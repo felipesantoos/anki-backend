@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/felipesantos/anki-backend/pkg/logger"
@@ -49,17 +51,35 @@ func generateRequestID() string {
 
 // getClientIP extracts the client IP from the request
 // Considers proxy/load balancer headers (X-Forwarded-For, X-Real-IP)
+// Returns only the IP address, removing the port number
 func getClientIP(r *http.Request) string {
 	// Check X-Forwarded-For (proxies/load balancers)
 	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		return ip
+		// X-Forwarded-For can contain multiple IPs (comma-separated), take the first one
+		if idx := strings.Index(ip, ","); idx != -1 {
+			ip = strings.TrimSpace(ip[:idx])
+		}
+		// Remove port if present
+		return normalizeIP(ip)
 	}
 	// Check X-Real-IP
 	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return ip
+		return normalizeIP(ip)
 	}
-	// Fallback to RemoteAddr
-	return r.RemoteAddr
+	// Fallback to RemoteAddr (remove port)
+	return normalizeIP(r.RemoteAddr)
+}
+
+// normalizeIP removes the port number from an IP address
+// Examples: "[::1]:12345" -> "::1", "127.0.0.1:8080" -> "127.0.0.1", "::1:12345" -> "::1"
+func normalizeIP(addr string) string {
+	// Use net.SplitHostPort which properly handles both IPv4 and IPv6
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		// If SplitHostPort fails, assume it's already just an IP without port
+		return addr
+	}
+	return host
 }
 
 // LoggingMiddleware logs all HTTP requests and responses

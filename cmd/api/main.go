@@ -102,6 +102,14 @@ func main() {
 	// Swagger documentation endpoint
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
+	// Test endpoint for rate limiting (remove in production if not needed)
+	e.GET("/api/test", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"message": "Test endpoint for rate limiting",
+			"timestamp": time.Now().Unix(),
+		})
+	})
+
 	// Register routes
 	routes.RegisterHealthRoutes(e, healthService)
 

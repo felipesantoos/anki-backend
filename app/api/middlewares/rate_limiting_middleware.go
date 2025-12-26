@@ -10,75 +10,89 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/time/rate"
 
 	"github.com/felipesantos/anki-backend/config"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 )
 
-// memoryLimiter stores rate limiters in memory (fallback when Redis is unavailable)
-// It supports dynamic limits per key, allowing different endpoints to have different rate limits
-type memoryLimiter struct {
-	limiters map[string]*rate.Limiter
+// memoryFixedWindowLimiter implements fixed window rate limiting in memory
+// Similar to Redis fixed window, but stores counters in a map with automatic cleanup
+type memoryFixedWindowLimiter struct {
+	counters map[string]*windowCounter
 	mu       sync.RWMutex
-	defaultLimit int
-	defaultBurst int
+	cleanupInterval time.Duration
+	lastCleanup     time.Time
 }
 
-func newMemoryLimiter(limitPerMinute int, burst int) *memoryLimiter {
-	return &memoryLimiter{
-		limiters: make(map[string]*rate.Limiter),
-		defaultLimit: limitPerMinute,
-		defaultBurst: burst,
-	}
+type windowCounter struct {
+	count     int
+	windowEnd int64 // Unix timestamp when window expires
 }
 
-func (m *memoryLimiter) getLimiter(key string, limitPerMinute int, burst int) *rate.Limiter {
-	// Use the provided limit and burst, or default if not specified
-	effectiveLimit := limitPerMinute
-	if effectiveLimit <= 0 {
-		effectiveLimit = m.defaultLimit
+func newMemoryFixedWindowLimiter() *memoryFixedWindowLimiter {
+	limiter := &memoryFixedWindowLimiter{
+		counters: make(map[string]*windowCounter),
+		cleanupInterval: 5 * time.Minute, // Clean up old entries every 5 minutes
+		lastCleanup:     time.Now(),
 	}
-	effectiveBurst := burst
-	if effectiveBurst <= 0 {
-		effectiveBurst = m.defaultBurst
-	}
-	
-	// For token bucket with rate limiting "X requests per minute", we want to allow
-	// up to X requests immediately, then enforce the rate. This requires burst >= limit.
-	// If burst is smaller than limit, set it to limit to match the expected behavior.
-	if effectiveBurst < effectiveLimit {
-		effectiveBurst = effectiveLimit
-	}
-	
-	// Create a composite key that includes the limit to support different limits per endpoint
-	limitKey := fmt.Sprintf("%s:limit:%d:burst:%d", key, effectiveLimit, effectiveBurst)
-	
-	m.mu.RLock()
-	limiter, exists := m.limiters[limitKey]
-	m.mu.RUnlock()
+	return limiter
+}
 
-	if exists {
-		return limiter
-	}
+// allow checks if a request should be allowed using fixed window algorithm
+// Returns (allowed, remaining, resetTime)
+func (m *memoryFixedWindowLimiter) allow(ctx context.Context, key string, limit int, window time.Duration) (bool, int, time.Time) {
+	now := time.Now()
+	windowStart := now.Truncate(window)
+	windowEnd := windowStart.Add(window)
+	windowEndUnix := windowEnd.Unix()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Double-check after acquiring write lock
-	if limiter, exists := m.limiters[limitKey]; exists {
-		return limiter
+	// Cleanup old entries periodically to prevent memory leak (while holding lock)
+	m.cleanupIfNeededUnsafe(now)
+
+	// Get or create counter for this key and window
+	counter, exists := m.counters[key]
+	if !exists || counter.windowEnd != windowEndUnix {
+		// New window or new key - start fresh
+		counter = &windowCounter{
+			count:     0,
+			windowEnd: windowEndUnix,
+		}
+		m.counters[key] = counter
 	}
 
-	rateLimit := rate.Limit(float64(effectiveLimit) / 60.0) // Convert per minute to per second
-	limiter = rate.NewLimiter(rateLimit, effectiveBurst)
-	m.limiters[limitKey] = limiter
-	return limiter
+	// Increment counter
+	counter.count++
+
+	remaining := limit - counter.count
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	allowed := counter.count <= limit
+	resetTime := windowEnd
+
+	return allowed, remaining, resetTime
 }
 
-func (m *memoryLimiter) allow(key string, limitPerMinute int, burst int) bool {
-	limiter := m.getLimiter(key, limitPerMinute, burst)
-	return limiter.Allow()
+// cleanupIfNeededUnsafe removes expired entries to prevent memory leaks
+// MUST be called while holding m.mu lock
+func (m *memoryFixedWindowLimiter) cleanupIfNeededUnsafe(now time.Time) {
+	if now.Sub(m.lastCleanup) < m.cleanupInterval {
+		return
+	}
+
+	// Remove expired entries (windows that ended more than cleanupInterval ago)
+	cutoff := now.Add(-m.cleanupInterval).Unix()
+	for key, counter := range m.counters {
+		if counter.windowEnd < cutoff {
+			delete(m.counters, key)
+		}
+	}
+
+	m.lastCleanup = now
 }
 
 // redisLimiter uses Redis for distributed rate limiting
@@ -127,11 +141,10 @@ type rateLimitStore interface {
 	allow(ctx context.Context, key string, limit int, window time.Duration) (bool, int, time.Time)
 }
 
-// memoryRateLimitStore adapts memoryLimiter to rateLimitStore interface
+// memoryRateLimitStore adapts memoryFixedWindowLimiter to rateLimitStore interface
 type memoryRateLimitStore struct {
-	limiter *memoryLimiter
+	limiter *memoryFixedWindowLimiter
 	defaultLimit int
-	defaultBurst int
 	window  time.Duration
 }
 
@@ -141,28 +154,9 @@ func (m *memoryRateLimitStore) allow(ctx context.Context, key string, limit int,
 	if effectiveLimit <= 0 {
 		effectiveLimit = m.defaultLimit
 	}
-	effectiveBurst := m.defaultBurst
-	if effectiveBurst <= 0 {
-		effectiveBurst = effectiveLimit // Use limit as minimum burst
-	}
 	
-	// For token bucket with rate limiting "X requests per minute", we want to allow
-	// up to X requests immediately, then enforce the rate. This requires burst >= limit.
-	if effectiveBurst < effectiveLimit {
-		effectiveBurst = effectiveLimit
-	}
-	
-	allowed := m.limiter.allow(key, effectiveLimit, effectiveBurst)
-	
-	// For memory limiter, we can't easily calculate remaining without more complex state
-	// We'll use a simplified approach: if allowed, assume we're within limit
-	remaining := effectiveLimit
-	if !allowed {
-		remaining = 0
-	}
-	
-	resetTime := time.Now().Add(window)
-	return allowed, remaining, resetTime
+	// Use fixed window algorithm (same as Redis)
+	return m.limiter.allow(ctx, key, effectiveLimit, window)
 }
 
 // redisRateLimitStore adapts redisLimiter to rateLimitStore interface
@@ -227,11 +221,10 @@ func RateLimitingMiddleware(cfg config.RateLimitConfig, redisClient *redis.Clien
 		if err != nil {
 			// Redis unavailable, fallback to memory
 			logger.GetLogger().Warn("Redis unavailable for rate limiting, falling back to memory strategy", "error", err)
-			memLimiter := newMemoryLimiter(cfg.DefaultLimitPerMinute, cfg.Burst)
+			memLimiter := newMemoryFixedWindowLimiter()
 			store = &memoryRateLimitStore{
 				limiter:      memLimiter,
 				defaultLimit: cfg.DefaultLimitPerMinute,
-				defaultBurst: cfg.Burst,
 				window:       time.Minute,
 			}
 		} else {
@@ -240,12 +233,11 @@ func RateLimitingMiddleware(cfg config.RateLimitConfig, redisClient *redis.Clien
 			store = &redisRateLimitStore{limiter: redisLimiter}
 		}
 	} else {
-		// Use memory strategy
-		memLimiter := newMemoryLimiter(cfg.DefaultLimitPerMinute, cfg.Burst)
+		// Use memory strategy (fixed window, same algorithm as Redis)
+		memLimiter := newMemoryFixedWindowLimiter()
 		store = &memoryRateLimitStore{
 			limiter:      memLimiter,
 			defaultLimit: cfg.DefaultLimitPerMinute,
-			defaultBurst: cfg.Burst,
 			window:       time.Minute,
 		}
 	}

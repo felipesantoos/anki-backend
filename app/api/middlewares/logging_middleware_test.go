@@ -152,7 +152,13 @@ func TestGetClientIP(t *testing.T) {
 			name:       "RemoteAddr fallback",
 			headers:    map[string]string{},
 			remoteAddr: "127.0.0.1:8080",
-			expectedIP: "127.0.0.1:8080",
+			expectedIP: "127.0.0.1",
+		},
+		{
+			name:       "RemoteAddr fallback IPv6",
+			headers:    map[string]string{},
+			remoteAddr: "[::1]:8080",
+			expectedIP: "::1",
 		},
 		{
 			name:       "X-Forwarded-For takes precedence",

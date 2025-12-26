@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -410,41 +411,46 @@ func TestRateLimitingMiddleware_Headers(t *testing.T) {
 	}
 }
 
-// TestMemoryLimiter tests the memory limiter directly
-func TestMemoryLimiter(t *testing.T) {
-	limiter := newMemoryLimiter(60, 60) // 60 per minute, burst 60 (at least equal to limit)
+// TestMemoryFixedWindowLimiter tests the memory fixed window limiter directly
+func TestMemoryFixedWindowLimiter(t *testing.T) {
+	limiter := newMemoryFixedWindowLimiter()
 
 	key := "test-key"
+	limit := 60
+	window := time.Minute
+	ctx := context.Background()
 
-	// Should allow requests up to burst (60)
+	// Should allow requests up to limit (60)
 	allowedCount := 0
 	for i := 0; i < 60; i++ {
-		if limiter.allow(key, 60, 60) {
+		allowed, _, _ := limiter.allow(ctx, key, limit, window)
+		if allowed {
 			allowedCount++
 		}
 	}
 
-	// Should allow at least most of the burst requests
-	if allowedCount < 50 {
-		t.Errorf("Expected at least 50 requests to be allowed with burst 60, got %d", allowedCount)
+	// Should allow exactly 60 requests
+	if allowedCount != 60 {
+		t.Errorf("Expected exactly 60 requests to be allowed, got %d", allowedCount)
 	}
 
-	// After burst is exhausted, should rate limit
-	// Token bucket may allow some requests as tokens refill slightly, which is expected behavior
-	// We just verify that the limiter is working
-
-	// Verify limiter allows requests as tokens refill over time
-	allowedAfterWait := false
-	for i := 0; i < 100; i++ {
-		if limiter.allow(key, 60, 60) {
-			allowedAfterWait = true
-		}
-		time.Sleep(10 * time.Millisecond) // Wait for tokens to refill
+	// The 61st request should be blocked
+	allowed, remaining, _ := limiter.allow(ctx, key, limit, window)
+	if allowed {
+		t.Error("Expected 61st request to be blocked")
+	}
+	if remaining != 0 {
+		t.Errorf("Expected remaining to be 0 when blocked, got %d", remaining)
 	}
 
-	// At least some requests should be allowed as tokens refill
-	if !allowedAfterWait {
-		t.Error("Some requests should be allowed as tokens refill over time")
+	// Test with a new key - should allow requests again
+	newKey := "test-key-2"
+	allowed, remaining, _ = limiter.allow(ctx, newKey, limit, window)
+	if !allowed {
+		t.Error("New key should allow requests")
+	}
+	if remaining != 59 {
+		t.Errorf("Expected remaining to be 59 after first request, got %d", remaining)
 	}
 }
 
@@ -501,14 +507,17 @@ func TestGetEndpointLimit(t *testing.T) {
 	}
 }
 
-// BenchmarkMemoryLimiter benchmarks the memory limiter performance
-func BenchmarkMemoryLimiter(b *testing.B) {
-	limiter := newMemoryLimiter(1000, 100)
+// BenchmarkMemoryFixedWindowLimiter benchmarks the memory fixed window limiter performance
+func BenchmarkMemoryFixedWindowLimiter(b *testing.B) {
+	limiter := newMemoryFixedWindowLimiter()
 	key := "bench-key"
+	limit := 1000
+	window := time.Minute
+	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		limiter.allow(key, 1000, 100)
+		limiter.allow(ctx, key, limit, window)
 	}
 }
 

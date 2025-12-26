@@ -267,9 +267,11 @@ func TestLoggingE2E_CompleteRequestFlow(t *testing.T) {
 
 // TestLoggingE2E_ConfigIntegration tests integration with configuration system
 func TestLoggingE2E_ConfigIntegration(t *testing.T) {
-	// Salvar valores originais
+	// Save original values
 	originalEnv := os.Getenv("ENV")
 	originalLogLevel := os.Getenv("LOG_LEVEL")
+	originalJWT := os.Getenv("JWT_SECRET_KEY")
+	originalCORS := os.Getenv("CORS_ALLOWED_ORIGINS")
 
 	// Cleanup after test
 	defer func() {
@@ -283,11 +285,23 @@ func TestLoggingE2E_ConfigIntegration(t *testing.T) {
 		} else {
 			os.Unsetenv("LOG_LEVEL")
 		}
+		if originalJWT != "" {
+			os.Setenv("JWT_SECRET_KEY", originalJWT)
+		} else {
+			os.Unsetenv("JWT_SECRET_KEY")
+		}
+		if originalCORS != "" {
+			os.Setenv("CORS_ALLOWED_ORIGINS", originalCORS)
+		} else {
+			os.Unsetenv("CORS_ALLOWED_ORIGINS")
+		}
 	}()
 
-	// Test 1: Production configuration
+	// Test 1: Production configuration (requires JWT_SECRET_KEY and CORS_ALLOWED_ORIGINS)
 	os.Setenv("ENV", "production")
 	os.Setenv("LOG_LEVEL", "WARN")
+	os.Setenv("JWT_SECRET_KEY", strings.Repeat("a", 32)) // Valid JWT secret
+	os.Setenv("CORS_ALLOWED_ORIGINS", "https://example.com")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -312,6 +326,8 @@ func TestLoggingE2E_ConfigIntegration(t *testing.T) {
 	// Test 2: Development configuration
 	os.Setenv("ENV", "development")
 	os.Setenv("LOG_LEVEL", "DEBUG")
+	os.Unsetenv("JWT_SECRET_KEY")
+	os.Unsetenv("CORS_ALLOWED_ORIGINS")
 
 	cfg, err = config.Load()
 	if err != nil {

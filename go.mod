@@ -4,12 +4,12 @@ go 1.25
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.17.0
+	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/lib/pq v1.10.9
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/swaggo/echo-swagger v1.4.1
 	github.com/swaggo/swag v1.8.12
-	golang.org/x/time v0.5.0
 )
 
 require (

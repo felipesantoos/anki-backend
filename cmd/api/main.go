@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -46,7 +47,28 @@ func main() {
 		// If unable to load config, use default logger
 		logger.InitLogger("INFO", "development")
 		log := logger.GetLogger()
+		
+		// Provide more detailed error messages for validation errors
+		if validationErr, ok := err.(*config.ValidationError); ok {
+			log.Error("Configuration validation failed", "error", validationErr.Error())
+			fmt.Fprintf(os.Stderr, "\n❌ Configuration Error: %s\n\n", validationErr.Error())
+			os.Exit(1)
+		}
+		if requiredErr, ok := err.(*config.RequiredEnvError); ok {
+			log.Error("Missing required environment variables", 
+				"environment", requiredErr.Environment,
+				"variables", requiredErr.Variables,
+				"error", requiredErr.Error())
+			fmt.Fprintf(os.Stderr, "\n❌ Missing Required Environment Variables:\n")
+			fmt.Fprintf(os.Stderr, "   Environment: %s\n", requiredErr.Environment)
+			fmt.Fprintf(os.Stderr, "   Missing variables: %s\n\n", strings.Join(requiredErr.Variables, ", "))
+			fmt.Fprintf(os.Stderr, "   Please set these variables and try again.\n")
+			fmt.Fprintf(os.Stderr, "   See env.example for reference.\n\n")
+			os.Exit(1)
+		}
+		
 		log.Error("Failed to load configuration", "error", err)
+		fmt.Fprintf(os.Stderr, "\n❌ Failed to load configuration: %v\n\n", err)
 		os.Exit(1)
 	}
 

@@ -1,9 +1,12 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds all configuration for the application
@@ -104,8 +107,48 @@ type CORSConfig struct {
 	AllowCredentials bool    // Allow credentials (cookies, authorization headers)
 }
 
+// ValidationError represents a configuration validation error
+type ValidationError struct {
+	Message string
+	Fields  []string
+}
+
+func (e *ValidationError) Error() string {
+	if len(e.Fields) > 0 {
+		return fmt.Sprintf("%s: %s", e.Message, strings.Join(e.Fields, ", "))
+	}
+	return e.Message
+}
+
+// RequiredEnvError represents an error for missing required environment variables
+type RequiredEnvError struct {
+	Variables []string
+	Environment string
+}
+
+func (e *RequiredEnvError) Error() string {
+	varsList := strings.Join(e.Variables, ", ")
+	return fmt.Sprintf("missing required environment variables for %s environment: %s", e.Environment, varsList)
+}
+
 // Load loads configuration from environment variables
+// It automatically tries to load .env file if it exists (does not fail if missing)
+// Environment variables take precedence over .env file values
 func Load() (*Config, error) {
+	// Try to load .env file (silently ignore if it doesn't exist)
+	_ = godotenv.Load()
+
+	return loadConfig()
+}
+
+// LoadFromFile loads configuration from a specific .env file
+// Environment variables take precedence over file values
+func LoadFromFile(filename string) error {
+	return godotenv.Load(filename)
+}
+
+// loadConfig performs the actual configuration loading
+func loadConfig() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
 			Host:         getEnv("SERVER_HOST", "0.0.0.0"),
@@ -158,7 +201,7 @@ func Load() (*Config, error) {
 			LoginLimitPerMinute:  getEnvAsInt("RATE_LIMIT_LOGIN_PER_MINUTE", 5),
 		},
 	}
-	
+
 	// Load CORS configuration
 	// Default allowed origins is "*" for development, should be configured explicitly in production
 	env := validateEnvironment(getEnv("ENV", "development"))
@@ -167,14 +210,110 @@ func Load() (*Config, error) {
 		// In production, require explicit configuration (empty by default)
 		corsDefaultOrigins = ""
 	}
-	
+
 	cfg.CORS = CORSConfig{
 		Enabled:          getEnvAsBool("CORS_ENABLED", true),
 		AllowedOrigins:   parseCORSOrigins(getEnv("CORS_ALLOWED_ORIGINS", corsDefaultOrigins)),
 		AllowCredentials: getEnvAsBool("CORS_ALLOW_CREDENTIALS", true),
 	}
 
+	// Validate configuration
+	if err := Validate(cfg); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// Validate validates the configuration and returns an error if validation fails
+func Validate(cfg *Config) error {
+	var missingVars []string
+	var validationErrors []string
+
+	env := cfg.Logger.Environment
+
+	// Validate JWT Secret Key (required in staging/production)
+	if env == "staging" || env == "production" {
+		if cfg.JWT.SecretKey == "" {
+			missingVars = append(missingVars, "JWT_SECRET_KEY")
+			validationErrors = append(validationErrors, "JWT_SECRET_KEY is required in staging/production environments")
+		} else if len(cfg.JWT.SecretKey) < 32 {
+			validationErrors = append(validationErrors, "JWT_SECRET_KEY must be at least 32 characters long for security")
+		}
+	}
+
+	// Validate CORS configuration in production
+	if env == "production" {
+		if len(cfg.CORS.AllowedOrigins) == 0 {
+			missingVars = append(missingVars, "CORS_ALLOWED_ORIGINS")
+			validationErrors = append(validationErrors, "CORS_ALLOWED_ORIGINS is required in production and cannot be empty")
+		} else {
+			// Check if wildcard is used (not allowed in production with credentials)
+			for _, origin := range cfg.CORS.AllowedOrigins {
+				if origin == "*" && cfg.CORS.AllowCredentials {
+					validationErrors = append(validationErrors, "CORS wildcard (*) is not allowed in production when AllowCredentials is true")
+					break
+				}
+			}
+		}
+	}
+
+	// Validate S3 configuration if storage type is s3
+	if cfg.Storage.Type == "s3" {
+		if cfg.Storage.S3Bucket == "" {
+			missingVars = append(missingVars, "STORAGE_S3_BUCKET")
+			validationErrors = append(validationErrors, "STORAGE_S3_BUCKET is required when STORAGE_TYPE=s3")
+		}
+		if cfg.Storage.S3Region == "" {
+			missingVars = append(missingVars, "STORAGE_S3_REGION")
+			validationErrors = append(validationErrors, "STORAGE_S3_REGION is required when STORAGE_TYPE=s3")
+		}
+		if cfg.Storage.S3Key == "" {
+			missingVars = append(missingVars, "STORAGE_S3_KEY")
+			validationErrors = append(validationErrors, "STORAGE_S3_KEY is required when STORAGE_TYPE=s3")
+		}
+		if cfg.Storage.S3Secret == "" {
+			missingVars = append(missingVars, "STORAGE_S3_SECRET")
+			validationErrors = append(validationErrors, "STORAGE_S3_SECRET is required when STORAGE_TYPE=s3")
+		}
+	}
+
+	// Return appropriate error type
+	if len(missingVars) > 0 {
+		return &RequiredEnvError{
+			Variables:  missingVars,
+			Environment: env,
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		return &ValidationError{
+			Message: "configuration validation failed",
+			Fields:  validationErrors,
+		}
+	}
+
+	return nil
+}
+
+// GetRequiredEnvVars returns a list of required environment variables for the given environment
+func GetRequiredEnvVars(environment string) []string {
+	env := validateEnvironment(environment)
+	
+	var required []string
+
+	if env == "staging" || env == "production" {
+		required = append(required, "JWT_SECRET_KEY")
+	}
+
+	if env == "production" {
+		required = append(required, "CORS_ALLOWED_ORIGINS")
+	}
+
+	// Note: S3 variables are conditionally required based on STORAGE_TYPE
+	// so they are not included in this list
+
+	return required
 }
 
 // getEnv gets an environment variable or returns a default value
@@ -280,17 +419,17 @@ func validateRateLimitStrategy(strategy string) string {
 // If empty, returns []string{} (empty = no origins allowed)
 func parseCORSOrigins(originsStr string) []string {
 	originsStr = strings.TrimSpace(originsStr)
-	
+
 	// Handle wildcard
 	if originsStr == "*" {
 		return []string{"*"}
 	}
-	
+
 	// Handle empty string
 	if originsStr == "" {
 		return []string{}
 	}
-	
+
 	// Split by comma and trim each origin
 	parts := strings.Split(originsStr, ",")
 	origins := make([]string, 0, len(parts))
@@ -300,6 +439,6 @@ func parseCORSOrigins(originsStr string) []string {
 			origins = append(origins, trimmed)
 		}
 	}
-	
+
 	return origins
 }

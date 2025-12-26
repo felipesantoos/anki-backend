@@ -41,6 +41,18 @@ backend/
 
 ## Configuration
 
+### Environment Variables
+
+The application supports loading configuration from:
+1. **System environment variables** (highest priority)
+2. **`.env` file** (automatically loaded if present)
+
+The application automatically tries to load a `.env` file from the current directory. If the file doesn't exist, the application will still work using system environment variables or defaults.
+
+**Priority**: System environment variables > `.env` file > Default values
+
+### Setup
+
 1. Copy the `env.example` file to `.env`:
 ```bash
 cp env.example .env
@@ -51,6 +63,36 @@ cp env.example .env
    - For local development: `DB_HOST=localhost`, `REDIS_HOST=localhost`
    - For Docker: `DB_HOST=postgres`, `REDIS_HOST=redis`
    - See `env.example` for all available variables
+
+### Required Variables by Environment
+
+- **Development**: None (all values have defaults)
+- **Staging/Production**:
+  - `JWT_SECRET_KEY` - Required, must be at least 32 characters long
+  - `CORS_ALLOWED_ORIGINS` - Required in production, cannot be `"*"` or empty
+- **S3 Storage** (when `STORAGE_TYPE=s3`):
+  - `STORAGE_S3_BUCKET` - Required
+  - `STORAGE_S3_REGION` - Required
+  - `STORAGE_S3_KEY` - Required
+  - `STORAGE_S3_SECRET` - Required
+
+The application validates required variables on startup and will fail with descriptive error messages if any are missing.
+
+### Using .env Files
+
+The `.env` file is loaded automatically when the application starts. You can also load a specific file programmatically:
+
+```go
+import "github.com/felipesantos/anki-backend/config"
+
+// Load from specific file
+err := config.LoadFromFile(".env.production")
+
+// Or use Load() which automatically tries .env
+cfg, err := config.Load()
+```
+
+**Note**: Never commit `.env` files to version control. They contain sensitive information.
 
 3. Run migrations:
 ```bash

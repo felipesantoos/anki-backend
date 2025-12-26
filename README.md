@@ -67,14 +67,33 @@ For more information about migrations, see [pkg/migrate/README.md](pkg/migrate/R
 
 ```bash
 # Start development environment
-# TODO: Add dev.sh script
+docker compose up -d
 
 # Run tests
-# TODO: Add test.sh script
+./scripts/test.sh              # Run all tests (unit + E2E, auto-starts test services for integration)
+./scripts/test.sh unit         # Run only unit tests
+./scripts/test.sh integration  # Run integration tests (requires services to be running)
+./scripts/test.sh integration-auto  # Run integration tests (auto-starts test services)
+./scripts/test.sh e2e          # Run only E2E tests
+
+# Manage test services (isolated PostgreSQL/Redis for testing)
+./scripts/test-services.sh start    # Start test services (port 5433/6380)
+./scripts/test-services.sh stop     # Stop test services
+./scripts/test-services.sh status   # Check service status
+./scripts/test-services.sh clean    # Stop and remove test data volumes
 
 # Build
-# TODO: Add build.sh script
+go build -o bin/api ./cmd/api
 ```
+
+### Test Services
+
+For integration tests, you can use isolated test services that won't interfere with your development database:
+
+- **Test PostgreSQL**: Port 5433, Database: `anki_test`
+- **Test Redis**: Port 6380
+
+The test services use separate Docker volumes and can run alongside your main development services.
 
 ## Documentation
 

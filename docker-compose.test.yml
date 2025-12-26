@@ -1,0 +1,63 @@
+# Docker Compose configuration for testing
+# Provides isolated PostgreSQL and Redis instances for running integration tests
+#
+# Usage:
+#   docker compose -f docker-compose.test.yml up -d    # Start test services
+#   docker compose -f docker-compose.test.yml down     # Stop test services
+#   docker compose -f docker-compose.test.yml down -v  # Stop and remove volumes
+
+services:
+  # PostgreSQL Database for Testing
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: anki-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: anki_test
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts with main postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: "no"  # Don't auto-restart for tests
+    networks:
+      - anki-test-network
+
+  # Redis Cache for Testing
+  redis-test:
+    image: redis:7-alpine
+    container_name: anki-redis-test
+    command: redis-server --appendonly no  # Disable persistence for faster tests
+    volumes:
+      - redis_test_data:/data
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts with main redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+    restart: "no"  # Don't auto-restart for tests
+    networks:
+      - anki-test-network
+
+networks:
+  anki-test-network:
+    driver: bridge
+    name: anki-test-network
+
+volumes:
+  postgres_test_data:
+    driver: local
+    name: anki-postgres-test-data
+  redis_test_data:
+    driver: local
+    name: anki-redis-test-data

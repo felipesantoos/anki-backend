@@ -40,6 +40,9 @@ type Config struct {
 
 	// Jobs configuration
 	Jobs JobsConfig
+
+	// Events configuration
+	Events EventsConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -130,6 +133,13 @@ type JobsConfig struct {
 	RetryDelaySeconds int   // Base delay between retries in seconds (default: 5)
 	RedisQueueKey    string // Redis key for job queue (default: "jobs:queue")
 	RedisDB          int    // Redis database number for jobs (default: 1, use 0 for same as cache)
+}
+
+// EventsConfig holds domain events bus configuration
+type EventsConfig struct {
+	Enabled    bool // Enable/disable event bus
+	WorkerCount int // Number of workers to process events
+	QueueSize   int // Size of the event queue buffer
 }
 
 // ValidationError represents a configuration validation error
@@ -257,6 +267,12 @@ func loadConfig() (*Config, error) {
 		RetryDelaySeconds: getEnvAsInt("JOBS_RETRY_DELAY_SECONDS", 5),
 		RedisQueueKey:     getEnv("JOBS_REDIS_QUEUE_KEY", "jobs:queue"),
 		RedisDB:           getEnvAsInt("JOBS_REDIS_DB", 1),
+	}
+
+	cfg.Events = EventsConfig{
+		Enabled:    getEnvAsBool("EVENTS_ENABLED", true),
+		WorkerCount: getEnvAsInt("EVENTS_WORKER_COUNT", 5),
+		QueueSize:   getEnvAsInt("EVENTS_QUEUE_SIZE", 1000),
 	}
 
 	// Validate configuration

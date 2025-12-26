@@ -32,8 +32,12 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/app/api/routes"
 	"github.com/felipesantos/anki-backend/config"
+	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
+	"github.com/felipesantos/anki-backend/core/services/events"
 	"github.com/felipesantos/anki-backend/core/services/health"
 	"github.com/felipesantos/anki-backend/core/services/jobs"
+	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
+	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	"github.com/felipesantos/anki-backend/infra/jobs/handlers"
 	infraJobs "github.com/felipesantos/anki-backend/infra/jobs"
 	"github.com/felipesantos/anki-backend/infra/postgres"
@@ -178,7 +182,61 @@ func main() {
 		log.Info("Jobs system is disabled")
 	}
 
-	// 7. Initialize HTTP server (Echo)
+	// 7. Initialize Events System (if enabled)
+	var eventService *events.EventService
+	var eventBus secondary.IEventBus
+
+	if cfg.Events.Enabled {
+		log.Info("Initializing events system",
+			"worker_count", cfg.Events.WorkerCount,
+			"queue_size", cfg.Events.QueueSize,
+		)
+
+		// Create in-memory event bus
+		eventBus = infraEvents.NewInMemoryEventBus(
+			cfg.Events.WorkerCount,
+			cfg.Events.QueueSize,
+			log,
+		)
+
+		// Create event service
+		eventService = events.NewEventService(eventBus)
+
+		// Register example handlers
+		exampleHandler := eventHandlers.NewExampleHandler(domainEvents.CardReviewedEventType)
+		if err := eventService.Subscribe(domainEvents.CardReviewedEventType, exampleHandler); err != nil {
+			log.Error("Failed to subscribe event handler", "event_type", domainEvents.CardReviewedEventType, "error", err)
+			os.Exit(1)
+		}
+
+		// Subscribe to other event types
+		noteHandler := eventHandlers.NewExampleHandler(domainEvents.NoteCreatedEventType)
+		if err := eventService.Subscribe(domainEvents.NoteCreatedEventType, noteHandler); err != nil {
+			log.Error("Failed to subscribe event handler", "event_type", domainEvents.NoteCreatedEventType, "error", err)
+			os.Exit(1)
+		}
+
+		deckHandler := eventHandlers.NewExampleHandler(domainEvents.DeckUpdatedEventType)
+		if err := eventService.Subscribe(domainEvents.DeckUpdatedEventType, deckHandler); err != nil {
+			log.Error("Failed to subscribe event handler", "event_type", domainEvents.DeckUpdatedEventType, "error", err)
+			os.Exit(1)
+		}
+
+		// Start event bus
+		if err := eventBus.Start(); err != nil {
+			log.Error("Failed to start event bus", "error", err)
+			os.Exit(1)
+		}
+
+		// EventService is reserved for future use in handlers/routes
+		_ = eventService
+
+		log.Info("Events system initialized successfully")
+	} else {
+		log.Info("Events system is disabled")
+	}
+
+	// 8. Initialize HTTP server (Echo)
 	e := echo.New()
 	e.HideBanner = true
 
@@ -270,6 +328,14 @@ func main() {
 	if cfg.Jobs.Enabled && scheduler != nil {
 		log.Info("Stopping scheduler...")
 		scheduler.Stop()
+	}
+
+	// Graceful shutdown of events system
+	if cfg.Events.Enabled && eventBus != nil {
+		log.Info("Stopping event bus...")
+		if err := eventBus.Stop(); err != nil {
+			log.Error("Error stopping event bus", "error", err)
+		}
 	}
 
 	// Graceful shutdown of HTTP server

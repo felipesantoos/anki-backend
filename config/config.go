@@ -24,6 +24,9 @@ type Config struct {
 
 	// Logger configuration
 	Logger LoggerConfig
+
+	// Rate limiting configuration
+	RateLimit RateLimitConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -80,6 +83,16 @@ type LoggerConfig struct {
 	Environment string // "development", "staging", "production"
 }
 
+// RateLimitConfig holds rate limiting configuration
+type RateLimitConfig struct {
+	Enabled              bool   // Enable/disable rate limiting
+	Strategy             string // "redis" or "memory"
+	DefaultLimitPerMinute int   // Default limit per minute (e.g., 60)
+	Burst                int    // Burst allowed (e.g., 10 extra requests)
+	EnableByEndpoint     bool   // Enable per-endpoint limits
+	LoginLimitPerMinute  int    // Login endpoint limit per minute (e.g., 5)
+}
+
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
@@ -125,6 +138,14 @@ func Load() (*Config, error) {
 			Level:       validateLogLevel(getEnv("LOG_LEVEL", "info")),
 			Environment: validateEnvironment(getEnv("ENV", "development")),
 		},
+		RateLimit: RateLimitConfig{
+			Enabled:              getEnvAsBool("RATE_LIMIT_ENABLED", true),
+			Strategy:             validateRateLimitStrategy(getEnv("RATE_LIMIT_STRATEGY", "redis")),
+			DefaultLimitPerMinute: getEnvAsInt("RATE_LIMIT_DEFAULT_PER_MINUTE", 60),
+			Burst:                getEnvAsInt("RATE_LIMIT_BURST", 10),
+			EnableByEndpoint:     getEnvAsBool("RATE_LIMIT_ENABLE_BY_ENDPOINT", false),
+			LoginLimitPerMinute:  getEnvAsInt("RATE_LIMIT_LOGIN_PER_MINUTE", 5),
+		},
 	}
 
 	return cfg, nil
@@ -145,6 +166,19 @@ func getEnvAsInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return defaultValue
+	}
+	return value
+}
+
+// getEnvAsBool gets an environment variable as boolean or returns a default value
+func getEnvAsBool(key string, defaultValue bool) bool {
+	valueStr := os.Getenv(key)
+	if valueStr == "" {
+		return defaultValue
+	}
+	value, err := strconv.ParseBool(valueStr)
 	if err != nil {
 		return defaultValue
 	}
@@ -195,5 +229,22 @@ func validateEnvironment(env string) string {
 	}
 	// Return safe default if invalid
 	return "development"
+}
+
+// validateRateLimitStrategy validates and normalizes the rate limit strategy
+// Returns "redis" if the value is invalid
+func validateRateLimitStrategy(strategy string) string {
+	validStrategies := map[string]string{
+		"redis":  "redis",
+		"REDIS":  "redis",
+		"memory": "memory",
+		"MEMORY": "memory",
+	}
+
+	if normalized, ok := validStrategies[strategy]; ok {
+		return normalized
+	}
+	// Return safe default if invalid
+	return "redis"
 }
 

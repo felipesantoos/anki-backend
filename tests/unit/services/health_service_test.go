@@ -29,6 +29,34 @@ func (m *mockCacheRepository) Ping(ctx context.Context) error {
 	return m.pingErr
 }
 
+func (m *mockCacheRepository) Get(ctx context.Context, key string) (string, error) {
+	return "", errors.New("not implemented")
+}
+
+func (m *mockCacheRepository) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockCacheRepository) Delete(ctx context.Context, key string) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockCacheRepository) Exists(ctx context.Context, key string) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
+func (m *mockCacheRepository) SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
+func (m *mockCacheRepository) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	return errors.New("not implemented")
+}
+
+func (m *mockCacheRepository) TTL(ctx context.Context, key string) (time.Duration, error) {
+	return 0, errors.New("not implemented")
+}
+
 func TestHealthService_CheckHealth_AllHealthy(t *testing.T) {
 	mockDB := &mockDatabaseRepository{pingErr: nil}
 	mockCache := &mockCacheRepository{pingErr: nil}

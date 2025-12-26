@@ -34,6 +34,9 @@ type Config struct {
 
 	// CORS configuration
 	CORS CORSConfig
+
+	// Session configuration
+	Session SessionConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -107,6 +110,12 @@ type CORSConfig struct {
 	Enabled         bool     // Enable/disable CORS middleware
 	AllowedOrigins  []string // List of allowed origins (comma-separated in env var)
 	AllowCredentials bool    // Allow credentials (cookies, authorization headers)
+}
+
+// SessionConfig holds session-related configuration
+type SessionConfig struct {
+	TTLMinutes int    // Session time-to-live in minutes (default: 30)
+	KeyPrefix  string // Prefix for session keys in Redis (default: "session")
 }
 
 // ValidationError represents a configuration validation error
@@ -219,6 +228,11 @@ func loadConfig() (*Config, error) {
 		Enabled:          getEnvAsBool("CORS_ENABLED", true),
 		AllowedOrigins:   parseCORSOrigins(getEnv("CORS_ALLOWED_ORIGINS", corsDefaultOrigins)),
 		AllowCredentials: getEnvAsBool("CORS_ALLOW_CREDENTIALS", true),
+	}
+
+	cfg.Session = SessionConfig{
+		TTLMinutes: getEnvAsInt("SESSION_TTL_MINUTES", 30),
+		KeyPrefix:  getEnv("SESSION_KEY_PREFIX", "session"),
 	}
 
 	// Validate configuration

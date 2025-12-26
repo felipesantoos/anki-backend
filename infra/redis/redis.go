@@ -78,5 +78,63 @@ func (r *RedisRepository) Close() error {
 	return r.Client.Close()
 }
 
+// Get retrieves a value from cache by key
+// Returns an error if the key does not exist
+func (r *RedisRepository) Get(ctx context.Context, key string) (string, error) {
+	result, err := r.Client.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return "", fmt.Errorf("key not found: %s", key)
+		}
+		return "", err
+	}
+	return result, nil
+}
+
+// Set stores a value in cache with TTL
+func (r *RedisRepository) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
+	return r.Client.Set(ctx, key, value, ttl).Err()
+}
+
+// Delete removes a key from cache
+func (r *RedisRepository) Delete(ctx context.Context, key string) error {
+	return r.Client.Del(ctx, key).Err()
+}
+
+// Exists checks if a key exists in cache
+func (r *RedisRepository) Exists(ctx context.Context, key string) (bool, error) {
+	count, err := r.Client.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// SetNX sets a key only if it does not exist (atomic operation)
+// Returns true if key was set, false if key already exists
+func (r *RedisRepository) SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error) {
+	result, err := r.Client.SetNX(ctx, key, value, ttl).Result()
+	if err != nil {
+		return false, err
+	}
+	return result, nil
+}
+
+// Expire sets the expiration time for a key
+func (r *RedisRepository) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	return r.Client.Expire(ctx, key, ttl).Err()
+}
+
+// TTL returns the remaining time to live of a key
+// Returns -1 if key exists but has no expiration
+// Returns -2 if key does not exist
+func (r *RedisRepository) TTL(ctx context.Context, key string) (time.Duration, error) {
+	result, err := r.Client.TTL(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	return result, nil
+}
+
 // Ensure RedisRepository implements ICacheRepository
 var _ secondary.ICacheRepository = (*RedisRepository)(nil)

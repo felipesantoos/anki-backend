@@ -93,6 +93,7 @@ func main() {
 
 	// Middleware
 	e.Use(middleware.Recover())
+	e.Use(middlewares.CORSMiddleware(cfg.CORS)) // CORS should be early in the chain to handle preflight requests
 	e.Use(middlewares.RequestIDMiddleware())
 	
 	// Rate limiting middleware (after logging would go, but we'll add logging middleware later)

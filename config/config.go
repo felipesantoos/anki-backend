@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds all configuration for the application
@@ -27,6 +28,9 @@ type Config struct {
 
 	// Rate limiting configuration
 	RateLimit RateLimitConfig
+
+	// CORS configuration
+	CORS CORSConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -93,6 +97,13 @@ type RateLimitConfig struct {
 	LoginLimitPerMinute  int    // Login endpoint limit per minute (e.g., 5)
 }
 
+// CORSConfig holds CORS configuration
+type CORSConfig struct {
+	Enabled         bool     // Enable/disable CORS middleware
+	AllowedOrigins  []string // List of allowed origins (comma-separated in env var)
+	AllowCredentials bool    // Allow credentials (cookies, authorization headers)
+}
+
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
@@ -146,6 +157,21 @@ func Load() (*Config, error) {
 			EnableByEndpoint:     getEnvAsBool("RATE_LIMIT_ENABLE_BY_ENDPOINT", false),
 			LoginLimitPerMinute:  getEnvAsInt("RATE_LIMIT_LOGIN_PER_MINUTE", 5),
 		},
+	}
+	
+	// Load CORS configuration
+	// Default allowed origins is "*" for development, should be configured explicitly in production
+	env := validateEnvironment(getEnv("ENV", "development"))
+	corsDefaultOrigins := "*"
+	if env == "production" {
+		// In production, require explicit configuration (empty by default)
+		corsDefaultOrigins = ""
+	}
+	
+	cfg.CORS = CORSConfig{
+		Enabled:          getEnvAsBool("CORS_ENABLED", true),
+		AllowedOrigins:   parseCORSOrigins(getEnv("CORS_ALLOWED_ORIGINS", corsDefaultOrigins)),
+		AllowCredentials: getEnvAsBool("CORS_ALLOW_CREDENTIALS", true),
 	}
 
 	return cfg, nil
@@ -248,3 +274,32 @@ func validateRateLimitStrategy(strategy string) string {
 	return "redis"
 }
 
+// parseCORSOrigins parses a comma-separated string of CORS origins
+// Returns a slice of origins with trimmed whitespace
+// If the string is "*", returns []string{"*"}
+// If empty, returns []string{} (empty = no origins allowed)
+func parseCORSOrigins(originsStr string) []string {
+	originsStr = strings.TrimSpace(originsStr)
+	
+	// Handle wildcard
+	if originsStr == "*" {
+		return []string{"*"}
+	}
+	
+	// Handle empty string
+	if originsStr == "" {
+		return []string{}
+	}
+	
+	// Split by comma and trim each origin
+	parts := strings.Split(originsStr, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			origins = append(origins, trimmed)
+		}
+	}
+	
+	return origins
+}

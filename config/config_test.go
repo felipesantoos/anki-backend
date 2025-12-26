@@ -64,6 +64,65 @@ func TestValidateEnvironment(t *testing.T) {
 	}
 }
 
+func TestParseCORSOrigins(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "Wildcard",
+			input:    "*",
+			expected: []string{"*"},
+		},
+		{
+			name:     "Single origin",
+			input:    "http://localhost:3000",
+			expected: []string{"http://localhost:3000"},
+		},
+		{
+			name:     "Multiple origins comma-separated",
+			input:    "http://localhost:3000,https://app.example.com",
+			expected: []string{"http://localhost:3000", "https://app.example.com"},
+		},
+		{
+			name:     "Multiple origins with spaces",
+			input:    "http://localhost:3000, https://app.example.com , https://api.example.com",
+			expected: []string{"http://localhost:3000", "https://app.example.com", "https://api.example.com"},
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: []string{},
+		},
+		{
+			name:     "Only whitespace",
+			input:    "   ",
+			expected: []string{},
+		},
+		{
+			name:     "Comma-separated with empty parts",
+			input:    "http://localhost:3000,,https://app.example.com",
+			expected: []string{"http://localhost:3000", "https://app.example.com"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseCORSOrigins(tt.input)
+			if len(result) != len(tt.expected) {
+				t.Errorf("parseCORSOrigins(%q) length = %d, want %d", tt.input, len(result), len(tt.expected))
+				return
+			}
+			for i, v := range result {
+				if v != tt.expected[i] {
+					t.Errorf("parseCORSOrigins(%q)[%d] = %q, want %q", tt.input, i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
 func TestLoad_LoggerConfig(t *testing.T) {
 	// Salvar valores originais
 	originalEnv := os.Getenv("ENV")

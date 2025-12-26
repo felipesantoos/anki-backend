@@ -297,8 +297,8 @@ func TestLoggingE2E_ConfigIntegration(t *testing.T) {
 	if cfg.Logger.Environment != "production" {
 		t.Errorf("Expected environment production, got %s", cfg.Logger.Environment)
 	}
-	if cfg.Logger.Level != "WARN" {
-		t.Errorf("Expected log level WARN, got %s", cfg.Logger.Level)
+	if cfg.Logger.Level != "warn" {
+		t.Errorf("Expected log level warn, got %s", cfg.Logger.Level)
 	}
 
 	// Initialize logger with configuration

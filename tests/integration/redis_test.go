@@ -263,7 +263,6 @@ func TestRedis_DifferentDatabases(t *testing.T) {
 	// Verify they are separate databases
 	key := "test:db:isolation"
 	value0 := "db0-value"
-	value1 := "db1-value"
 
 	// Set in DB 0
 	rdb0.Client.Set(ctx, key, value0, time.Minute)

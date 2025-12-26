@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/config"
-	"github.com/felipesantos/anki-backend/infra/database"
+	"github.com/felipesantos/anki-backend/infra/postgres"
 )
 
 func TestDatabase_Connection(t *testing.T) {
@@ -30,7 +30,7 @@ func TestDatabase_Connection(t *testing.T) {
 	)
 
 	// Create database connection
-	db, err := database.NewDatabase(cfg.Database, logger)
+	db, err := postgres.NewPostgresRepository(cfg.Database, logger)
 	if err != nil {
 		t.Fatalf("Failed to create database connection: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestDatabase_ConnectionPool(t *testing.T) {
 	logger := slog.Default()
 
 	// Create database connection
-	db, err := database.NewDatabase(cfg.Database, logger)
+	db, err := postgres.NewPostgresRepository(cfg.Database, logger)
 	if err != nil {
 		t.Fatalf("Failed to create database connection: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestDatabase_GracefulShutdown(t *testing.T) {
 	logger := slog.Default()
 
 	// Create database connection
-	db, err := database.NewDatabase(cfg.Database, logger)
+	db, err := postgres.NewPostgresRepository(cfg.Database, logger)
 	if err != nil {
 		t.Fatalf("Failed to create database connection: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestDatabase_QueryExecution(t *testing.T) {
 
 	logger := slog.Default()
 
-	db, err := database.NewDatabase(cfg.Database, logger)
+	db, err := postgres.NewPostgresRepository(cfg.Database, logger)
 	if err != nil {
 		t.Fatalf("Failed to create database connection: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestDatabase_Transaction(t *testing.T) {
 
 	logger := slog.Default()
 
-	db, err := database.NewDatabase(cfg.Database, logger)
+	db, err := postgres.NewPostgresRepository(cfg.Database, logger)
 	if err != nil {
 		t.Fatalf("Failed to create database connection: %v", err)
 	}

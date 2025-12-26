@@ -10,15 +10,17 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/felipesantos/anki-backend/config"
+	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 )
 
-// Redis wraps the redis.Client with additional functionality
-type Redis struct {
+// RedisRepository wraps the redis.Client with additional functionality
+// Implements ICacheRepository interface
+type RedisRepository struct {
 	Client *redis.Client
 }
 
-// NewRedis creates a new Redis connection with connection pooling configured
-func NewRedis(cfg config.RedisConfig, logger *slog.Logger) (*Redis, error) {
+// NewRedisRepository creates a new Redis connection with connection pooling configured
+func NewRedisRepository(cfg config.RedisConfig, logger *slog.Logger) (*RedisRepository, error) {
 	addr := net.JoinHostPort(cfg.Host, cfg.Port)
 
 	logger.Info("Connecting to Redis",
@@ -62,15 +64,19 @@ func NewRedis(cfg config.RedisConfig, logger *slog.Logger) (*Redis, error) {
 		"min_idle_conns", options.MinIdleConns,
 	)
 
-	return &Redis{Client: client}, nil
+	return &RedisRepository{Client: client}, nil
 }
 
 // Ping verifies the Redis connection
-func (r *Redis) Ping(ctx context.Context) error {
+// Implements ICacheRepository interface
+func (r *RedisRepository) Ping(ctx context.Context) error {
 	return r.Client.Ping(ctx).Err()
 }
 
 // Close closes the Redis connection gracefully
-func (r *Redis) Close() error {
+func (r *RedisRepository) Close() error {
 	return r.Client.Close()
 }
+
+// Ensure RedisRepository implements ICacheRepository
+var _ secondary.ICacheRepository = (*RedisRepository)(nil)

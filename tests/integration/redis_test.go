@@ -32,7 +32,7 @@ func TestRedis_Connection(t *testing.T) {
 	)
 
 	// Create Redis connection
-	rdb, err := redis.NewRedis(cfg.Redis, logger)
+	rdb, err := redis.NewRedisRepository(cfg.Redis, logger)
 	if err != nil {
 		t.Fatalf("Failed to create Redis connection: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestRedis_BasicOperations(t *testing.T) {
 
 	logger := slog.Default()
 
-	rdb, err := redis.NewRedis(cfg.Redis, logger)
+	rdb, err := redis.NewRedisRepository(cfg.Redis, logger)
 	if err != nil {
 		t.Fatalf("Failed to create Redis connection: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestRedis_ConnectionPool(t *testing.T) {
 
 	logger := slog.Default()
 
-	rdb, err := redis.NewRedis(cfg.Redis, logger)
+	rdb, err := redis.NewRedisRepository(cfg.Redis, logger)
 	if err != nil {
 		t.Fatalf("Failed to create Redis connection: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestRedis_GracefulShutdown(t *testing.T) {
 
 	logger := slog.Default()
 
-	rdb, err := redis.NewRedis(cfg.Redis, logger)
+	rdb, err := redis.NewRedisRepository(cfg.Redis, logger)
 	if err != nil {
 		t.Fatalf("Failed to create Redis connection: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestRedis_WithoutPassword(t *testing.T) {
 
 	logger := slog.Default()
 
-	rdb, err := redis.NewRedis(testCfg, logger)
+	rdb, err := redis.NewRedisRepository(testCfg, logger)
 	if err != nil {
 		// This might fail if Redis requires password, which is fine
 		t.Skipf("Skipping test: Redis requires password or not available: %v", err)
@@ -235,7 +235,7 @@ func TestRedis_DifferentDatabases(t *testing.T) {
 	cfg0 := cfg.Redis
 	cfg0.DB = 0
 
-	rdb0, err := redis.NewRedis(cfg0, logger)
+	rdb0, err := redis.NewRedisRepository(cfg0, logger)
 	if err != nil {
 		t.Fatalf("Failed to create Redis connection for DB 0: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestRedis_DifferentDatabases(t *testing.T) {
 	cfg1 := cfg.Redis
 	cfg1.DB = 1
 
-	rdb1, err := redis.NewRedis(cfg1, logger)
+	rdb1, err := redis.NewRedisRepository(cfg1, logger)
 	if err != nil {
 		t.Fatalf("Failed to create Redis connection for DB 1: %v", err)
 	}

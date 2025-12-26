@@ -1,4 +1,4 @@
-package database
+package postgres
 
 import (
 	"log/slog"
@@ -66,7 +66,7 @@ func TestBuildDSN(t *testing.T) {
 	}
 }
 
-func TestNewDatabase_InvalidConfig(t *testing.T) {
+func TestNewPostgresRepository_InvalidConfig(t *testing.T) {
 	logger := slog.Default()
 
 	cfg := config.DatabaseConfig{
@@ -79,7 +79,7 @@ func TestNewDatabase_InvalidConfig(t *testing.T) {
 	}
 
 	// This should fail to connect, but not crash
-	db, err := NewDatabase(cfg, logger)
+	db, err := NewPostgresRepository(cfg, logger)
 	if err == nil {
 		// If it somehow connects, close it
 		if db != nil {

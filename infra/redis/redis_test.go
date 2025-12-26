@@ -7,9 +7,9 @@ import (
 	"github.com/felipesantos/anki-backend/config"
 )
 
-// TestNewRedis_InvalidHost tests that NewRedis returns an error for invalid host
+// TestNewRedisRepository_InvalidHost tests that NewRedisRepository returns an error for invalid host
 // This is a unit test that doesn't require a real Redis connection
-func TestNewRedis_InvalidHost(t *testing.T) {
+func TestNewRedisRepository_InvalidHost(t *testing.T) {
 	logger := slog.Default()
 
 	cfg := config.RedisConfig{
@@ -20,7 +20,7 @@ func TestNewRedis_InvalidHost(t *testing.T) {
 	}
 
 	// This should fail to connect
-	rdb, err := NewRedis(cfg, logger)
+	rdb, err := NewRedisRepository(cfg, logger)
 	if err == nil {
 		// If it somehow connects, close it
 		if rdb != nil {

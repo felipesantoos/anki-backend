@@ -1,4 +1,4 @@
-package database
+package postgres
 
 import (
 	"context"
@@ -11,15 +11,17 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL driver
 
 	"github.com/felipesantos/anki-backend/config"
+	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 )
 
-// Database wraps the sql.DB connection with additional functionality
-type Database struct {
+// PostgresRepository wraps the sql.DB connection with additional functionality
+// Implements IDatabaseRepository interface
+type PostgresRepository struct {
 	DB *sql.DB
 }
 
-// NewDatabase creates a new database connection with connection pooling configured
-func NewDatabase(cfg config.DatabaseConfig, logger *slog.Logger) (*Database, error) {
+// NewPostgresRepository creates a new PostgreSQL connection with connection pooling configured
+func NewPostgresRepository(cfg config.DatabaseConfig, logger *slog.Logger) (*PostgresRepository, error) {
 	dsn, err := buildDSN(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build DSN: %w", err)
@@ -58,17 +60,18 @@ func NewDatabase(cfg config.DatabaseConfig, logger *slog.Logger) (*Database, err
 		"connection_max_lifetime_minutes", cfg.ConnMaxLifetime,
 	)
 
-	return &Database{DB: db}, nil
+	return &PostgresRepository{DB: db}, nil
 }
 
 // Ping verifies the database connection
-func (d *Database) Ping(ctx context.Context) error {
-	return d.DB.PingContext(ctx)
+// Implements IDatabaseRepository interface
+func (p *PostgresRepository) Ping(ctx context.Context) error {
+	return p.DB.PingContext(ctx)
 }
 
 // Close closes the database connection gracefully
-func (d *Database) Close() error {
-	return d.DB.Close()
+func (p *PostgresRepository) Close() error {
+	return p.DB.Close()
 }
 
 // buildDSN builds a PostgreSQL connection string (DSN) from DatabaseConfig
@@ -89,3 +92,7 @@ func buildDSN(cfg config.DatabaseConfig) (string, error) {
 
 	return dsn, nil
 }
+
+// Ensure PostgresRepository implements IDatabaseRepository
+var _ secondary.IDatabaseRepository = (*PostgresRepository)(nil)
+

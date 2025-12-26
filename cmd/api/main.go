@@ -2,13 +2,20 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+
+	"github.com/felipesantos/anki-backend/app/api/routes"
 	"github.com/felipesantos/anki-backend/config"
-	"github.com/felipesantos/anki-backend/infra/database"
+	"github.com/felipesantos/anki-backend/core/services/health"
+	"github.com/felipesantos/anki-backend/infra/postgres"
 	"github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 	// Uncomment to enable automatic migrations on startup
@@ -36,7 +43,7 @@ func main() {
 	)
 
 	// 3. Initialize database connection
-	db, err := database.NewDatabase(cfg.Database, log)
+	db, err := postgres.NewPostgresRepository(cfg.Database, log)
 	if err != nil {
 		log.Error("Failed to initialize database connection", "error", err)
 		os.Exit(1)
@@ -52,7 +59,7 @@ func main() {
 	}
 
 	// 4. Initialize Redis connection
-	rdb, err := redis.NewRedis(cfg.Redis, log)
+	rdb, err := redis.NewRedisRepository(cfg.Redis, log)
 	if err != nil {
 		log.Error("Failed to initialize Redis connection", "error", err)
 		// Redis is optional for some applications, but we'll treat it as an error
@@ -60,17 +67,59 @@ func main() {
 		os.Exit(1)
 	}
 
-	// TODO: Initialize HTTP router
-	// TODO: Initialize services
-	// TODO: Register routes
-	// TODO: Start HTTP server
+	// 5. Initialize Health Service
+	healthService := health.NewHealthService(db, rdb)
+
+	// 6. Initialize HTTP server (Echo)
+	e := echo.New()
+	e.HideBanner = true
+
+	// Middleware
+	e.Use(middleware.Recover())
+	e.Use(middleware.RequestID())
+
+	// Register routes
+	routes.RegisterHealthRoutes(e, healthService)
+
+	// Start HTTP server
+	serverAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
+	srv := &http.Server{
+		Addr:         serverAddr,
+		Handler:      e,
+		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+		IdleTimeout:  time.Duration(cfg.Server.IdleTimeout) * time.Second,
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Store db and redis in context or make them available to handlers
-	_ = db  // TODO: Pass db to services/repositories
-	_ = rdb // TODO: Pass redis to services
+	// Start server in goroutine
+	serverErrChan := make(chan error, 1)
+	go func() {
+		log.Info("Starting HTTP server",
+			"address", serverAddr,
+			"read_timeout", cfg.Server.ReadTimeout,
+			"write_timeout", cfg.Server.WriteTimeout,
+		)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("HTTP server error", "error", err)
+			serverErrChan <- err
+			cancel()
+		}
+	}()
+
+	// Give the server a moment to start and check for immediate errors
+	select {
+	case err := <-serverErrChan:
+		if err != nil {
+			log.Error("Failed to start HTTP server", "error", err)
+			os.Exit(1)
+		}
+	case <-time.After(100 * time.Millisecond):
+		// Server started successfully (no immediate error)
+		log.Info("HTTP server started successfully", "address", serverAddr)
+	}
 
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -84,6 +133,17 @@ func main() {
 
 	// Wait for context cancellation
 	<-ctx.Done()
+
+	// Graceful shutdown of HTTP server
+	log.Info("Shutting down HTTP server...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error("Error shutting down HTTP server", "error", err)
+	} else {
+		log.Info("HTTP server shut down successfully")
+	}
 
 	// Close Redis connection gracefully
 	log.Info("Closing Redis connection...")

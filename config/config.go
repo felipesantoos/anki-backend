@@ -37,6 +37,9 @@ type Config struct {
 
 	// Session configuration
 	Session SessionConfig
+
+	// Jobs configuration
+	Jobs JobsConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -116,6 +119,17 @@ type CORSConfig struct {
 type SessionConfig struct {
 	TTLMinutes int    // Session time-to-live in minutes (default: 30)
 	KeyPrefix  string // Prefix for session keys in Redis (default: "session")
+}
+
+// JobsConfig holds background jobs configuration
+type JobsConfig struct {
+	Enabled          bool   // Enable/disable job processing system
+	WorkerCount      int    // Number of worker goroutines (default: 5)
+	QueueSize        int    // Queue buffer size (default: 1000)
+	MaxRetries       int    // Maximum number of retries for failed jobs (default: 3)
+	RetryDelaySeconds int   // Base delay between retries in seconds (default: 5)
+	RedisQueueKey    string // Redis key for job queue (default: "jobs:queue")
+	RedisDB          int    // Redis database number for jobs (default: 1, use 0 for same as cache)
 }
 
 // ValidationError represents a configuration validation error
@@ -233,6 +247,16 @@ func loadConfig() (*Config, error) {
 	cfg.Session = SessionConfig{
 		TTLMinutes: getEnvAsInt("SESSION_TTL_MINUTES", 30),
 		KeyPrefix:  getEnv("SESSION_KEY_PREFIX", "session"),
+	}
+
+	cfg.Jobs = JobsConfig{
+		Enabled:           getEnvAsBool("JOBS_ENABLED", true),
+		WorkerCount:       getEnvAsInt("JOBS_WORKER_COUNT", 5),
+		QueueSize:         getEnvAsInt("JOBS_QUEUE_SIZE", 1000),
+		MaxRetries:        getEnvAsInt("JOBS_MAX_RETRIES", 3),
+		RetryDelaySeconds: getEnvAsInt("JOBS_RETRY_DELAY_SECONDS", 5),
+		RedisQueueKey:     getEnv("JOBS_REDIS_QUEUE_KEY", "jobs:queue"),
+		RedisDB:           getEnvAsInt("JOBS_REDIS_DB", 1),
 	}
 
 	// Validate configuration

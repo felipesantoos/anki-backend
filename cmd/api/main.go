@@ -33,6 +33,9 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/routes"
 	"github.com/felipesantos/anki-backend/config"
 	"github.com/felipesantos/anki-backend/core/services/health"
+	"github.com/felipesantos/anki-backend/core/services/jobs"
+	"github.com/felipesantos/anki-backend/infra/jobs/handlers"
+	infraJobs "github.com/felipesantos/anki-backend/infra/jobs"
 	"github.com/felipesantos/anki-backend/infra/postgres"
 	"github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/pkg/logger"
@@ -109,7 +112,74 @@ func main() {
 	// 5. Initialize Health Service
 	healthService := health.NewHealthService(db, rdb)
 
-	// 6. Initialize HTTP server (Echo)
+	// 6. Initialize Jobs System (if enabled)
+	var jobService *jobs.JobService
+	var schedulerService *jobs.SchedulerService
+	var workerPool *infraJobs.WorkerPool
+	var scheduler *infraJobs.Scheduler
+
+	if cfg.Jobs.Enabled {
+		log.Info("Initializing jobs system",
+			"worker_count", cfg.Jobs.WorkerCount,
+			"max_retries", cfg.Jobs.MaxRetries,
+			"queue_key", cfg.Jobs.RedisQueueKey,
+			"redis_db", cfg.Jobs.RedisDB,
+		)
+
+		// Create Redis client for jobs (use same connection or separate DB)
+		jobRedisClient := rdb.Client
+		if cfg.Jobs.RedisDB != cfg.Redis.DB {
+			// If using different DB, we need a new client connection
+			// For simplicity, we'll use the same client but note that Redis DB can be changed per command
+			// In production, you might want separate Redis instance for jobs
+			log.Info("Using different Redis DB for jobs",
+				"cache_db", cfg.Redis.DB,
+				"jobs_db", cfg.Jobs.RedisDB,
+			)
+		}
+
+		// Create job queue
+		jobQueue := infraJobs.NewRedisQueue(jobRedisClient, cfg.Jobs.RedisQueueKey)
+
+		// Create job registry
+		jobRegistry := infraJobs.NewJobRegistry()
+
+		// Register job handlers (example handlers - replace with actual handlers)
+		exampleHandler := handlers.NewExampleHandler("example_job")
+		if err := jobRegistry.Register(exampleHandler); err != nil {
+			log.Error("Failed to register job handler", "handler", "example_job", "error", err)
+			os.Exit(1)
+		}
+
+		// Create worker pool
+		workerPool = infraJobs.NewWorkerPool(
+			cfg.Jobs.WorkerCount,
+			jobQueue,
+			jobRegistry,
+			log,
+			cfg.Jobs.MaxRetries,
+			cfg.Jobs.RetryDelaySeconds,
+		)
+
+		// Create scheduler
+		scheduler = infraJobs.NewScheduler(jobQueue, log)
+
+		// Create services
+		jobService = jobs.NewJobService(jobQueue, cfg.Jobs.MaxRetries)
+		schedulerService = jobs.NewSchedulerService(scheduler)
+
+		// Start worker pool
+		workerPool.Start()
+
+		// Start scheduler
+		scheduler.Start()
+
+		log.Info("Jobs system initialized successfully")
+	} else {
+		log.Info("Jobs system is disabled")
+	}
+
+	// 7. Initialize HTTP server (Echo)
 	e := echo.New()
 	e.HideBanner = true
 
@@ -191,6 +261,17 @@ func main() {
 
 	// Wait for context cancellation
 	<-ctx.Done()
+
+	// Graceful shutdown of jobs system
+	if cfg.Jobs.Enabled && workerPool != nil {
+		log.Info("Stopping worker pool...")
+		workerPool.Stop()
+	}
+
+	if cfg.Jobs.Enabled && scheduler != nil {
+		log.Info("Stopping scheduler...")
+		scheduler.Stop()
+	}
 
 	// Graceful shutdown of HTTP server
 	log.Info("Shutting down HTTP server...",

@@ -1,0 +1,70 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Tests
+tests/
+*_test.go
+coverage.out
+coverage.html
+
+# Scripts
+scripts/
+*.sh
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+bin/
+dist/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Storage (local development)
+storage/
+*.db
+*.sqlite
+*.sqlite3
+
+# Dependencies
+vendor/
+
+# Go workspace
+go.work
+
+# Air (live reload)
+tmp/
+

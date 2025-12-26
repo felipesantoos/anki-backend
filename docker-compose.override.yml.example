@@ -1,0 +1,30 @@
+# docker-compose.override.yml
+# This file is for local development overrides
+# Copy this file to docker-compose.override.yml (not tracked in git)
+# Docker Compose will automatically use this file if it exists
+
+version: '3.8'
+
+services:
+  api:
+    # Mount source code for hot-reload during development
+    volumes:
+      - .:/app/src
+      - ./storage:/app/storage
+    # Override command for development (if using air or similar)
+    # command: ["air", "-c", ".air.toml"]
+    environment:
+      - ENV=development
+      - LOG_LEVEL=debug
+      - DEBUG=true
+
+  postgres:
+    # Expose port for local development access
+    ports:
+      - "5432:5432"
+
+  redis:
+    # Expose port for local development access
+    ports:
+      - "6379:6379"
+

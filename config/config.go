@@ -38,11 +38,12 @@ type Config struct {
 
 // ServerConfig holds server-related configuration
 type ServerConfig struct {
-	Host         string
-	Port         string
-	ReadTimeout  int
-	WriteTimeout int
-	IdleTimeout  int
+	Host            string
+	Port            string
+	ReadTimeout     int
+	WriteTimeout    int
+	IdleTimeout     int
+	ShutdownTimeout int // Graceful shutdown timeout in seconds (default: 10)
 }
 
 // DatabaseConfig holds database-related configuration
@@ -151,11 +152,12 @@ func LoadFromFile(filename string) error {
 func loadConfig() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
-			Host:         getEnv("SERVER_HOST", "0.0.0.0"),
-			Port:         getEnv("SERVER_PORT", "8080"),
-			ReadTimeout:  getEnvAsInt("SERVER_READ_TIMEOUT", 30),
-			WriteTimeout: getEnvAsInt("SERVER_WRITE_TIMEOUT", 30),
-			IdleTimeout:  getEnvAsInt("SERVER_IDLE_TIMEOUT", 120),
+			Host:            getEnv("SERVER_HOST", "0.0.0.0"),
+			Port:            getEnv("SERVER_PORT", "8080"),
+			ReadTimeout:     getEnvAsInt("SERVER_READ_TIMEOUT", 30),
+			WriteTimeout:    getEnvAsInt("SERVER_WRITE_TIMEOUT", 30),
+			IdleTimeout:     getEnvAsInt("SERVER_IDLE_TIMEOUT", 120),
+			ShutdownTimeout: getEnvAsInt("SERVER_SHUTDOWN_TIMEOUT", 10),
 		},
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "localhost"),

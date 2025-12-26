@@ -193,12 +193,17 @@ func main() {
 	<-ctx.Done()
 
 	// Graceful shutdown of HTTP server
-	log.Info("Shutting down HTTP server...")
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	log.Info("Shutting down HTTP server...",
+		"shutdown_timeout", cfg.Server.ShutdownTimeout,
+	)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("Error shutting down HTTP server", "error", err)
+		if shutdownCtx.Err() == context.DeadlineExceeded {
+			log.Warn("HTTP server shutdown exceeded timeout, forcing shutdown", "timeout", cfg.Server.ShutdownTimeout)
+		}
 	} else {
 		log.Info("HTTP server shut down successfully")
 	}
@@ -219,6 +224,5 @@ func main() {
 		log.Info("Database connection closed successfully")
 	}
 
-	time.Sleep(1 * time.Second)
 	log.Info("Server stopped")
 }

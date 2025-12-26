@@ -113,8 +113,6 @@ func main() {
 	healthService := health.NewHealthService(db, rdb)
 
 	// 6. Initialize Jobs System (if enabled)
-	var jobService *jobs.JobService
-	var schedulerService *jobs.SchedulerService
 	var workerPool *infraJobs.WorkerPool
 	var scheduler *infraJobs.Scheduler
 
@@ -164,9 +162,10 @@ func main() {
 		// Create scheduler
 		scheduler = infraJobs.NewScheduler(jobQueue, log)
 
-		// Create services
-		jobService = jobs.NewJobService(jobQueue, cfg.Jobs.MaxRetries)
-		schedulerService = jobs.NewSchedulerService(scheduler)
+		// Create services (reserved for future use in handlers/routes)
+		// These services can be used to enqueue jobs or schedule recurring tasks from HTTP handlers
+		_ = jobs.NewJobService(jobQueue, cfg.Jobs.MaxRetries)      // Reserved for future use
+		_ = jobs.NewSchedulerService(scheduler)                    // Reserved for future use
 
 		// Start worker pool
 		workerPool.Start()

@@ -47,7 +47,7 @@ func (s *JobService) EnqueueWithRetries(ctx context.Context, jobType string, pay
 		return "", fmt.Errorf("max retries cannot be negative")
 	}
 
-	job := NewJob(jobType, payload, maxRetries)
+	job := jobs.NewJob(jobType, payload, maxRetries)
 
 	if err := s.queue.Enqueue(ctx, job); err != nil {
 		return "", fmt.Errorf("failed to enqueue job: %w", err)

@@ -37,9 +37,7 @@ func (h *HealthHandler) HealthCheck(c echo.Context) error {
 
 	healthResp, err := h.healthService.CheckHealth(ctx)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to check health",
-		})
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to check health")
 	}
 
 	// Determine HTTP status code based on health status

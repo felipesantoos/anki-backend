@@ -91,6 +91,9 @@ func main() {
 	e := echo.New()
 	e.HideBanner = true
 
+	// Configure custom error handler (must be set before routes)
+	e.HTTPErrorHandler = middlewares.CustomHTTPErrorHandler
+
 	// Middleware
 	e.Use(middleware.Recover())
 	e.Use(middlewares.CORSMiddleware(cfg.CORS)) // CORS should be early in the chain to handle preflight requests

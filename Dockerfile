@@ -15,8 +15,23 @@ COPY go.sum* ./
 # Download dependencies
 RUN go mod download
 
+# Install swag for generating Swagger documentation
+# Use the same version as the swaggo/swag library in go.mod (v1.8.12)
+# This ensures compatibility between the CLI and the library
+ENV GOPATH=/go
+ENV PATH=$PATH:$GOPATH/bin
+RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
+
 # Copy source code
 COPY . .
+
+# Generate Swagger documentation before building
+# Force regeneration to ensure compatibility with installed swag version
+# Remove any existing generated files and regenerate with container's swag version
+RUN mkdir -p docs && \
+    rm -rf docs/docs.go docs/swagger.json docs/swagger.yaml && \
+    swag init -g cmd/api/main.go && \
+    echo "Swagger documentation generated successfully"
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bin/api ./cmd/api

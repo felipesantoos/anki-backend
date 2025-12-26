@@ -3,16 +3,18 @@ package response
 import "time"
 
 // ComponentHealth represents the health status of a single component
+// @Description Health status of a single component (database, redis, etc.)
 type ComponentHealth struct {
-	Status  string `json:"status"`  // "healthy" or "unhealthy"
-	Message string `json:"message"` // Status message or error description
+	Status  string `json:"status" example:"healthy"`   // "healthy" or "unhealthy"
+	Message string `json:"message" example:"Connection successful"` // Status message or error description
 }
 
 // HealthResponse represents the overall health check response
+// @Description Health check response containing overall status, timestamp, and component health statuses
 type HealthResponse struct {
-	Status     string                      `json:"status"`     // "healthy", "degraded", or "unhealthy"
-	Timestamp  string                      `json:"timestamp"`  // ISO 8601 timestamp
-	Components map[string]ComponentHealth  `json:"components"` // Component health statuses
+	Status     string                      `json:"status" example:"healthy"`     // "healthy", "degraded", or "unhealthy"
+	Timestamp  string                      `json:"timestamp" example:"2024-01-15T10:30:00Z"` // ISO 8601 timestamp
+	Components map[string]ComponentHealth  `json:"components"`                  // Component health statuses
 }
 
 // NewHealthResponse creates a new HealthResponse

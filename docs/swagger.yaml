@@ -1,0 +1,74 @@
+basePath: /
+definitions:
+  response.ComponentHealth:
+    description: Health status of a single component (database, redis, etc.)
+    properties:
+      message:
+        description: Status message or error description
+        example: Connection successful
+        type: string
+      status:
+        description: '"healthy" or "unhealthy"'
+        example: healthy
+        type: string
+    type: object
+  response.HealthResponse:
+    description: Health check response containing overall status, timestamp, and component
+      health statuses
+    properties:
+      components:
+        additionalProperties:
+          $ref: '#/definitions/response.ComponentHealth'
+        description: Component health statuses
+        type: object
+      status:
+        description: '"healthy", "degraded", or "unhealthy"'
+        example: healthy
+        type: string
+      timestamp:
+        description: ISO 8601 timestamp
+        example: "2024-01-15T10:30:00Z"
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@anki.example.com
+    name: API Support
+  description: REST API for Anki Backend system. This API provides endpoints for managing
+    decks, notes, cards, and study sessions.
+  license:
+    name: MIT
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Anki Backend API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: 'Returns the health status of the application and its dependencies
+        (database, cache). The endpoint follows hexagonal architecture: Handler ->
+        Service (IHealthService) -> Repositories (IDatabaseRepository, ICacheRepository)'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: All services are healthy
+          schema:
+            $ref: '#/definitions/response.HealthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service is degraded or unhealthy
+          schema:
+            $ref: '#/definitions/response.HealthResponse'
+      summary: Health check endpoint
+      tags:
+      - health
+swagger: "2.0"

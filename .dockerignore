@@ -4,7 +4,12 @@
 .gitattributes
 
 # Documentation
-docs/
+docs/*.md
+docs/README.md
+# Ignore generated Swagger files - they will be regenerated during Docker build
+docs/docs.go
+docs/swagger.json
+docs/swagger.yaml
 *.md
 !README.md
 

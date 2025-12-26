@@ -23,6 +23,15 @@ func NewHealthHandler(healthService primary.IHealthService) *HealthHandler {
 }
 
 // HealthCheck handles GET /health requests
+// @Summary Health check endpoint
+// @Description Returns the health status of the application and its dependencies (database, cache). The endpoint follows hexagonal architecture: Handler -> Service (IHealthService) -> Repositories (IDatabaseRepository, ICacheRepository)
+// @Tags health
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.HealthResponse "All services are healthy"
+// @Failure 503 {object} response.HealthResponse "Service is degraded or unhealthy"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /health [get]
 func (h *HealthHandler) HealthCheck(c echo.Context) error {
 	ctx := c.Request().Context()
 

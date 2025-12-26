@@ -43,7 +43,7 @@ func NewPostgresRepository(cfg config.DatabaseConfig, logger *slog.Logger) (*Pos
 	db.SetMaxOpenConns(cfg.MaxConnections)
 	db.SetMaxIdleConns(cfg.MaxIdleConns)
 	db.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Minute)
-	db.SetConnMaxIdleTime(10 * time.Minute) // Default 10 minutes
+	db.SetConnMaxIdleTime(time.Duration(cfg.ConnMaxIdleTime) * time.Minute)
 
 	// Verify connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -58,6 +58,7 @@ func NewPostgresRepository(cfg config.DatabaseConfig, logger *slog.Logger) (*Pos
 		"max_connections", cfg.MaxConnections,
 		"max_idle_connections", cfg.MaxIdleConns,
 		"connection_max_lifetime_minutes", cfg.ConnMaxLifetime,
+		"connection_max_idle_time_minutes", cfg.ConnMaxIdleTime,
 	)
 
 	return &PostgresRepository{DB: db}, nil

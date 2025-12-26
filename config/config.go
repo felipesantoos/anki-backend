@@ -48,15 +48,16 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database-related configuration
 type DatabaseConfig struct {
-	Host            string
-	Port            string
-	User            string
-	Password        string
-	DBName          string
-	SSLMode         string
-	MaxConnections  int
-	MaxIdleConns    int
-	ConnMaxLifetime int
+	Host             string
+	Port             string
+	User             string
+	Password         string
+	DBName           string
+	SSLMode          string
+	MaxConnections   int
+	MaxIdleConns     int
+	ConnMaxLifetime  int
+	ConnMaxIdleTime  int // Maximum time a connection can be idle before being closed (in minutes)
 }
 
 // RedisConfig holds Redis-related configuration
@@ -160,15 +161,16 @@ func loadConfig() (*Config, error) {
 			ShutdownTimeout: getEnvAsInt("SERVER_SHUTDOWN_TIMEOUT", 10),
 		},
 		Database: DatabaseConfig{
-			Host:            getEnv("DB_HOST", "localhost"),
-			Port:            getEnv("DB_PORT", "5432"),
-			User:            getEnv("DB_USER", "postgres"),
-			Password:        getEnv("DB_PASSWORD", ""),
-			DBName:          getEnv("DB_NAME", "anki"),
-			SSLMode:         getEnv("DB_SSLMODE", "disable"),
-			MaxConnections:  getEnvAsInt("DB_MAX_CONNECTIONS", 25),
-			MaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
-			ConnMaxLifetime: getEnvAsInt("DB_CONN_MAX_LIFETIME", 5),
+			Host:             getEnv("DB_HOST", "localhost"),
+			Port:             getEnv("DB_PORT", "5432"),
+			User:             getEnv("DB_USER", "postgres"),
+			Password:         getEnv("DB_PASSWORD", ""),
+			DBName:           getEnv("DB_NAME", "anki"),
+			SSLMode:          getEnv("DB_SSLMODE", "disable"),
+			MaxConnections:   getEnvAsInt("DB_MAX_CONNECTIONS", 25),
+			MaxIdleConns:     getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
+			ConnMaxLifetime:  getEnvAsInt("DB_CONN_MAX_LIFETIME", 5),
+			ConnMaxIdleTime:  getEnvAsInt("DB_CONN_MAX_IDLE_TIME", 10),
 		},
 		Redis: RedisConfig{
 			Host:     getEnv("REDIS_HOST", "localhost"),

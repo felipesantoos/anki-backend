@@ -93,7 +93,7 @@ func main() {
 
 	// Middleware
 	e.Use(middleware.Recover())
-	e.Use(middleware.RequestID())
+	e.Use(middlewares.RequestIDMiddleware())
 	
 	// Rate limiting middleware (after logging would go, but we'll add logging middleware later)
 	// Rate limiting should come after RequestID to have request IDs in logs

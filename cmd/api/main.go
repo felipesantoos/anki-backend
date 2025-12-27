@@ -33,6 +33,7 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/routes"
 	"github.com/felipesantos/anki-backend/config"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
+	authService "github.com/felipesantos/anki-backend/core/services/auth"
 	"github.com/felipesantos/anki-backend/core/services/events"
 	"github.com/felipesantos/anki-backend/core/services/health"
 	"github.com/felipesantos/anki-backend/core/services/jobs"
@@ -46,6 +47,7 @@ import (
 	infraJobs "github.com/felipesantos/anki-backend/infra/jobs"
 	"github.com/felipesantos/anki-backend/infra/postgres"
 	"github.com/felipesantos/anki-backend/infra/redis"
+	"github.com/felipesantos/anki-backend/infra/database/repositories"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 	// Uncomment to enable automatic migrations on startup
 	"github.com/felipesantos/anki-backend/pkg/migrate"
@@ -325,7 +327,14 @@ func main() {
 
 		log.Info("Events system initialized successfully")
 	} else {
-		log.Info("Events system is disabled")
+		// Create a minimal event bus for auth service if events are disabled
+		// This ensures AuthService always has an event bus available
+		log.Info("Events system is disabled, creating minimal event bus for auth service")
+		eventBus = infraEvents.NewInMemoryEventBus(1, 10, log)
+		if err := eventBus.Start(); err != nil {
+			log.Error("Failed to start minimal event bus for auth", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	// 8. Initialize HTTP server (Echo)
@@ -375,6 +384,12 @@ func main() {
 	if cfg.Metrics.Enabled {
 		routes.RegisterMetricsRoutes(e, metricsSvc, cfg.Metrics.Path)
 	}
+
+	// Initialize Auth Service and register routes
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus)
+	routes.RegisterAuthRoutes(e, authSvc)
 
 	// Start HTTP server
 	serverAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)

@@ -23,10 +23,11 @@ func NewDatabaseCollector(db *sql.DB, systemMetrics *SystemMetrics) *DatabaseCol
 }
 
 // Describe implements prometheus.Collector
+// Note: We don't describe the metrics here because they are already registered
+// in the registry via SystemMetrics.Register(). Describing them again would cause
+// a duplicate registration error. The collector only updates the metric values.
 func (dc *DatabaseCollector) Describe(ch chan<- *prometheus.Desc) {
-	if dc.systemMetrics != nil {
-		dc.systemMetrics.DatabaseConnectionsActive.Describe(ch)
-	}
+	// Metrics are already registered, no need to describe them again
 }
 
 // Collect implements prometheus.Collector
@@ -55,11 +56,11 @@ func NewRedisCollector(client *redis.Client, systemMetrics *SystemMetrics) *Redi
 }
 
 // Describe implements prometheus.Collector
+// Note: We don't describe the metrics here because they are already registered
+// in the registry via SystemMetrics.Register(). Describing them again would cause
+// a duplicate registration error. The collector only updates the metric values.
 func (rc *RedisCollector) Describe(ch chan<- *prometheus.Desc) {
-	if rc.systemMetrics != nil {
-		rc.systemMetrics.RedisConnectionsActive.Describe(ch)
-		rc.systemMetrics.RedisPoolSize.Describe(ch)
-	}
+	// Metrics are already registered, no need to describe them again
 }
 
 // Collect implements prometheus.Collector

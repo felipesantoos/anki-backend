@@ -29,6 +29,10 @@ type MetricsService struct {
 	counters   map[string]*prometheus.CounterVec
 	histograms map[string]*prometheus.HistogramVec
 	gauges     map[string]*prometheus.GaugeVec
+	
+	// Track which collectors have been registered
+	databaseCollectorRegistered bool
+	redisCollectorRegistered     bool
 }
 
 // NewMetricsService creates a new MetricsService with a custom Prometheus registry
@@ -211,26 +215,46 @@ func (m *MetricsService) GetRegistry() *prometheus.Registry {
 
 // RegisterDatabaseCollector registers a database collector for system metrics
 func (m *MetricsService) RegisterDatabaseCollector(db *sql.DB) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	if m.databaseCollectorRegistered {
+		// Already registered, skip
+		return nil
+	}
 	
 	if m.systemMetrics == nil {
 		return fmt.Errorf("system metrics must be registered before registering database collector")
 	}
 	
-	return metricsPackage.RegisterDatabaseCollector(m.registry, db, m.systemMetrics)
+	if err := metricsPackage.RegisterDatabaseCollector(m.registry, db, m.systemMetrics); err != nil {
+		return err
+	}
+	
+	m.databaseCollectorRegistered = true
+	return nil
 }
 
 // RegisterRedisCollector registers a Redis collector for system metrics
 func (m *MetricsService) RegisterRedisCollector(client *redis.Client) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	if m.redisCollectorRegistered {
+		// Already registered, skip
+		return nil
+	}
 	
 	if m.systemMetrics == nil {
 		return fmt.Errorf("system metrics must be registered before registering redis collector")
 	}
 	
-	return metricsPackage.RegisterRedisCollector(m.registry, client, m.systemMetrics)
+	if err := metricsPackage.RegisterRedisCollector(m.registry, client, m.systemMetrics); err != nil {
+		return err
+	}
+	
+	m.redisCollectorRegistered = true
+	return nil
 }
 
 // Ensure MetricsService implements primary.IMetricsService

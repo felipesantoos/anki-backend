@@ -87,12 +87,17 @@ type JWTConfig struct {
 
 // StorageConfig holds storage-related configuration
 type StorageConfig struct {
-	Type      string // "local" or "s3"
-	LocalPath string
-	S3Bucket  string
-	S3Region  string
-	S3Key     string
-	S3Secret  string
+	Type              string // "local", "s3", "cloudflare", or "r2"
+	LocalPath         string
+	S3Bucket          string
+	S3Region          string
+	S3Key             string
+	S3Secret          string
+	CloudflareAccountID string // Cloudflare Account ID for R2
+	CloudflareR2Bucket  string // Cloudflare R2 bucket name
+	CloudflareR2Key     string // Cloudflare R2 Access Key ID
+	CloudflareR2Secret  string // Cloudflare R2 Secret Access Key
+	CloudflareR2Endpoint string // Cloudflare R2 endpoint (optional, defaults to https://<account-id>.r2.cloudflarestorage.com)
 }
 
 // LoggerConfig holds logger-related configuration
@@ -218,12 +223,17 @@ func loadConfig() (*Config, error) {
 			Issuer:             getEnv("JWT_ISSUER", "anki-api"),
 		},
 		Storage: StorageConfig{
-			Type:      getEnv("STORAGE_TYPE", "local"),
-			LocalPath: getEnv("STORAGE_LOCAL_PATH", "./storage"),
-			S3Bucket:  getEnv("STORAGE_S3_BUCKET", ""),
-			S3Region:  getEnv("STORAGE_S3_REGION", ""),
-			S3Key:     getEnv("STORAGE_S3_KEY", ""),
-			S3Secret:  getEnv("STORAGE_S3_SECRET", ""),
+			Type:                getEnv("STORAGE_TYPE", "local"),
+			LocalPath:           getEnv("STORAGE_LOCAL_PATH", "./storage"),
+			S3Bucket:            getEnv("STORAGE_S3_BUCKET", ""),
+			S3Region:            getEnv("STORAGE_S3_REGION", ""),
+			S3Key:               getEnv("STORAGE_S3_KEY", ""),
+			S3Secret:            getEnv("STORAGE_S3_SECRET", ""),
+			CloudflareAccountID: getEnv("STORAGE_CLOUDFLARE_ACCOUNT_ID", ""),
+			CloudflareR2Bucket:  getEnv("STORAGE_CLOUDFLARE_R2_BUCKET", ""),
+			CloudflareR2Key:     getEnv("STORAGE_CLOUDFLARE_R2_KEY", ""),
+			CloudflareR2Secret:  getEnv("STORAGE_CLOUDFLARE_R2_SECRET", ""),
+			CloudflareR2Endpoint: getEnv("STORAGE_CLOUDFLARE_R2_ENDPOINT", ""),
 		},
 		Logger: LoggerConfig{
 			Level:       validateLogLevel(getEnv("LOG_LEVEL", "info")),
@@ -333,6 +343,26 @@ func Validate(cfg *Config) error {
 		if cfg.Storage.S3Secret == "" {
 			missingVars = append(missingVars, "STORAGE_S3_SECRET")
 			validationErrors = append(validationErrors, "STORAGE_S3_SECRET is required when STORAGE_TYPE=s3")
+		}
+	}
+
+	// Validate Cloudflare R2 configuration if storage type is cloudflare or r2
+	if cfg.Storage.Type == "cloudflare" || cfg.Storage.Type == "r2" {
+		if cfg.Storage.CloudflareAccountID == "" {
+			missingVars = append(missingVars, "STORAGE_CLOUDFLARE_ACCOUNT_ID")
+			validationErrors = append(validationErrors, "STORAGE_CLOUDFLARE_ACCOUNT_ID is required when STORAGE_TYPE=cloudflare or r2")
+		}
+		if cfg.Storage.CloudflareR2Bucket == "" {
+			missingVars = append(missingVars, "STORAGE_CLOUDFLARE_R2_BUCKET")
+			validationErrors = append(validationErrors, "STORAGE_CLOUDFLARE_R2_BUCKET is required when STORAGE_TYPE=cloudflare or r2")
+		}
+		if cfg.Storage.CloudflareR2Key == "" {
+			missingVars = append(missingVars, "STORAGE_CLOUDFLARE_R2_KEY")
+			validationErrors = append(validationErrors, "STORAGE_CLOUDFLARE_R2_KEY is required when STORAGE_TYPE=cloudflare or r2")
+		}
+		if cfg.Storage.CloudflareR2Secret == "" {
+			missingVars = append(missingVars, "STORAGE_CLOUDFLARE_R2_SECRET")
+			validationErrors = append(validationErrors, "STORAGE_CLOUDFLARE_R2_SECRET is required when STORAGE_TYPE=cloudflare or r2")
 		}
 	}
 

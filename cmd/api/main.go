@@ -36,6 +36,8 @@ import (
 	"github.com/felipesantos/anki-backend/core/services/events"
 	"github.com/felipesantos/anki-backend/core/services/health"
 	"github.com/felipesantos/anki-backend/core/services/jobs"
+	storageService "github.com/felipesantos/anki-backend/core/services/storage"
+	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	"github.com/felipesantos/anki-backend/infra/jobs/handlers"
@@ -113,10 +115,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 5. Initialize Health Service
+	// 5. Initialize Storage Service
+	storageRepo, err := storageService.NewStorageRepository(cfg.Storage, log)
+	if err != nil {
+		log.Error("Failed to initialize storage repository", "error", err)
+		os.Exit(1)
+	}
+	storageSvc := storageService.NewStorageService(storageRepo, log)
+	log.Info("Storage service initialized", "type", cfg.Storage.Type)
+
+	// 6. Initialize Health Service
 	healthService := health.NewHealthService(db, rdb)
 
-	// 6. Initialize Jobs System (if enabled)
+	// 7. Initialize Jobs System (if enabled)
 	var workerPool *infraJobs.WorkerPool
 	var scheduler *infraJobs.Scheduler
 

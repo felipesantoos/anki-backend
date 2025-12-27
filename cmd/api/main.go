@@ -36,6 +36,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/services/events"
 	"github.com/felipesantos/anki-backend/core/services/health"
 	"github.com/felipesantos/anki-backend/core/services/jobs"
+	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
 	storageService "github.com/felipesantos/anki-backend/core/services/storage"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
@@ -126,6 +127,63 @@ func main() {
 
 	// 6. Initialize Health Service
 	healthService := health.NewHealthService(db, rdb)
+
+	// 6.5. Initialize Metrics Service (if enabled)
+	var metricsSvc *metricsService.MetricsService
+	if cfg.Metrics.Enabled {
+		log.Info("Initializing metrics system",
+			"path", cfg.Metrics.Path,
+			"enable_http", cfg.Metrics.EnableHTTPMetrics,
+			"enable_system", cfg.Metrics.EnableSystemMetrics,
+			"enable_business", cfg.Metrics.EnableBusinessMetrics,
+		)
+
+		metricsSvc = metricsService.NewMetricsService()
+
+		// Register HTTP metrics
+		if cfg.Metrics.EnableHTTPMetrics {
+			if err := metricsSvc.RegisterHTTPMetrics(); err != nil {
+				log.Error("Failed to register HTTP metrics", "error", err)
+				os.Exit(1)
+			}
+			log.Info("HTTP metrics registered")
+		}
+
+		// Register system metrics
+		if cfg.Metrics.EnableSystemMetrics {
+			if err := metricsSvc.RegisterSystemMetrics(); err != nil {
+				log.Error("Failed to register system metrics", "error", err)
+				os.Exit(1)
+			}
+
+			// Register database collector
+			if err := metricsSvc.RegisterDatabaseCollector(db.DB); err != nil {
+				log.Error("Failed to register database collector", "error", err)
+				os.Exit(1)
+			}
+
+			// Register Redis collector
+			if err := metricsSvc.RegisterRedisCollector(rdb.Client); err != nil {
+				log.Error("Failed to register Redis collector", "error", err)
+				os.Exit(1)
+			}
+
+			log.Info("System metrics registered")
+		}
+
+		// Register business metrics
+		if cfg.Metrics.EnableBusinessMetrics {
+			if err := metricsSvc.RegisterBusinessMetrics(); err != nil {
+				log.Error("Failed to register business metrics", "error", err)
+				os.Exit(1)
+			}
+			log.Info("Business metrics registered")
+		}
+
+		log.Info("Metrics system initialized successfully")
+	} else {
+		log.Info("Metrics system is disabled")
+	}
 
 	// 7. Initialize Jobs System (if enabled)
 	var workerPool *infraJobs.WorkerPool
@@ -259,6 +317,12 @@ func main() {
 	e.Use(middlewares.CORSMiddleware(cfg.CORS)) // CORS should be early in the chain to handle preflight requests
 	e.Use(middlewares.RequestIDMiddleware())
 	
+	// Metrics middleware (after RequestID, before RateLimit)
+	// This ensures we have request IDs for logging and metrics are collected before rate limiting
+	if cfg.Metrics.Enabled && cfg.Metrics.EnableHTTPMetrics {
+		e.Use(middlewares.MetricsMiddleware(metricsSvc))
+	}
+	
 	// Rate limiting middleware (after logging would go, but we'll add logging middleware later)
 	// Rate limiting should come after RequestID to have request IDs in logs
 	e.Use(middlewares.RateLimitingMiddleware(cfg.RateLimit, rdb.Client))
@@ -276,6 +340,11 @@ func main() {
 
 	// Register routes
 	routes.RegisterHealthRoutes(e, healthService)
+
+	// Register metrics routes (if enabled)
+	if cfg.Metrics.Enabled {
+		routes.RegisterMetricsRoutes(e, metricsSvc, cfg.Metrics.Path)
+	}
 
 	// Start HTTP server
 	serverAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)

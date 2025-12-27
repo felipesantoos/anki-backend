@@ -665,6 +665,138 @@ func TestRequiredEnvError_Error(t *testing.T) {
 	}
 }
 
+func TestLoad_MetricsConfig_Defaults(t *testing.T) {
+	// Save original values
+	originalMetricsEnabled := os.Getenv("METRICS_ENABLED")
+	originalMetricsPath := os.Getenv("METRICS_PATH")
+	originalMetricsEnableHTTP := os.Getenv("METRICS_ENABLE_HTTP")
+	originalMetricsEnableSystem := os.Getenv("METRICS_ENABLE_SYSTEM")
+	originalMetricsEnableBusiness := os.Getenv("METRICS_ENABLE_BUSINESS")
+
+	defer func() {
+		if originalMetricsEnabled != "" {
+			os.Setenv("METRICS_ENABLED", originalMetricsEnabled)
+		} else {
+			os.Unsetenv("METRICS_ENABLED")
+		}
+		if originalMetricsPath != "" {
+			os.Setenv("METRICS_PATH", originalMetricsPath)
+		} else {
+			os.Unsetenv("METRICS_PATH")
+		}
+		if originalMetricsEnableHTTP != "" {
+			os.Setenv("METRICS_ENABLE_HTTP", originalMetricsEnableHTTP)
+		} else {
+			os.Unsetenv("METRICS_ENABLE_HTTP")
+		}
+		if originalMetricsEnableSystem != "" {
+			os.Setenv("METRICS_ENABLE_SYSTEM", originalMetricsEnableSystem)
+		} else {
+			os.Unsetenv("METRICS_ENABLE_SYSTEM")
+		}
+		if originalMetricsEnableBusiness != "" {
+			os.Setenv("METRICS_ENABLE_BUSINESS", originalMetricsEnableBusiness)
+		} else {
+			os.Unsetenv("METRICS_ENABLE_BUSINESS")
+		}
+	}()
+
+	// Unset all metrics environment variables to test defaults
+	os.Unsetenv("METRICS_ENABLED")
+	os.Unsetenv("METRICS_PATH")
+	os.Unsetenv("METRICS_ENABLE_HTTP")
+	os.Unsetenv("METRICS_ENABLE_SYSTEM")
+	os.Unsetenv("METRICS_ENABLE_BUSINESS")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Check default values
+	if cfg.Metrics.Enabled != true {
+		t.Errorf("Expected Metrics.Enabled = true (default), got %v", cfg.Metrics.Enabled)
+	}
+	if cfg.Metrics.Path != "/metrics" {
+		t.Errorf("Expected Metrics.Path = \"/metrics\" (default), got %q", cfg.Metrics.Path)
+	}
+	if cfg.Metrics.EnableHTTPMetrics != true {
+		t.Errorf("Expected Metrics.EnableHTTPMetrics = true (default), got %v", cfg.Metrics.EnableHTTPMetrics)
+	}
+	if cfg.Metrics.EnableSystemMetrics != true {
+		t.Errorf("Expected Metrics.EnableSystemMetrics = true (default), got %v", cfg.Metrics.EnableSystemMetrics)
+	}
+	if cfg.Metrics.EnableBusinessMetrics != true {
+		t.Errorf("Expected Metrics.EnableBusinessMetrics = true (default), got %v", cfg.Metrics.EnableBusinessMetrics)
+	}
+}
+
+func TestLoad_MetricsConfig_CustomValues(t *testing.T) {
+	// Save original values
+	originalMetricsEnabled := os.Getenv("METRICS_ENABLED")
+	originalMetricsPath := os.Getenv("METRICS_PATH")
+	originalMetricsEnableHTTP := os.Getenv("METRICS_ENABLE_HTTP")
+	originalMetricsEnableSystem := os.Getenv("METRICS_ENABLE_SYSTEM")
+	originalMetricsEnableBusiness := os.Getenv("METRICS_ENABLE_BUSINESS")
+
+	defer func() {
+		if originalMetricsEnabled != "" {
+			os.Setenv("METRICS_ENABLED", originalMetricsEnabled)
+		} else {
+			os.Unsetenv("METRICS_ENABLED")
+		}
+		if originalMetricsPath != "" {
+			os.Setenv("METRICS_PATH", originalMetricsPath)
+		} else {
+			os.Unsetenv("METRICS_PATH")
+		}
+		if originalMetricsEnableHTTP != "" {
+			os.Setenv("METRICS_ENABLE_HTTP", originalMetricsEnableHTTP)
+		} else {
+			os.Unsetenv("METRICS_ENABLE_HTTP")
+		}
+		if originalMetricsEnableSystem != "" {
+			os.Setenv("METRICS_ENABLE_SYSTEM", originalMetricsEnableSystem)
+		} else {
+			os.Unsetenv("METRICS_ENABLE_SYSTEM")
+		}
+		if originalMetricsEnableBusiness != "" {
+			os.Setenv("METRICS_ENABLE_BUSINESS", originalMetricsEnableBusiness)
+		} else {
+			os.Unsetenv("METRICS_ENABLE_BUSINESS")
+		}
+	}()
+
+	// Set custom values
+	os.Setenv("METRICS_ENABLED", "false")
+	os.Setenv("METRICS_PATH", "/custom-metrics")
+	os.Setenv("METRICS_ENABLE_HTTP", "false")
+	os.Setenv("METRICS_ENABLE_SYSTEM", "false")
+	os.Setenv("METRICS_ENABLE_BUSINESS", "false")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Check custom values
+	if cfg.Metrics.Enabled != false {
+		t.Errorf("Expected Metrics.Enabled = false, got %v", cfg.Metrics.Enabled)
+	}
+	if cfg.Metrics.Path != "/custom-metrics" {
+		t.Errorf("Expected Metrics.Path = \"/custom-metrics\", got %q", cfg.Metrics.Path)
+	}
+	if cfg.Metrics.EnableHTTPMetrics != false {
+		t.Errorf("Expected Metrics.EnableHTTPMetrics = false, got %v", cfg.Metrics.EnableHTTPMetrics)
+	}
+	if cfg.Metrics.EnableSystemMetrics != false {
+		t.Errorf("Expected Metrics.EnableSystemMetrics = false, got %v", cfg.Metrics.EnableSystemMetrics)
+	}
+	if cfg.Metrics.EnableBusinessMetrics != false {
+		t.Errorf("Expected Metrics.EnableBusinessMetrics = false, got %v", cfg.Metrics.EnableBusinessMetrics)
+	}
+}
+
 // Helper function to check if a string slice contains a value
 func contains(slice []string, value string) bool {
 	for _, v := range slice {

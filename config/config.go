@@ -43,6 +43,9 @@ type Config struct {
 
 	// Events configuration
 	Events EventsConfig
+
+	// Metrics configuration
+	Metrics MetricsConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -145,6 +148,15 @@ type EventsConfig struct {
 	Enabled    bool // Enable/disable event bus
 	WorkerCount int // Number of workers to process events
 	QueueSize   int // Size of the event queue buffer
+}
+
+// MetricsConfig holds Prometheus metrics configuration
+type MetricsConfig struct {
+	Enabled            bool   // Enable/disable metrics collection
+	Path               string // Metrics endpoint path (default: "/metrics")
+	EnableHTTPMetrics  bool   // Enable HTTP metrics collection
+	EnableSystemMetrics bool  // Enable system metrics (DB, Redis)
+	EnableBusinessMetrics bool // Enable business metrics
 }
 
 // ValidationError represents a configuration validation error
@@ -283,6 +295,14 @@ func loadConfig() (*Config, error) {
 		Enabled:    getEnvAsBool("EVENTS_ENABLED", true),
 		WorkerCount: getEnvAsInt("EVENTS_WORKER_COUNT", 5),
 		QueueSize:   getEnvAsInt("EVENTS_QUEUE_SIZE", 1000),
+	}
+
+	cfg.Metrics = MetricsConfig{
+		Enabled:             getEnvAsBool("METRICS_ENABLED", true),
+		Path:                getEnv("METRICS_PATH", "/metrics"),
+		EnableHTTPMetrics:   getEnvAsBool("METRICS_ENABLE_HTTP", true),
+		EnableSystemMetrics: getEnvAsBool("METRICS_ENABLE_SYSTEM", true),
+		EnableBusinessMetrics: getEnvAsBool("METRICS_ENABLE_BUSINESS", true),
 	}
 
 	// Validate configuration

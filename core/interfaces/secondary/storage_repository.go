@@ -62,3 +62,5 @@ type IStorageRepository interface {
 	Move(ctx context.Context, srcPath string, dstPath string) error
 }
 
+
+

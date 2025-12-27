@@ -17,6 +17,10 @@ type IUserRepository interface {
 	// Returns the user if found, nil if not found, or an error if the query fails
 	FindByEmail(ctx context.Context, email string) (*entities.User, error)
 
+	// FindByID finds a user by ID
+	// Returns the user if found, nil if not found, or an error if the query fails
+	FindByID(ctx context.Context, id int64) (*entities.User, error)
+
 	// ExistsByEmail checks if a user with the given email already exists
 	// Returns true if exists, false if not, or an error if the query fails
 	ExistsByEmail(ctx context.Context, email string) (bool, error)

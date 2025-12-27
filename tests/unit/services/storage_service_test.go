@@ -30,6 +30,9 @@ func (m *mockStorageRepository) Upload(ctx context.Context, file io.Reader, path
 
 func (m *mockStorageRepository) Download(ctx context.Context, path string) ([]byte, error) {
 	args := m.Called(ctx, path)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).([]byte), args.Error(1)
 }
 

@@ -142,6 +142,42 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entiti
 	return mappers.ToDomain(&model)
 }
 
+// FindByID finds a user by ID
+// Returns the user if found, nil if not found, or an error if the query fails
+func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entities.User, error) {
+	query := `
+		SELECT id, email, password_hash, email_verified, created_at, updated_at, last_login_at, deleted_at
+		FROM users
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+
+	var model models.UserModel
+	var lastLoginAt, deletedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&model.ID,
+		&model.Email,
+		&model.PasswordHash,
+		&model.EmailVerified,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+		&lastLoginAt,
+		&deletedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find user by ID: %w", err)
+	}
+
+	model.LastLoginAt = lastLoginAt
+	model.DeletedAt = deletedAt
+
+	return mappers.ToDomain(&model)
+}
+
 // ExistsByEmail checks if a user with the given email already exists
 // Returns true if exists, false if not, or an error if the query fails
 func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {

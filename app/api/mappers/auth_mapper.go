@@ -23,3 +23,28 @@ func ToRegisterResponse(user *entities.User) *response.RegisterResponse {
 		},
 	}
 }
+
+// ToLoginResponse converts a User entity and tokens to LoginResponse DTO
+func ToLoginResponse(user *entities.User, accessToken, refreshToken string, expiresIn int) *response.LoginResponse {
+	return &response.LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    expiresIn,
+		TokenType:    "Bearer",
+		User: response.UserData{
+			ID:            user.ID,
+			Email:         user.Email.Value(),
+			EmailVerified: user.EmailVerified,
+			CreatedAt:     user.CreatedAt,
+		},
+	}
+}
+
+// ToTokenResponse converts an access token and expiry to TokenResponse DTO
+func ToTokenResponse(accessToken string, expiresIn int) *response.TokenResponse {
+	return &response.TokenResponse{
+		AccessToken: accessToken,
+		ExpiresIn:   expiresIn,
+		TokenType:   "Bearer",
+	}
+}

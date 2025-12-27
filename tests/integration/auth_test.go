@@ -28,7 +28,9 @@ import (
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
 	postgresInfra "github.com/felipesantos/anki-backend/infra/postgres"
+	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/config"
+	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 )
 
@@ -125,10 +127,21 @@ func TestAuth_Register_Integration(t *testing.T) {
 	require.NoError(t, err)
 	defer eventBus.Stop()
 
+	// Setup Redis
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo)
 
 	// Setup Echo
 	e := echo.New()
@@ -234,6 +247,352 @@ func TestAuth_Register_Integration(t *testing.T) {
 		jsonBody, _ := json.Marshal(reqBody)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+func TestAuth_Login_Integration(t *testing.T) {
+	db, cleanup := setupAuthTestDB(t)
+	defer cleanup()
+
+	// Setup event bus
+	log := logger.GetLogger()
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	err := eventBus.Start()
+	require.NoError(t, err)
+	defer eventBus.Stop()
+
+	// Setup Redis
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
+	// Setup repositories and service
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo)
+
+	// Setup Echo
+	e := echo.New()
+	routes.RegisterAuthRoutes(e, authSvc)
+
+	// First register a user
+	registerReq := request.RegisterRequest{
+		Email:           "testlogin@example.com",
+		Password:        "password123",
+		PasswordConfirm: "password123",
+	}
+	registerBody, _ := json.Marshal(registerReq)
+	registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+	registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	registerRec := httptest.NewRecorder()
+	e.ServeHTTP(registerRec, registerHTTPReq)
+	require.Equal(t, http.StatusCreated, registerRec.Code)
+
+	t.Run("successful login", func(t *testing.T) {
+		reqBody := request.LoginRequest{
+			Email:    "testlogin@example.com",
+			Password: "password123",
+		}
+		jsonBody, err := json.Marshal(reqBody)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var result response.LoginResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &result)
+		require.NoError(t, err)
+
+		assert.NotEmpty(t, result.AccessToken)
+		assert.NotEmpty(t, result.RefreshToken)
+		assert.Equal(t, "Bearer", result.TokenType)
+		assert.Greater(t, result.ExpiresIn, 0)
+		assert.Equal(t, "testlogin@example.com", result.User.Email)
+		assert.NotZero(t, result.User.ID)
+	})
+
+	t.Run("invalid credentials - wrong password", func(t *testing.T) {
+		reqBody := request.LoginRequest{
+			Email:    "testlogin@example.com",
+			Password: "wrongpassword",
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
+	t.Run("invalid credentials - user not found", func(t *testing.T) {
+		reqBody := request.LoginRequest{
+			Email:    "nonexistent@example.com",
+			Password: "password123",
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
+	t.Run("invalid email format", func(t *testing.T) {
+		reqBody := request.LoginRequest{
+			Email:    "invalid-email",
+			Password: "password123",
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+func TestAuth_RefreshToken_Integration(t *testing.T) {
+	db, cleanup := setupAuthTestDB(t)
+	defer cleanup()
+
+	// Setup event bus
+	log := logger.GetLogger()
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	err := eventBus.Start()
+	require.NoError(t, err)
+	defer eventBus.Stop()
+
+	// Setup Redis
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
+	// Setup repositories and service
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo)
+
+	// Setup Echo
+	e := echo.New()
+	routes.RegisterAuthRoutes(e, authSvc)
+
+	// Register and login a user to get a refresh token
+	registerReq := request.RegisterRequest{
+		Email:           "testrefresh@example.com",
+		Password:        "password123",
+		PasswordConfirm: "password123",
+	}
+	registerBody, _ := json.Marshal(registerReq)
+	registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+	registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	registerRec := httptest.NewRecorder()
+	e.ServeHTTP(registerRec, registerHTTPReq)
+	require.Equal(t, http.StatusCreated, registerRec.Code)
+
+	loginReq := request.LoginRequest{
+		Email:    "testrefresh@example.com",
+		Password: "password123",
+	}
+	loginBody, _ := json.Marshal(loginReq)
+	loginHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+	loginHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	loginRec := httptest.NewRecorder()
+	e.ServeHTTP(loginRec, loginHTTPReq)
+	require.Equal(t, http.StatusOK, loginRec.Code)
+
+	var loginResp response.LoginResponse
+	err = json.Unmarshal(loginRec.Body.Bytes(), &loginResp)
+	require.NoError(t, err)
+	refreshToken := loginResp.RefreshToken
+
+	t.Run("successful refresh", func(t *testing.T) {
+		reqBody := request.RefreshRequest{
+			RefreshToken: refreshToken,
+		}
+		jsonBody, err := json.Marshal(reqBody)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var result response.TokenResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &result)
+		require.NoError(t, err)
+
+		assert.NotEmpty(t, result.AccessToken)
+		assert.Equal(t, "Bearer", result.TokenType)
+		assert.Greater(t, result.ExpiresIn, 0)
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		reqBody := request.RefreshRequest{
+			RefreshToken: "invalid-token",
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
+	t.Run("empty refresh token", func(t *testing.T) {
+		reqBody := request.RefreshRequest{
+			RefreshToken: "",
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+func TestAuth_Logout_Integration(t *testing.T) {
+	db, cleanup := setupAuthTestDB(t)
+	defer cleanup()
+
+	// Setup event bus
+	log := logger.GetLogger()
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	err := eventBus.Start()
+	require.NoError(t, err)
+	defer eventBus.Stop()
+
+	// Setup Redis
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
+	// Setup repositories and service
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo)
+
+	// Setup Echo
+	e := echo.New()
+	routes.RegisterAuthRoutes(e, authSvc)
+
+	// Register and login a user to get a refresh token
+	registerReq := request.RegisterRequest{
+		Email:           "testlogout@example.com",
+		Password:        "password123",
+		PasswordConfirm: "password123",
+	}
+	registerBody, _ := json.Marshal(registerReq)
+	registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+	registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	registerRec := httptest.NewRecorder()
+	e.ServeHTTP(registerRec, registerHTTPReq)
+	require.Equal(t, http.StatusCreated, registerRec.Code)
+
+	loginReq := request.LoginRequest{
+		Email:    "testlogout@example.com",
+		Password: "password123",
+	}
+	loginBody, _ := json.Marshal(loginReq)
+	loginHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+	loginHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	loginRec := httptest.NewRecorder()
+	e.ServeHTTP(loginRec, loginHTTPReq)
+	require.Equal(t, http.StatusOK, loginRec.Code)
+
+	var loginResp response.LoginResponse
+	err = json.Unmarshal(loginRec.Body.Bytes(), &loginResp)
+	require.NoError(t, err)
+	refreshToken := loginResp.RefreshToken
+
+	t.Run("successful logout", func(t *testing.T) {
+		reqBody := request.RefreshRequest{
+			RefreshToken: refreshToken,
+		}
+		jsonBody, err := json.Marshal(reqBody)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var result map[string]string
+		err = json.Unmarshal(rec.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Logged out successfully", result["message"])
+
+		// Verify that refresh token was invalidated by trying to refresh it
+		refreshReq := request.RefreshRequest{
+			RefreshToken: refreshToken,
+		}
+		refreshBody, _ := json.Marshal(refreshReq)
+		refreshHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(refreshBody))
+		refreshHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		refreshRec := httptest.NewRecorder()
+		e.ServeHTTP(refreshRec, refreshHTTPReq)
+
+		// Should fail with unauthorized since token was revoked
+		assert.Equal(t, http.StatusUnauthorized, refreshRec.Code)
+	})
+
+	t.Run("empty refresh token", func(t *testing.T) {
+		reqBody := request.RefreshRequest{
+			RefreshToken: "",
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", bytes.NewReader(jsonBody))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		

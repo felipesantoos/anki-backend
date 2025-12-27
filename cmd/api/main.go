@@ -48,6 +48,7 @@ import (
 	"github.com/felipesantos/anki-backend/infra/postgres"
 	"github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
+	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 	// Uncomment to enable automatic migrations on startup
 	"github.com/felipesantos/anki-backend/pkg/migrate"
@@ -386,9 +387,20 @@ func main() {
 	}
 
 	// Initialize Auth Service and register routes
+	// Create JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	if err != nil {
+		log.Error("Failed to initialize JWT service", "error", err)
+		os.Exit(1)
+	}
+	log.Info("JWT service initialized successfully")
+
+	// Initialize repositories
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus)
+	
+	// Create Auth Service with JWT service and cache repository
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, rdb)
 	routes.RegisterAuthRoutes(e, authSvc)
 
 	// Start HTTP server

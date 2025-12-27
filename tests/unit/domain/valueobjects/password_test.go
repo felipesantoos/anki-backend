@@ -2,6 +2,16 @@ package valueobjects
 
 import (
 	"testing"
+
+	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
+)
+
+var (
+	ErrPasswordTooShort = valueobjects.ErrPasswordTooShort
+	ErrPasswordNoLetter = valueobjects.ErrPasswordNoLetter
+	ErrPasswordNoNumber = valueobjects.ErrPasswordNoNumber
+	NewPassword         = valueobjects.NewPassword
+	NewPasswordFromHash = valueobjects.NewPasswordFromHash
 )
 
 func TestNewPassword(t *testing.T) {

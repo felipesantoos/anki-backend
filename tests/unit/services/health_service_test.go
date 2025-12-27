@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/core/services/health"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 )
@@ -20,46 +19,47 @@ func (m *mockDatabaseRepository) Ping(ctx context.Context) error {
 	return m.pingErr
 }
 
-// mockCacheRepository is a mock implementation of ICacheRepository
-type mockCacheRepository struct {
+// mockCacheRepositoryForHealth is a mock implementation of ICacheRepository for health tests
+// Note: A separate type name is used to avoid conflict with mockCacheRepository in cache_service_test.go
+type mockCacheRepositoryForHealth struct {
 	pingErr error
 }
 
-func (m *mockCacheRepository) Ping(ctx context.Context) error {
+func (m *mockCacheRepositoryForHealth) Ping(ctx context.Context) error {
 	return m.pingErr
 }
 
-func (m *mockCacheRepository) Get(ctx context.Context, key string) (string, error) {
+func (m *mockCacheRepositoryForHealth) Get(ctx context.Context, key string) (string, error) {
 	return "", errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
+func (m *mockCacheRepositoryForHealth) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
 	return errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) Delete(ctx context.Context, key string) error {
+func (m *mockCacheRepositoryForHealth) Delete(ctx context.Context, key string) error {
 	return errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) Exists(ctx context.Context, key string) (bool, error) {
+func (m *mockCacheRepositoryForHealth) Exists(ctx context.Context, key string) (bool, error) {
 	return false, errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error) {
+func (m *mockCacheRepositoryForHealth) SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error) {
 	return false, errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) Expire(ctx context.Context, key string, ttl time.Duration) error {
+func (m *mockCacheRepositoryForHealth) Expire(ctx context.Context, key string, ttl time.Duration) error {
 	return errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) TTL(ctx context.Context, key string) (time.Duration, error) {
+func (m *mockCacheRepositoryForHealth) TTL(ctx context.Context, key string) (time.Duration, error) {
 	return 0, errors.New("not implemented")
 }
 
 func TestHealthService_CheckHealth_AllHealthy(t *testing.T) {
 	mockDB := &mockDatabaseRepository{pingErr: nil}
-	mockCache := &mockCacheRepository{pingErr: nil}
+	mockCache := &mockCacheRepositoryForHealth{pingErr: nil}
 
 	service := health.NewHealthService(mockDB, mockCache)
 
@@ -91,7 +91,7 @@ func TestHealthService_CheckHealth_AllHealthy(t *testing.T) {
 
 func TestHealthService_CheckHealth_DatabaseDown(t *testing.T) {
 	mockDB := &mockDatabaseRepository{pingErr: errors.New("connection refused")}
-	mockCache := &mockCacheRepository{pingErr: nil}
+	mockCache := &mockCacheRepositoryForHealth{pingErr: nil}
 
 	service := health.NewHealthService(mockDB, mockCache)
 
@@ -123,7 +123,7 @@ func TestHealthService_CheckHealth_DatabaseDown(t *testing.T) {
 
 func TestHealthService_CheckHealth_CacheDown(t *testing.T) {
 	mockDB := &mockDatabaseRepository{pingErr: nil}
-	mockCache := &mockCacheRepository{pingErr: errors.New("connection refused")}
+	mockCache := &mockCacheRepositoryForHealth{pingErr: errors.New("connection refused")}
 
 	service := health.NewHealthService(mockDB, mockCache)
 
@@ -155,7 +155,7 @@ func TestHealthService_CheckHealth_CacheDown(t *testing.T) {
 
 func TestHealthService_CheckHealth_BothDown(t *testing.T) {
 	mockDB := &mockDatabaseRepository{pingErr: errors.New("connection refused")}
-	mockCache := &mockCacheRepository{pingErr: errors.New("connection refused")}
+	mockCache := &mockCacheRepositoryForHealth{pingErr: errors.New("connection refused")}
 
 	service := health.NewHealthService(mockDB, mockCache)
 
@@ -187,7 +187,7 @@ func TestHealthService_CheckHealth_BothDown(t *testing.T) {
 
 func TestHealthService_CheckHealth_NilDatabase(t *testing.T) {
 	var nilDB secondary.IDatabaseRepository = nil
-	mockCache := &mockCacheRepository{pingErr: nil}
+	mockCache := &mockCacheRepositoryForHealth{pingErr: nil}
 
 	service := health.NewHealthService(nilDB, mockCache)
 
@@ -237,7 +237,7 @@ func TestHealthService_CheckHealth_NilCache(t *testing.T) {
 
 func TestHealthService_CheckHealth_Timeout(t *testing.T) {
 	mockDB := &mockDatabaseRepository{pingErr: context.DeadlineExceeded}
-	mockCache := &mockCacheRepository{pingErr: nil}
+	mockCache := &mockCacheRepositoryForHealth{pingErr: nil}
 
 	service := health.NewHealthService(mockDB, mockCache)
 
@@ -262,7 +262,7 @@ func TestHealthService_CheckHealth_Timeout(t *testing.T) {
 
 func TestHealthService_CheckHealth_ResponseStructure(t *testing.T) {
 	mockDB := &mockDatabaseRepository{pingErr: nil}
-	mockCache := &mockCacheRepository{pingErr: nil}
+	mockCache := &mockCacheRepositoryForHealth{pingErr: nil}
 
 	service := health.NewHealthService(mockDB, mockCache)
 

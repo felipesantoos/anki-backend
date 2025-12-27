@@ -2,6 +2,14 @@ package valueobjects
 
 import (
 	"testing"
+
+	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
+)
+
+var (
+	ErrEmailEmpty  = valueobjects.ErrEmailEmpty
+	ErrEmailInvalid = valueobjects.ErrEmailInvalid
+	NewEmail       = valueobjects.NewEmail
 )
 
 func TestNewEmail(t *testing.T) {

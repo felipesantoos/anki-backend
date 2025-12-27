@@ -11,7 +11,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/handlers"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 )
 
 // mockHealthService is a mock implementation of IHealthService
@@ -134,15 +133,11 @@ func TestHealthHandler_HealthCheck_ServiceError(t *testing.T) {
 	handler := handlers.NewHealthHandler(mockService)
 
 	e := echo.New()
+	e.GET("/health", handler.HealthCheck)
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
 
-	err := handler.HealthCheck(c)
-
-	if err != nil {
-		t.Fatalf("HealthCheck() error = %v, want nil", err)
-	}
+	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("HealthCheck() status code = %d, want %d", rec.Code, http.StatusInternalServerError)
@@ -153,8 +148,8 @@ func TestHealthHandler_HealthCheck_ServiceError(t *testing.T) {
 		t.Fatalf("HealthCheck() failed to unmarshal response: %v", err)
 	}
 
-	if result["error"] != "Failed to check health" {
-		t.Errorf("HealthCheck() error message = %v, want 'Failed to check health'", result["error"])
+	if result["message"] != "Failed to check health" {
+		t.Errorf("HealthCheck() error message = %v, want 'Failed to check health'", result["message"])
 	}
 }
 

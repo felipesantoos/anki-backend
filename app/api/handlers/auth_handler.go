@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -99,4 +100,162 @@ func handleRegisterError(err error) *echo.HTTPError {
 
 	// For other errors, return 500
 	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to register user")
+}
+
+// Login handles POST /api/v1/auth/login requests
+// @Summary Login user
+// @Description Authenticates a user with email and password and returns access and refresh tokens
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body request.LoginRequest true "Login request"
+// @Success 200 {object} response.LoginResponse "Login successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Invalid credentials"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/login [post]
+func (h *AuthHandler) Login(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Bind request body to DTO
+	var req request.LoginRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if err := validateLoginRequest(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Call service
+	resp, err := h.authService.Login(ctx, req.Email, req.Password)
+	if err != nil {
+		return handleLoginError(err)
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+// RefreshToken handles POST /api/v1/auth/refresh requests
+// @Summary Refresh access token
+// @Description Generates a new access token using a refresh token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body request.RefreshRequest true "Refresh token request"
+// @Success 200 {object} response.TokenResponse "Token refreshed successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Invalid or expired token"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/refresh [post]
+func (h *AuthHandler) RefreshToken(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Bind request body to DTO
+	var req request.RefreshRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if req.RefreshToken == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "refresh_token is required")
+	}
+
+	// Call service
+	resp, err := h.authService.RefreshToken(ctx, req.RefreshToken)
+	if err != nil {
+		return handleRefreshError(err)
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+// Logout handles POST /api/v1/auth/logout requests
+// @Summary Logout user
+// @Description Invalidates a refresh token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body request.RefreshRequest true "Logout request"
+// @Success 200 {object} map[string]string "Logout successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Invalid token"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/logout [post]
+func (h *AuthHandler) Logout(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Bind request body to DTO
+	var req request.RefreshRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if req.RefreshToken == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "refresh_token is required")
+	}
+
+	// Call service
+	err := h.authService.Logout(ctx, req.RefreshToken)
+	if err != nil {
+		return handleLogoutError(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "Logged out successfully"})
+}
+
+// validateLoginRequest validates the login request
+func validateLoginRequest(req *request.LoginRequest) error {
+	var errors []string
+
+	if req.Email == "" {
+		errors = append(errors, "email is required")
+	}
+
+	if req.Password == "" {
+		errors = append(errors, "password is required")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("%s", strings.Join(errors, ", "))
+	}
+
+	return nil
+}
+
+// handleLoginError handles errors from the login service and converts them to appropriate HTTP errors
+func handleLoginError(err error) *echo.HTTPError {
+	if errors.Is(err, authService.ErrInvalidCredentials) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid email or password")
+	}
+
+	if errors.Is(err, authService.ErrInvalidEmail) || errors.Is(err, authService.ErrInvalidPassword) {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// For other errors, return 500
+	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to login")
+}
+
+// handleRefreshError handles errors from the refresh token service and converts them to appropriate HTTP errors
+func handleRefreshError(err error) *echo.HTTPError {
+	if errors.Is(err, authService.ErrInvalidToken) || errors.Is(err, authService.ErrUserNotFound) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid or expired token")
+	}
+
+	// For other errors, return 500
+	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to refresh token")
+}
+
+// handleLogoutError handles errors from the logout service and converts them to appropriate HTTP errors
+func handleLogoutError(err error) *echo.HTTPError {
+	if errors.Is(err, authService.ErrInvalidToken) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
+	}
+
+	// For other errors, return 500
+	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to logout")
 }

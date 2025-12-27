@@ -144,7 +144,8 @@ func main() {
 		log.Error("Failed to initialize storage repository", "error", err)
 		os.Exit(1)
 	}
-	storageSvc := storageService.NewStorageService(storageRepo, log)
+	// Storage service is reserved for future use in handlers/routes
+	_ = storageService.NewStorageService(storageRepo, log)
 	log.Info("Storage service initialized", "type", cfg.Storage.Type)
 
 	// 6. Initialize Health Service

@@ -174,11 +174,12 @@ func (h *AuthHandler) RefreshToken(c echo.Context) error {
 
 // Logout handles POST /api/v1/auth/logout requests
 // @Summary Logout user
-// @Description Invalidates a refresh token
+// @Description Invalidates both access token and refresh token
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body request.RefreshRequest true "Logout request"
+// @Security BearerAuth
+// @Param request body request.RefreshRequest true "Logout request (refresh_token optional if access token is provided)"
 // @Success 200 {object} map[string]string "Logout successful"
 // @Failure 400 {object} response.ErrorResponse "Invalid request"
 // @Failure 401 {object} response.ErrorResponse "Invalid token"
@@ -187,19 +188,28 @@ func (h *AuthHandler) RefreshToken(c echo.Context) error {
 func (h *AuthHandler) Logout(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// Bind request body to DTO
-	var req request.RefreshRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	// Extract access token from Authorization header
+	authHeader := c.Request().Header.Get("Authorization")
+	var accessToken string
+	if authHeader != "" {
+		// Extract token from "Bearer <token>" format
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			accessToken = authHeader[7:]
+		}
 	}
 
-	// Validate request
-	if req.RefreshToken == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "refresh_token is required")
+	// Bind request body to DTO (for refresh token, optional)
+	var req request.RefreshRequest
+	// Don't fail if body is empty - access token from header is enough
+	_ = c.Bind(&req)
+
+	// At least one token must be provided
+	if accessToken == "" && req.RefreshToken == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Either Authorization header with Bearer token or refresh_token in body is required")
 	}
 
 	// Call service
-	err := h.authService.Logout(ctx, req.RefreshToken)
+	err := h.authService.Logout(ctx, accessToken, req.RefreshToken)
 	if err != nil {
 		return handleLogoutError(err)
 	}

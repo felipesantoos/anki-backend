@@ -601,6 +601,7 @@ func TestAuth_Logout_Integration(t *testing.T) {
 	refreshToken := loginResp.RefreshToken
 
 	t.Run("successful logout", func(t *testing.T) {
+		// Logout with both access token and refresh token
 		reqBody := request.RefreshRequest{
 			RefreshToken: refreshToken,
 		}
@@ -609,6 +610,7 @@ func TestAuth_Logout_Integration(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", bytes.NewReader(jsonBody))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
 		rec := httptest.NewRecorder()
 		
 		e.ServeHTTP(rec, req)
@@ -632,15 +634,43 @@ func TestAuth_Logout_Integration(t *testing.T) {
 
 		// Should fail with unauthorized since token was revoked
 		assert.Equal(t, http.StatusUnauthorized, refreshRec.Code)
+
+		// TODO: Verify access token is blacklisted (would require JWT auth middleware to check blacklist)
+		// For now, we verify that refresh token is invalidated, which is the main concern
 	})
 
-	t.Run("empty refresh token", func(t *testing.T) {
-		reqBody := request.RefreshRequest{
-			RefreshToken: "",
+	t.Run("logout with access token only", func(t *testing.T) {
+		// Login again to get new tokens
+		loginReq := request.LoginRequest{
+			Email:    "testlogout@example.com",
+			Password: "password123",
 		}
-		jsonBody, _ := json.Marshal(reqBody)
+		loginBody, _ := json.Marshal(loginReq)
+		loginHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+		loginHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		loginRec := httptest.NewRecorder()
+		e.ServeHTTP(loginRec, loginHTTPReq)
+		require.Equal(t, http.StatusOK, loginRec.Code)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", bytes.NewReader(jsonBody))
+		var loginResp2 response.LoginResponse
+		err = json.Unmarshal(loginRec.Body.Bytes(), &loginResp2)
+		require.NoError(t, err)
+
+		// Logout with only access token (no refresh token in body)
+		logoutReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+		logoutReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		logoutReq.Header.Set("Authorization", "Bearer "+loginResp2.AccessToken)
+		logoutRec := httptest.NewRecorder()
+
+		e.ServeHTTP(logoutRec, logoutReq)
+
+		assert.Equal(t, http.StatusOK, logoutRec.Code)
+
+		// TODO: Verify access token is blacklisted (would require JWT auth middleware)
+	})
+
+	t.Run("logout with no tokens", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		

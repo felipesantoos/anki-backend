@@ -22,7 +22,7 @@ type mockAuthService struct {
 	registerFunc     func(ctx context.Context, email string, password string) (*entities.User, error)
 	loginFunc        func(ctx context.Context, email string, password string) (*response.LoginResponse, error)
 	refreshTokenFunc func(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
-	logoutFunc       func(ctx context.Context, refreshToken string) error
+	logoutFunc       func(ctx context.Context, accessToken string, refreshToken string) error
 }
 
 func (m *mockAuthService) Register(ctx context.Context, email string, password string) (*entities.User, error) {
@@ -46,9 +46,9 @@ func (m *mockAuthService) RefreshToken(ctx context.Context, refreshToken string)
 	return nil, nil
 }
 
-func (m *mockAuthService) Logout(ctx context.Context, refreshToken string) error {
+func (m *mockAuthService) Logout(ctx context.Context, accessToken string, refreshToken string) error {
 	if m.logoutFunc != nil {
-		return m.logoutFunc(ctx, refreshToken)
+		return m.logoutFunc(ctx, accessToken, refreshToken)
 	}
 	return nil
 }
@@ -526,7 +526,7 @@ func TestAuthHandler_RefreshToken_EmptyToken(t *testing.T) {
 
 func TestAuthHandler_Logout_Success(t *testing.T) {
 	mockService := &mockAuthService{
-		logoutFunc: func(ctx context.Context, refreshToken string) error {
+		logoutFunc: func(ctx context.Context, accessToken string, refreshToken string) error {
 			return nil
 		},
 	}
@@ -541,6 +541,7 @@ func TestAuthHandler_Logout_Success(t *testing.T) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", bytes.NewReader(jsonBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Authorization", "Bearer valid-access-token")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -564,17 +565,42 @@ func TestAuthHandler_Logout_Success(t *testing.T) {
 	}
 }
 
-func TestAuthHandler_Logout_EmptyToken(t *testing.T) {
+func TestAuthHandler_Logout_AccessTokenOnly(t *testing.T) {
+	mockService := &mockAuthService{
+		logoutFunc: func(ctx context.Context, accessToken string, refreshToken string) error {
+			if accessToken == "" {
+				t.Error("Expected access token to be provided")
+			}
+			return nil
+		},
+	}
+
+	handler := handlers.NewAuthHandler(mockService)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Authorization", "Bearer valid-access-token")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.Logout(c)
+
+	if err != nil {
+		t.Fatalf("Logout() error = %v, want nil", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Logout() status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestAuthHandler_Logout_NoTokens(t *testing.T) {
 	mockService := &mockAuthService{}
 	handler := handlers.NewAuthHandler(mockService)
 
-	reqBody := map[string]interface{}{
-		"refresh_token": "",
-	}
-	jsonBody, _ := json.Marshal(reqBody)
-
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", bytes.NewReader(jsonBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)

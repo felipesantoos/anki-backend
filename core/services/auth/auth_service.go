@@ -34,6 +34,7 @@ var (
 
 const (
 	refreshTokenKeyPrefix = "refresh_token"
+	accessTokenBlacklistPrefix = "access_token_blacklist"
 )
 
 // AuthService implements IAuthService
@@ -71,6 +72,11 @@ func hashToken(token string) string {
 // buildRefreshTokenKey builds the Redis key for a refresh token
 func buildRefreshTokenKey(token string) string {
 	return fmt.Sprintf("%s:%s", refreshTokenKeyPrefix, hashToken(token))
+}
+
+// buildAccessTokenBlacklistKey builds the Redis key for an access token blacklist entry
+func buildAccessTokenBlacklistKey(token string) string {
+	return fmt.Sprintf("%s:%s", accessTokenBlacklistPrefix, hashToken(token))
 }
 
 // Register creates a new user account with email and password
@@ -291,27 +297,56 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*r
 	}, nil
 }
 
-// Logout invalidates a refresh token
-func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
-	// 1. Validate refresh token (optional but good for error messages)
-	claims, err := s.jwtService.ValidateToken(refreshToken)
-	if err != nil {
-		// If token is invalid, we still try to delete it (idempotent operation)
-		// This prevents information leakage about token validity
-	} else {
-		// Check if token is a refresh token
-		if claims.Type != "refresh" {
-			return ErrInvalidToken
+// Logout invalidates both access token and refresh token
+// It adds the access token to a blacklist in Redis and removes the refresh token
+func (s *AuthService) Logout(ctx context.Context, accessToken string, refreshToken string) error {
+	// 1. Invalidate access token (add to blacklist)
+	if accessToken != "" {
+		// Validate access token to get expiration time
+		claims, err := s.jwtService.ValidateToken(accessToken)
+		if err == nil && claims != nil && claims.Type == "access" {
+			// Calculate TTL: time until token expires
+			ttl := time.Until(claims.ExpiresAt.Time)
+			if ttl > 0 {
+				// Add access token to blacklist with TTL matching remaining expiration time
+				accessTokenBlacklistKey := buildAccessTokenBlacklistKey(accessToken)
+				err = s.cacheRepo.Set(ctx, accessTokenBlacklistKey, "1", ttl)
+				if err != nil {
+					return fmt.Errorf("failed to blacklist access token: %w", err)
+				}
+			}
+			// If token is already expired (ttl <= 0), no need to blacklist it
+		} else {
+			// If token is invalid, we still try to blacklist it (idempotent operation)
+			// This prevents information leakage about token validity
+			// Use maximum access token expiry as TTL for invalid tokens
+			accessTokenBlacklistKey := buildAccessTokenBlacklistKey(accessToken)
+			maxTTL := s.jwtService.GetAccessTokenExpiry()
+			_ = s.cacheRepo.Set(ctx, accessTokenBlacklistKey, "1", maxTTL)
+			// Don't return error here - idempotent operation
 		}
 	}
 
-	// 2. Remove refresh token from Redis (idempotent - no error if key doesn't exist)
-	refreshTokenKey := buildRefreshTokenKey(refreshToken)
-	err = s.cacheRepo.Delete(ctx, refreshTokenKey)
-	if err != nil {
-		// Log error but don't fail logout (idempotent operation)
-		// In production, you might want to log this
-		return fmt.Errorf("failed to delete refresh token: %w", err)
+	// 2. Invalidate refresh token (remove from Redis)
+	if refreshToken != "" {
+		// Validate refresh token (optional but good for error messages)
+		claims, err := s.jwtService.ValidateToken(refreshToken)
+		if err != nil {
+			// If token is invalid, we still try to delete it (idempotent operation)
+			// This prevents information leakage about token validity
+		} else {
+			// Check if token is a refresh token
+			if claims.Type != "refresh" {
+				return ErrInvalidToken
+			}
+		}
+
+		// Remove refresh token from Redis (idempotent - no error if key doesn't exist)
+		refreshTokenKey := buildRefreshTokenKey(refreshToken)
+		err = s.cacheRepo.Delete(ctx, refreshTokenKey)
+		if err != nil {
+			return fmt.Errorf("failed to delete refresh token: %w", err)
+		}
 	}
 
 	return nil

@@ -27,8 +27,9 @@ type IAuthService interface {
 	// Returns token response with new access token and new refresh token, or an error if refresh token is invalid
 	RefreshToken(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
 
-	// Logout invalidates a refresh token
-	// It removes the refresh token from Redis to prevent further use
+	// Logout invalidates both access token and refresh token
+	// It adds the access token to a blacklist in Redis and removes the refresh token
+	// Either accessToken or refreshToken (or both) should be provided
 	// Returns an error if the operation fails
-	Logout(ctx context.Context, refreshToken string) error
+	Logout(ctx context.Context, accessToken string, refreshToken string) error
 }

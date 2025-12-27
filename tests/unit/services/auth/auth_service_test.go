@@ -729,15 +729,27 @@ func TestAuthService_RefreshToken_WrongTokenType(t *testing.T) {
 func TestAuthService_Logout_Success(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	
+	accessToken, err := jwtSvc.GenerateAccessToken(1)
+	if err != nil {
+		t.Fatalf("Failed to generate access token: %v", err)
+	}
+	
 	refreshToken, err := jwtSvc.GenerateRefreshToken(1)
 	if err != nil {
 		t.Fatalf("Failed to generate refresh token: %v", err)
 	}
 
-	deleted := false
+	accessTokenBlacklisted := false
+	refreshTokenDeleted := false
 	cacheRepo := &mockCacheRepository{
+		setFunc: func(ctx context.Context, key string, value string, ttl time.Duration) error {
+			// Track that access token is blacklisted
+			accessTokenBlacklisted = true
+			return nil
+		},
 		deleteFunc: func(ctx context.Context, key string) error {
-			deleted = true
+			// Track that refresh token is deleted
+			refreshTokenDeleted = true
 			return nil
 		},
 	}
@@ -749,20 +761,31 @@ func TestAuthService_Logout_Success(t *testing.T) {
 	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
 
 	ctx := context.Background()
-	err = service.Logout(ctx, refreshToken)
+	err = service.Logout(ctx, accessToken, refreshToken)
 
 	if err != nil {
 		t.Fatalf("Logout() error = %v, want nil", err)
 	}
 
-	if !deleted {
+	if !accessTokenBlacklisted {
+		t.Errorf("Logout() should blacklist access token")
+	}
+
+	if !refreshTokenDeleted {
 		t.Errorf("Logout() should delete refresh token from cache")
 	}
 }
 
 func TestAuthService_Logout_InvalidToken(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
-	cacheRepo := &mockCacheRepository{}
+	cacheRepo := &mockCacheRepository{
+		setFunc: func(ctx context.Context, key string, value string, ttl time.Duration) error {
+			return nil // Allow blacklisting even for invalid tokens
+		},
+		deleteFunc: func(ctx context.Context, key string) error {
+			return nil // Allow deletion even for invalid tokens
+		},
+	}
 	userRepo := &mockUserRepository{}
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
@@ -770,12 +793,46 @@ func TestAuthService_Logout_InvalidToken(t *testing.T) {
 	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
 
 	ctx := context.Background()
-	// Logout should still succeed even with invalid token (idempotent operation)
-	err := service.Logout(ctx, "invalid-token")
+	// Logout should still succeed even with invalid tokens (idempotent operation)
+	err := service.Logout(ctx, "invalid-access-token", "invalid-refresh-token")
 
 	// Logout is idempotent, so it should not return an error for invalid tokens
-	// It just tries to delete, which is safe
+	// It just tries to blacklist/delete, which is safe
 	if err != nil {
-		t.Logf("Logout() with invalid token returned error (acceptable): %v", err)
+		t.Logf("Logout() with invalid tokens returned error (acceptable): %v", err)
+	}
+}
+
+func TestAuthService_Logout_AccessTokenOnly(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	accessToken, err := jwtSvc.GenerateAccessToken(1)
+	if err != nil {
+		t.Fatalf("Failed to generate access token: %v", err)
+	}
+
+	accessTokenBlacklisted := false
+	cacheRepo := &mockCacheRepository{
+		setFunc: func(ctx context.Context, key string, value string, ttl time.Duration) error {
+			accessTokenBlacklisted = true
+			return nil
+		},
+	}
+
+	userRepo := &mockUserRepository{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+
+	ctx := context.Background()
+	err = service.Logout(ctx, accessToken, "")
+
+	if err != nil {
+		t.Fatalf("Logout() error = %v, want nil", err)
+	}
+
+	if !accessTokenBlacklisted {
+		t.Errorf("Logout() should blacklist access token even without refresh token")
 	}
 }

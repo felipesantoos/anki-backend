@@ -21,9 +21,10 @@ type IAuthService interface {
 	// Returns login response with tokens and user data, or an error if authentication fails
 	Login(ctx context.Context, email string, password string) (*response.LoginResponse, error)
 
-	// RefreshToken generates a new access token using a refresh token
-	// It validates the refresh token, checks if it exists in Redis, and generates a new access token
-	// Returns token response with new access token, or an error if refresh token is invalid
+	// RefreshToken generates a new access token and refresh token using a refresh token (token rotation)
+	// It validates the refresh token, checks if it exists in Redis, generates new tokens,
+	// stores the new refresh token in Redis, invalidates the old refresh token, and returns both new tokens
+	// Returns token response with new access token and new refresh token, or an error if refresh token is invalid
 	RefreshToken(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
 
 	// Logout invalidates a refresh token

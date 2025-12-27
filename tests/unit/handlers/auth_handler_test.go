@@ -405,9 +405,10 @@ func TestAuthHandler_Login_InvalidRequest(t *testing.T) {
 
 func TestAuthHandler_RefreshToken_Success(t *testing.T) {
 	tokenResp := &response.TokenResponse{
-		AccessToken: "new-access-token",
-		ExpiresIn:   900,
-		TokenType:   "Bearer",
+		AccessToken:  "new-access-token",
+		RefreshToken: "new-refresh-token", // Token rotation: new refresh token is returned
+		ExpiresIn:    900,
+		TokenType:    "Bearer",
 	}
 
 	mockService := &mockAuthService{
@@ -446,6 +447,11 @@ func TestAuthHandler_RefreshToken_Success(t *testing.T) {
 
 	if result.AccessToken != tokenResp.AccessToken {
 		t.Errorf("RefreshToken() AccessToken = %v, want %v", result.AccessToken, tokenResp.AccessToken)
+	}
+
+	// Token rotation: new refresh token should be returned
+	if result.RefreshToken != tokenResp.RefreshToken {
+		t.Errorf("RefreshToken() RefreshToken = %v, want %v (token rotation)", result.RefreshToken, tokenResp.RefreshToken)
 	}
 
 	if result.TokenType != "Bearer" {

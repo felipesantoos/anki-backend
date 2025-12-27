@@ -214,7 +214,9 @@ func (s *AuthService) Login(ctx context.Context, email string, password string) 
 	}, nil
 }
 
-// RefreshToken generates a new access token using a refresh token
+// RefreshToken generates a new access token and refresh token using a refresh token (token rotation)
+// It validates the refresh token, checks if it exists in Redis, generates new tokens,
+// stores the new refresh token in Redis, invalidates the old refresh token, and returns both new tokens
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*response.TokenResponse, error) {
 	// 1. Validate refresh token
 	claims, err := s.jwtService.ValidateToken(refreshToken)
@@ -255,14 +257,37 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*r
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	// 6. Calculate expires_in in seconds
+	// 6. Generate new refresh token (token rotation)
+	newRefreshToken, err := s.jwtService.GenerateRefreshToken(claims.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	// 7. Store new refresh token in Redis with TTL matching refresh token expiry
+	newRefreshTokenKey := buildRefreshTokenKey(newRefreshToken)
+	refreshTokenTTL := s.jwtService.GetRefreshTokenExpiry()
+	err = s.cacheRepo.Set(ctx, newRefreshTokenKey, fmt.Sprintf("%d", claims.UserID), refreshTokenTTL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store new refresh token: %w", err)
+	}
+
+	// 8. Delete old refresh token from Redis (invalidate it - token rotation)
+	err = s.cacheRepo.Delete(ctx, refreshTokenKey)
+	if err != nil {
+		// If deletion fails, return error to ensure token rotation integrity
+		// The new token is already stored, but we need to invalidate the old one for security
+		return nil, fmt.Errorf("failed to invalidate old refresh token: %w", err)
+	}
+
+	// 9. Calculate expires_in in seconds
 	expiresIn := int(s.jwtService.GetAccessTokenExpiry().Seconds())
 
-	// 7. Build response
+	// 10. Build response with both new tokens
 	return &response.TokenResponse{
-		AccessToken: accessToken,
-		ExpiresIn:   expiresIn,
-		TokenType:   "Bearer",
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		ExpiresIn:    expiresIn,
+		TokenType:    "Bearer",
 	}, nil
 }
 

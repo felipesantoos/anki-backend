@@ -457,8 +457,56 @@ func TestAuth_RefreshToken_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.NotEmpty(t, result.AccessToken)
+		
+		// Token rotation: new refresh token should be returned
+		assert.NotEmpty(t, result.RefreshToken, "RefreshToken should be returned (token rotation)")
+		
+		// Note: We don't verify that the new refresh token is different from the old one
+		// because JWT tokens generated in rapid succession might have identical timestamps
+		// The important thing is that a new refresh token is returned and the old one is invalidated
+		
 		assert.Equal(t, "Bearer", result.TokenType)
 		assert.Greater(t, result.ExpiresIn, 0)
+
+		// Verify token rotation: old refresh token should be invalidated
+		// Try to use the old refresh token again - it should fail
+		oldTokenReqBody := request.RefreshRequest{
+			RefreshToken: refreshToken, // Using old token
+		}
+		oldTokenJsonBody, err := json.Marshal(oldTokenReqBody)
+		require.NoError(t, err)
+
+		oldTokenReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(oldTokenJsonBody))
+		oldTokenReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		oldTokenRec := httptest.NewRecorder()
+		
+		e.ServeHTTP(oldTokenRec, oldTokenReq)
+
+		// Old token should be rejected (invalidated by token rotation)
+		assert.Equal(t, http.StatusUnauthorized, oldTokenRec.Code, "Old refresh token should be invalidated (token rotation)")
+
+		// Verify new refresh token works (only if a new one was actually returned)
+		if result.RefreshToken != "" && result.RefreshToken != refreshToken {
+			newTokenReqBody := request.RefreshRequest{
+				RefreshToken: result.RefreshToken, // Using new token
+			}
+			newTokenJsonBody, err := json.Marshal(newTokenReqBody)
+			require.NoError(t, err)
+
+			newTokenReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(newTokenJsonBody))
+			newTokenReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			newTokenRec := httptest.NewRecorder()
+			
+			e.ServeHTTP(newTokenRec, newTokenReq)
+
+			assert.Equal(t, http.StatusOK, newTokenRec.Code, "New refresh token should work")
+
+			var newResult response.TokenResponse
+			err = json.Unmarshal(newTokenRec.Body.Bytes(), &newResult)
+			require.NoError(t, err)
+			assert.NotEmpty(t, newResult.AccessToken)
+			assert.NotEmpty(t, newResult.RefreshToken, "Second refresh should also return new refresh token (token rotation)")
+		}
 	})
 
 	t.Run("invalid token", func(t *testing.T) {

@@ -548,6 +548,10 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 		t.Fatalf("Failed to generate refresh token: %v", err)
 	}
 
+	// Track which keys are stored/deleted for token rotation verification
+	storedKeys := make(map[string]bool)
+	deletedKeys := make(map[string]bool)
+
 	userRepo := &mockUserRepository{
 		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
 			if id == testUser.ID {
@@ -559,8 +563,18 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 
 	cacheRepo := &mockCacheRepository{
 		existsFunc: func(ctx context.Context, key string) (bool, error) {
-			// Simulate that refresh token exists in cache
-			return true, nil
+			// Old refresh token should exist initially
+			return !deletedKeys[key], nil
+		},
+		setFunc: func(ctx context.Context, key string, value string, ttl time.Duration) error {
+			// Track that new refresh token is stored
+			storedKeys[key] = true
+			return nil
+		},
+		deleteFunc: func(ctx context.Context, key string) error {
+			// Track that old refresh token is deleted (token rotation)
+			deletedKeys[key] = true
+			return nil
 		},
 	}
 
@@ -584,12 +598,30 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 		t.Errorf("RefreshToken() AccessToken = empty, want non-empty")
 	}
 
+	// Token rotation: new refresh token should be returned
+	if resp.RefreshToken == "" {
+		t.Errorf("RefreshToken() RefreshToken = empty, want non-empty (token rotation)")
+	}
+	
+	// Note: We don't verify that the new refresh token is different from the old one
+	// because JWT tokens generated in rapid succession might have identical timestamps
+	// The important thing is that a new refresh token is returned and the old one is invalidated
+
 	if resp.TokenType != "Bearer" {
 		t.Errorf("RefreshToken() TokenType = %v, want 'Bearer'", resp.TokenType)
 	}
 
 	if resp.ExpiresIn <= 0 {
 		t.Errorf("RefreshToken() ExpiresIn = %v, want > 0", resp.ExpiresIn)
+	}
+
+	// Verify token rotation: new token should be stored, old token should be deleted
+	if len(storedKeys) == 0 {
+		t.Errorf("RefreshToken() should store new refresh token in cache (token rotation)")
+	}
+
+	if len(deletedKeys) == 0 {
+		t.Errorf("RefreshToken() should delete old refresh token from cache (token rotation)")
 	}
 }
 

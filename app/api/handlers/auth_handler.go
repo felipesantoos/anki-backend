@@ -174,14 +174,15 @@ func (h *AuthHandler) RefreshToken(c echo.Context) error {
 
 // Logout handles POST /api/v1/auth/logout requests
 // @Summary Logout user
-// @Description Invalidates both access token and refresh token
+// @Description Invalidates both access token and refresh token. Access token should be provided in Authorization header as Bearer token. Refresh token is optional and can be provided in the request body.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body request.RefreshRequest true "Logout request (refresh_token optional if access token is provided)"
+// @Param Authorization header string false "Bearer JWT token (access token)"
+// @Param request body request.RefreshRequest false "Logout request (refresh_token optional if access token is provided in header)"
 // @Success 200 {object} map[string]string "Logout successful"
-// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 400 {object} response.ErrorResponse "Invalid request - either Authorization header with Bearer token or refresh_token in body is required"
 // @Failure 401 {object} response.ErrorResponse "Invalid token"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/auth/logout [post]

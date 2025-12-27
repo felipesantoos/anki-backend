@@ -1,5 +1,61 @@
 basePath: /
 definitions:
+  request.LoginRequest:
+    description: Request payload for user login endpoint
+    properties:
+      email:
+        description: Email address
+        example: usuario@example.com
+        type: string
+      password:
+        description: User password
+        example: senhaSegura123
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  request.RefreshRequest:
+    description: Request payload for refresh token endpoint
+    properties:
+      refresh_token:
+        description: Refresh token
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    required:
+    - refresh_token
+    type: object
+  request.RegisterRequest:
+    description: Request payload for user registration endpoint
+    properties:
+      email:
+        description: |-
+          Email address of the user
+          Required: true
+          Example: "usuario@example.com"
+        example: usuario@example.com
+        type: string
+      password:
+        description: |-
+          Password for the user account (minimum 8 characters, must contain at least one letter and one number)
+          Required: true
+          Example: "senhaSegura123"
+        example: senhaSegura123
+        minLength: 8
+        type: string
+      password_confirm:
+        description: |-
+          Password confirmation (must match password)
+          Required: true
+          Example: "senhaSegura123"
+        example: senhaSegura123
+        type: string
+    required:
+    - email
+    - password
+    - password_confirm
+    type: object
   response.ComponentHealth:
     description: Health status of a single component (database, redis, etc.)
     properties:
@@ -10,6 +66,34 @@ definitions:
       status:
         description: '"healthy" or "unhealthy"'
         example: healthy
+        type: string
+    type: object
+  response.ErrorResponse:
+    description: Standardized error response format returned by the API
+    properties:
+      code:
+        description: Error code (same as error field, kept for compatibility)
+        example: NOT_FOUND
+        type: string
+      error:
+        description: Error code (e.g., "NOT_FOUND", "VALIDATION_ERROR")
+        example: NOT_FOUND
+        type: string
+      message:
+        description: Human-readable error message
+        example: Resource not found
+        type: string
+      path:
+        description: Request path
+        example: /api/users/123
+        type: string
+      request_id:
+        description: Request ID for tracking
+        example: abc123def456
+        type: string
+      timestamp:
+        description: ISO 8601 timestamp
+        example: "2024-01-15T10:30:00Z"
         type: string
     type: object
   response.HealthResponse:
@@ -30,6 +114,77 @@ definitions:
         example: "2024-01-15T10:30:00Z"
         type: string
     type: object
+  response.LoginResponse:
+    description: Response payload for login endpoint
+    properties:
+      access_token:
+        description: Access token (JWT)
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      expires_in:
+        description: Token expiration time in seconds
+        example: 900
+        type: integer
+      refresh_token:
+        description: Refresh token
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      token_type:
+        description: Token type (usually "Bearer")
+        example: Bearer
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/response.UserData'
+        description: User information
+    type: object
+  response.RegisterResponse:
+    description: Response payload for user registration endpoint
+    properties:
+      user:
+        allOf:
+        - $ref: '#/definitions/response.UserData'
+        description: User information
+    type: object
+  response.TokenResponse:
+    description: Response payload for refresh token endpoint
+    properties:
+      access_token:
+        description: Access token (JWT)
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      expires_in:
+        description: Token expiration time in seconds
+        example: 900
+        type: integer
+      refresh_token:
+        description: Refresh token (JWT) - returned when token rotation is enabled
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      token_type:
+        description: Token type (usually "Bearer")
+        example: Bearer
+        type: string
+    type: object
+  response.UserData:
+    properties:
+      created_at:
+        description: Timestamp when the user was created
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      email:
+        description: Email address
+        example: usuario@example.com
+        type: string
+      email_verified:
+        description: Whether the email has been verified
+        example: false
+        type: boolean
+      id:
+        description: User ID
+        example: 1
+        type: integer
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -44,6 +199,155 @@ info:
   title: Anki Backend API
   version: "1.0"
 paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email and password and returns access
+        and refresh tokens
+      parameters:
+      - description: Login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            $ref: '#/definitions/response.LoginResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Login user
+      tags:
+      - auth
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Invalidates both access token and refresh token. Access token should
+        be provided in Authorization header as Bearer token. Refresh token is optional
+        and can be provided in the request body.
+      parameters:
+      - description: Bearer JWT token (access token)
+        in: header
+        name: Authorization
+        type: string
+      - description: Logout request (refresh_token optional if access token is provided
+          in header)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/request.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logout successful
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request - either Authorization header with Bearer token
+            or refresh_token in body is required
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout user
+      tags:
+      - auth
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Generates a new access token using a refresh token
+      parameters:
+      - description: Refresh token request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token refreshed successfully
+          schema:
+            $ref: '#/definitions/response.TokenResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or expired token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Registers a new user account with email and password. Creates a
+        default deck for the user.
+      parameters:
+      - description: Registration request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User registered successfully
+          schema:
+            $ref: '#/definitions/response.RegisterResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Email already registered
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - auth
   /health:
     get:
       consumes:
@@ -71,4 +375,11 @@ paths:
       summary: Health check endpoint
       tags:
       - health
+securityDefinitions:
+  BearerAuth:
+    description: 'Type "Bearer" followed by a space and JWT token. Example: "Bearer
+      eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."'
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

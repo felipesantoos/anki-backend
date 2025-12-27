@@ -17,6 +17,227 @@
     "host": "localhost:8080",
     "basePath": "/",
     "paths": {
+        "/api/v1/auth/login": {
+            "post": {
+                "description": "Authenticates a user with email and password and returns access and refresh tokens",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login user",
+                "parameters": [
+                    {
+                        "description": "Login request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Login successful",
+                        "schema": {
+                            "$ref": "#/definitions/response.LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/logout": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Invalidates both access token and refresh token. Access token should be provided in Authorization header as Bearer token. Refresh token is optional and can be provided in the request body.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer JWT token (access token)",
+                        "name": "Authorization",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Logout request (refresh_token optional if access token is provided in header)",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/request.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Logout successful",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request - either Authorization header with Bearer token or refresh_token in body is required",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/refresh": {
+            "post": {
+                "description": "Generates a new access token using a refresh token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Refresh access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Token refreshed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.TokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or expired token",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/register": {
+            "post": {
+                "description": "Registers a new user account with email and password. Creates a default deck for the user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Register a new user",
+                "parameters": [
+                    {
+                        "description": "Registration request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "User registered successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.RegisterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already registered",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns the health status of the application and its dependencies (database, cache). The endpoint follows hexagonal architecture: Handler -\u003e Service (IHealthService) -\u003e Repositories (IDatabaseRepository, ICacheRepository)",
@@ -57,6 +278,68 @@
         }
     },
     "definitions": {
+        "request.LoginRequest": {
+            "description": "Request payload for user login endpoint",
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "description": "Email address",
+                    "type": "string",
+                    "example": "usuario@example.com"
+                },
+                "password": {
+                    "description": "User password",
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "senhaSegura123"
+                }
+            }
+        },
+        "request.RefreshRequest": {
+            "description": "Request payload for refresh token endpoint",
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "description": "Refresh token",
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
+        "request.RegisterRequest": {
+            "description": "Request payload for user registration endpoint",
+            "type": "object",
+            "required": [
+                "email",
+                "password",
+                "password_confirm"
+            ],
+            "properties": {
+                "email": {
+                    "description": "Email address of the user\nRequired: true\nExample: \"usuario@example.com\"",
+                    "type": "string",
+                    "example": "usuario@example.com"
+                },
+                "password": {
+                    "description": "Password for the user account (minimum 8 characters, must contain at least one letter and one number)\nRequired: true\nExample: \"senhaSegura123\"",
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "senhaSegura123"
+                },
+                "password_confirm": {
+                    "description": "Password confirmation (must match password)\nRequired: true\nExample: \"senhaSegura123\"",
+                    "type": "string",
+                    "example": "senhaSegura123"
+                }
+            }
+        },
         "response.ComponentHealth": {
             "description": "Health status of a single component (database, redis, etc.)",
             "type": "object",
@@ -70,6 +353,42 @@
                     "description": "\"healthy\" or \"unhealthy\"",
                     "type": "string",
                     "example": "healthy"
+                }
+            }
+        },
+        "response.ErrorResponse": {
+            "description": "Standardized error response format returned by the API",
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Error code (same as error field, kept for compatibility)",
+                    "type": "string",
+                    "example": "NOT_FOUND"
+                },
+                "error": {
+                    "description": "Error code (e.g., \"NOT_FOUND\", \"VALIDATION_ERROR\")",
+                    "type": "string",
+                    "example": "NOT_FOUND"
+                },
+                "message": {
+                    "description": "Human-readable error message",
+                    "type": "string",
+                    "example": "Resource not found"
+                },
+                "path": {
+                    "description": "Request path",
+                    "type": "string",
+                    "example": "/api/users/123"
+                },
+                "request_id": {
+                    "description": "Request ID for tracking",
+                    "type": "string",
+                    "example": "abc123def456"
+                },
+                "timestamp": {
+                    "description": "ISO 8601 timestamp",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
                 }
             }
         },
@@ -95,6 +414,113 @@
                     "example": "2024-01-15T10:30:00Z"
                 }
             }
+        },
+        "response.LoginResponse": {
+            "description": "Response payload for login endpoint",
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "Access token (JWT)",
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "expires_in": {
+                    "description": "Token expiration time in seconds",
+                    "type": "integer",
+                    "example": 900
+                },
+                "refresh_token": {
+                    "description": "Refresh token",
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "token_type": {
+                    "description": "Token type (usually \"Bearer\")",
+                    "type": "string",
+                    "example": "Bearer"
+                },
+                "user": {
+                    "description": "User information",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/response.UserData"
+                        }
+                    ]
+                }
+            }
+        },
+        "response.RegisterResponse": {
+            "description": "Response payload for user registration endpoint",
+            "type": "object",
+            "properties": {
+                "user": {
+                    "description": "User information",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/response.UserData"
+                        }
+                    ]
+                }
+            }
+        },
+        "response.TokenResponse": {
+            "description": "Response payload for refresh token endpoint",
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "Access token (JWT)",
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "expires_in": {
+                    "description": "Token expiration time in seconds",
+                    "type": "integer",
+                    "example": 900
+                },
+                "refresh_token": {
+                    "description": "Refresh token (JWT) - returned when token rotation is enabled",
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "token_type": {
+                    "description": "Token type (usually \"Bearer\")",
+                    "type": "string",
+                    "example": "Bearer"
+                }
+            }
+        },
+        "response.UserData": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "Timestamp when the user was created",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "email": {
+                    "description": "Email address",
+                    "type": "string",
+                    "example": "usuario@example.com"
+                },
+                "email_verified": {
+                    "description": "Whether the email has been verified",
+                    "type": "boolean",
+                    "example": false
+                },
+                "id": {
+                    "description": "User ID",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Type \"Bearer\" followed by a space and JWT token. Example: \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }

@@ -2,7 +2,10 @@ package integration
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -635,8 +638,20 @@ func TestAuth_Logout_Integration(t *testing.T) {
 		// Should fail with unauthorized since token was revoked
 		assert.Equal(t, http.StatusUnauthorized, refreshRec.Code)
 
-		// TODO: Verify access token is blacklisted (would require JWT auth middleware to check blacklist)
-		// For now, we verify that refresh token is invalidated, which is the main concern
+		// Verify that access token is blacklisted in Redis
+		ctx := context.Background()
+		accessTokenHash := sha256.Sum256([]byte(loginResp.AccessToken))
+		accessTokenBlacklistKey := fmt.Sprintf("access_token_blacklist:%s", hex.EncodeToString(accessTokenHash[:]))
+		exists, err := redisRepo.Exists(ctx, accessTokenBlacklistKey)
+		require.NoError(t, err, "Failed to check access token blacklist")
+		assert.True(t, exists, "Access token should be blacklisted in Redis after logout")
+
+		// Verify that refresh token is not in Redis (was deleted)
+		refreshTokenHash := sha256.Sum256([]byte(refreshToken))
+		refreshTokenKey := fmt.Sprintf("refresh_token:%s", hex.EncodeToString(refreshTokenHash[:]))
+		refreshExists, err := redisRepo.Exists(ctx, refreshTokenKey)
+		require.NoError(t, err, "Failed to check refresh token")
+		assert.False(t, refreshExists, "Refresh token should be deleted from Redis after logout")
 	})
 
 	t.Run("logout with access token only", func(t *testing.T) {
@@ -666,7 +681,13 @@ func TestAuth_Logout_Integration(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, logoutRec.Code)
 
-		// TODO: Verify access token is blacklisted (would require JWT auth middleware)
+		// Verify that access token is blacklisted in Redis
+		ctx := context.Background()
+		accessTokenHash := sha256.Sum256([]byte(loginResp2.AccessToken))
+		accessTokenBlacklistKey := fmt.Sprintf("access_token_blacklist:%s", hex.EncodeToString(accessTokenHash[:]))
+		exists, err := redisRepo.Exists(ctx, accessTokenBlacklistKey)
+		require.NoError(t, err, "Failed to check access token blacklist")
+		assert.True(t, exists, "Access token should be blacklisted in Redis after logout")
 	})
 
 	t.Run("logout with no tokens", func(t *testing.T) {

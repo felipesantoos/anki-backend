@@ -46,6 +46,9 @@ type Config struct {
 
 	// Metrics configuration
 	Metrics MetricsConfig
+
+	// Tracing configuration
+	Tracing TracingConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -157,6 +160,16 @@ type MetricsConfig struct {
 	EnableHTTPMetrics  bool   // Enable HTTP metrics collection
 	EnableSystemMetrics bool  // Enable system metrics (DB, Redis)
 	EnableBusinessMetrics bool // Enable business metrics
+}
+
+// TracingConfig holds OpenTelemetry tracing configuration
+type TracingConfig struct {
+	Enabled        bool    // Enable/disable tracing
+	ServiceName    string  // Service name for traces (default: "anki-backend")
+	Environment    string  // Environment name (development, staging, production)
+	JaegerEndpoint string  // Jaeger collector endpoint (default: "http://localhost:14268/api/traces")
+	SampleRate     float64 // Sampling rate (0.0 to 1.0, default: 1.0)
+	ConsoleEnabled bool    // Enable console exporter for development
 }
 
 // ValidationError represents a configuration validation error
@@ -303,6 +316,21 @@ func loadConfig() (*Config, error) {
 		EnableHTTPMetrics:   getEnvAsBool("METRICS_ENABLE_HTTP", true),
 		EnableSystemMetrics: getEnvAsBool("METRICS_ENABLE_SYSTEM", true),
 		EnableBusinessMetrics: getEnvAsBool("METRICS_ENABLE_BUSINESS", true),
+	}
+
+	// Load tracing configuration
+	sampleRate := getEnvAsFloat("TRACING_SAMPLE_RATE", 1.0)
+	if sampleRate < 0.0 || sampleRate > 1.0 {
+		sampleRate = 1.0 // Default to 100% sampling if invalid
+	}
+
+	cfg.Tracing = TracingConfig{
+		Enabled:        getEnvAsBool("TRACING_ENABLED", false),
+		ServiceName:    getEnv("TRACING_SERVICE_NAME", "anki-backend"),
+		Environment:    env,
+		JaegerEndpoint: getEnv("TRACING_JAEGER_ENDPOINT", "http://localhost:14268/api/traces"),
+		SampleRate:     sampleRate,
+		ConsoleEnabled: getEnvAsBool("TRACING_CONSOLE_ENABLED", env == "development"),
 	}
 
 	// Validate configuration
@@ -452,6 +480,19 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 		return defaultValue
 	}
 	value, err := strconv.ParseBool(valueStr)
+	if err != nil {
+		return defaultValue
+	}
+	return value
+}
+
+// getEnvAsFloat gets an environment variable as float64 or returns a default value
+func getEnvAsFloat(key string, defaultValue float64) float64 {
+	valueStr := os.Getenv(key)
+	if valueStr == "" {
+		return defaultValue
+	}
+	value, err := strconv.ParseFloat(valueStr, 64)
 	if err != nil {
 		return defaultValue
 	}

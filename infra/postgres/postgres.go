@@ -9,15 +9,22 @@ import (
 	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/felipesantos/anki-backend/config"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 )
 
+var tracer = otel.Tracer("anki-backend/postgres")
+
 // PostgresRepository wraps the sql.DB connection with additional functionality
 // Implements IDatabaseRepository interface
 type PostgresRepository struct {
-	DB *sql.DB
+	DB     *sql.DB
+	dbName string
 }
 
 // NewPostgresRepository creates a new PostgreSQL connection with connection pooling configured
@@ -34,6 +41,8 @@ func NewPostgresRepository(cfg config.DatabaseConfig, logger *slog.Logger) (*Pos
 		"user", cfg.User,
 	)
 
+	// Open database connection
+	// OpenTelemetry instrumentation is implemented manually using spans
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
@@ -61,13 +70,31 @@ func NewPostgresRepository(cfg config.DatabaseConfig, logger *slog.Logger) (*Pos
 		"connection_max_idle_time_minutes", cfg.ConnMaxIdleTime,
 	)
 
-	return &PostgresRepository{DB: db}, nil
+	return &PostgresRepository{
+		DB:     db,
+		dbName: cfg.DBName,
+	}, nil
 }
 
 // Ping verifies the database connection
 // Implements IDatabaseRepository interface
 func (p *PostgresRepository) Ping(ctx context.Context) error {
-	return p.DB.PingContext(ctx)
+	ctx, span := tracer.Start(ctx, "db.ping",
+		trace.WithAttributes(
+			attribute.String("db.system", "postgresql"),
+			attribute.String("db.name", p.dbName),
+		),
+	)
+	defer span.End()
+
+	err := p.DB.PingContext(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	span.SetStatus(codes.Ok, "")
+	return nil
 }
 
 // Close closes the database connection gracefully

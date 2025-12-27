@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/pkg/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // CacheService provides high-level cache operations
@@ -23,38 +26,78 @@ func NewCacheService(repo secondary.ICacheRepository) *CacheService {
 
 // Get retrieves a value from cache by key
 func (s *CacheService) Get(ctx context.Context, key string) (string, error) {
-	return s.repo.Get(ctx, key)
+	ctx, span := tracing.StartSpan(ctx, "cache.get",
+		trace.WithAttributes(attribute.String("cache.key", key)),
+	)
+	defer span.End()
+
+	result, err := s.repo.Get(ctx, key)
+	if err != nil {
+		tracing.RecordError(span, err)
+		return "", err
+	}
+	span.SetAttributes(attribute.Bool("cache.hit", true))
+	return result, nil
 }
 
 // Set stores a value in cache with TTL
 func (s *CacheService) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
-	return s.repo.Set(ctx, key, value, ttl)
+	ctx, span := tracing.StartSpan(ctx, "cache.set",
+		trace.WithAttributes(
+			attribute.String("cache.key", key),
+			attribute.String("cache.ttl", ttl.String()),
+		),
+	)
+	defer span.End()
+
+	err := s.repo.Set(ctx, key, value, ttl)
+	if err != nil {
+		tracing.RecordError(span, err)
+		return err
+	}
+	return nil
 }
 
 // Delete removes a key from cache
 func (s *CacheService) Delete(ctx context.Context, key string) error {
-	return s.repo.Delete(ctx, key)
+	ctx, span := tracing.StartSpan(ctx, "cache.delete",
+		trace.WithAttributes(attribute.String("cache.key", key)),
+	)
+	defer span.End()
+
+	err := s.repo.Delete(ctx, key)
+	if err != nil {
+		tracing.RecordError(span, err)
+		return err
+	}
+	return nil
 }
 
 // GetOrSet implements cache-aside pattern
 // If key exists, returns cached value
 // If key doesn't exist, calls fetchFunc to get value, stores it, and returns it
 func (s *CacheService) GetOrSet(ctx context.Context, key string, fetchFunc func() (string, error), ttl time.Duration) (string, error) {
+	ctx, span := tracing.StartSpan(ctx, "cache.get_or_set",
+		trace.WithAttributes(
+			attribute.String("cache.key", key),
+			attribute.String("cache.ttl", ttl.String()),
+		),
+	)
+	defer span.End()
+
 	// Try to get from cache
 	value, err := s.repo.Get(ctx, key)
 	if err == nil {
 		// Cache hit - return cached value
+		span.SetAttributes(attribute.Bool("cache.hit", true))
 		return value, nil
 	}
 
-	// Check if error is "key not found" (cache miss) or another error
-	// If it's another error (e.g., connection error), we should probably return it
-	// For now, we'll treat any error as cache miss and continue
-	// In production, you might want to log non-"not found" errors
-
 	// Cache miss - fetch from source
+	span.SetAttributes(attribute.Bool("cache.hit", false))
 	fetchedValue, err := fetchFunc()
 	if err != nil {
+		tracing.RecordError(span, err)
 		return "", fmt.Errorf("failed to fetch value: %w", err)
 	}
 
@@ -62,6 +105,7 @@ func (s *CacheService) GetOrSet(ctx context.Context, key string, fetchFunc func(
 	if err := s.repo.Set(ctx, key, fetchedValue, ttl); err != nil {
 		// Log error but don't fail the operation
 		// Return the fetched value even if cache set failed
+		tracing.RecordError(span, err)
 	}
 
 	return fetchedValue, nil
@@ -78,6 +122,17 @@ func (s *CacheService) InvalidatePattern(ctx context.Context, pattern string) er
 
 // Exists checks if a key exists in cache
 func (s *CacheService) Exists(ctx context.Context, key string) (bool, error) {
-	return s.repo.Exists(ctx, key)
+	ctx, span := tracing.StartSpan(ctx, "cache.exists",
+		trace.WithAttributes(attribute.String("cache.key", key)),
+	)
+	defer span.End()
+
+	exists, err := s.repo.Exists(ctx, key)
+	if err != nil {
+		tracing.RecordError(span, err)
+		return false, err
+	}
+	span.SetAttributes(attribute.Bool("cache.exists", exists))
+	return exists, nil
 }
 

@@ -38,6 +38,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/services/jobs"
 	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
 	storageService "github.com/felipesantos/anki-backend/core/services/storage"
+	tracingService "github.com/felipesantos/anki-backend/core/services/tracing"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
@@ -90,6 +91,27 @@ func main() {
 		"environment", cfg.Logger.Environment,
 		"log_level", cfg.Logger.Level,
 	)
+
+	// 2.5. Initialize Tracing Service (if enabled)
+	var tracingSvc *tracingService.TracingService
+	if cfg.Tracing.Enabled {
+		log.Info("Initializing tracing system",
+			"service_name", cfg.Tracing.ServiceName,
+			"jaeger_endpoint", cfg.Tracing.JaegerEndpoint,
+			"sample_rate", cfg.Tracing.SampleRate,
+			"console_enabled", cfg.Tracing.ConsoleEnabled,
+		)
+
+		tracingSvc, err = tracingService.NewTracingService(cfg.Tracing)
+		if err != nil {
+			log.Error("Failed to initialize tracing service", "error", err)
+			os.Exit(1)
+		}
+
+		log.Info("Tracing system initialized successfully")
+	} else {
+		log.Info("Tracing system is disabled")
+	}
 
 	// 3. Initialize database connection
 	db, err := postgres.NewPostgresRepository(cfg.Database, log)
@@ -317,7 +339,14 @@ func main() {
 	e.Use(middlewares.CORSMiddleware(cfg.CORS)) // CORS should be early in the chain to handle preflight requests
 	e.Use(middlewares.RequestIDMiddleware())
 	
-	// Metrics middleware (after RequestID, before RateLimit)
+	// Tracing middleware (after RequestID, before Metrics)
+	// This ensures request IDs are available for span attributes
+	if cfg.Tracing.Enabled {
+		e.Use(middlewares.TracingMiddlewareWithCustomAttributes())
+		log.Info("Tracing middleware registered")
+	}
+	
+	// Metrics middleware (after RequestID and Tracing, before RateLimit)
 	// This ensures we have request IDs for logging and metrics are collected before rate limiting
 	if cfg.Metrics.Enabled && cfg.Metrics.EnableHTTPMetrics {
 		e.Use(middlewares.MetricsMiddleware(metricsSvc))
@@ -448,6 +477,18 @@ func main() {
 		log.Error("Error closing database connection", "error", err)
 	} else {
 		log.Info("Database connection closed successfully")
+	}
+
+	// Shutdown tracing service gracefully
+	if cfg.Tracing.Enabled && tracingSvc != nil {
+		log.Info("Shutting down tracing service...")
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := tracingSvc.Shutdown(shutdownCtx); err != nil {
+			log.Error("Error shutting down tracing service", "error", err)
+		} else {
+			log.Info("Tracing service shut down successfully")
+		}
 	}
 
 	log.Info("Server stopped")

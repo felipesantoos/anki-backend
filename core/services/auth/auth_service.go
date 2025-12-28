@@ -14,6 +14,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/core/services/session"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 )
@@ -40,12 +41,13 @@ const (
 
 // AuthService implements IAuthService
 type AuthService struct {
-	userRepo     secondary.IUserRepository
-	deckRepo     secondary.IDeckRepository
-	eventBus     secondary.IEventBus
-	jwtService   *jwt.JWTService
-	cacheRepo    secondary.ICacheRepository
-	emailService primary.IEmailService
+	userRepo      secondary.IUserRepository
+	deckRepo      secondary.IDeckRepository
+	eventBus      secondary.IEventBus
+	jwtService    *jwt.JWTService
+	cacheRepo     secondary.ICacheRepository
+	emailService  primary.IEmailService
+	sessionService *session.SessionService
 }
 
 // NewAuthService creates a new AuthService instance
@@ -56,14 +58,16 @@ func NewAuthService(
 	jwtService *jwt.JWTService,
 	cacheRepo secondary.ICacheRepository,
 	emailService primary.IEmailService,
+	sessionService *session.SessionService,
 ) primary.IAuthService {
 	return &AuthService{
-		userRepo:     userRepo,
-		deckRepo:     deckRepo,
-		eventBus:     eventBus,
-		jwtService:   jwtService,
-		cacheRepo:    cacheRepo,
-		emailService: emailService,
+		userRepo:       userRepo,
+		deckRepo:       deckRepo,
+		eventBus:       eventBus,
+		jwtService:     jwtService,
+		cacheRepo:      cacheRepo,
+		emailService:   emailService,
+		sessionService: sessionService,
 	}
 }
 
@@ -153,7 +157,7 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 }
 
 // Login authenticates a user and returns access and refresh tokens
-func (s *AuthService) Login(ctx context.Context, email string, password string) (*response.LoginResponse, error) {
+func (s *AuthService) Login(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error) {
 	// 1. Validate email format
 	emailVO, err := valueobjects.NewEmail(email)
 	if err != nil {
@@ -198,18 +202,45 @@ func (s *AuthService) Login(ctx context.Context, email string, password string) 
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// 8. Store refresh token in Redis with TTL matching refresh token expiry
+	// 8. Create session with metadata
+	now := time.Now()
+	sessionMetadata := session.SessionMetadata{
+		IPAddress:    ipAddress,
+		UserAgent:    userAgent,
+		DeviceInfo:   extractDeviceInfo(userAgent),
+		LastActivity: now,
+	}
+	sessionID, err := s.sessionService.CreateSessionWithMetadata(ctx, user.ID, sessionMetadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// 9. Store refresh token in Redis with session ID
 	refreshTokenKey := buildRefreshTokenKey(refreshToken)
 	refreshTokenTTL := s.jwtService.GetRefreshTokenExpiry()
-	err = s.cacheRepo.Set(ctx, refreshTokenKey, fmt.Sprintf("%d", user.ID), refreshTokenTTL)
+	refreshTokenValue := fmt.Sprintf(`{"user_id":%d,"session_id":"%s"}`, user.ID, sessionID)
+	err = s.cacheRepo.Set(ctx, refreshTokenKey, refreshTokenValue, refreshTokenTTL)
 	if err != nil {
+		// Clean up session if token storage fails
+		_ = s.sessionService.DeleteSession(ctx, sessionID)
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
-	// 9. Calculate expires_in in seconds
+	// 10. Associate refresh token with session
+	refreshTokenHash := hashToken(refreshToken)
+	if err := s.sessionService.AssociateRefreshToken(ctx, refreshTokenHash, sessionID, refreshTokenTTL); err != nil {
+		// Log error but don't fail - the session is already created
+		log := logger.GetLogger()
+		log.Warn("Failed to associate refresh token with session",
+			"error", err,
+			"session_id", sessionID,
+		)
+	}
+
+	// 11. Calculate expires_in in seconds
 	expiresIn := int(s.jwtService.GetAccessTokenExpiry().Seconds())
 
-	// 10. Build response
+	// 12. Build response
 	return &response.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -222,6 +253,17 @@ func (s *AuthService) Login(ctx context.Context, email string, password string) 
 			CreatedAt:     user.CreatedAt,
 		},
 	}, nil
+}
+
+// extractDeviceInfo extracts device information from user agent string
+func extractDeviceInfo(userAgent string) string {
+	// Simple device info extraction - can be enhanced with a proper user agent parser
+	if userAgent == "" {
+		return "Unknown"
+	}
+	// For now, return a simplified version
+	// In production, you might want to use a library like github.com/mileusna/useragent
+	return userAgent
 }
 
 // RefreshToken generates a new access token and refresh token using a refresh token (token rotation)
@@ -254,6 +296,18 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*r
 			"user_id", claims.UserID,
 		)
 		return nil, ErrInvalidToken
+	}
+
+	// 2.5. Get session ID associated with refresh token
+	var sessionID string
+	refreshTokenHash := hashToken(refreshToken)
+	sessionID, err = s.sessionService.GetSessionByRefreshToken(ctx, refreshTokenHash)
+	if err != nil {
+		// Session association might not exist (legacy tokens), continue without it
+		log.Warn("No session association found for refresh token",
+			"user_id", claims.UserID,
+			"error", err,
+		)
 	}
 
 	// 3. Verify user still exists and is active
@@ -298,16 +352,38 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*r
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// 6. Store new refresh token in Redis with TTL matching refresh token expiry
+	// 6. Store new refresh token in Redis with session ID
 	newRefreshTokenKey := buildRefreshTokenKey(newRefreshToken)
 	refreshTokenTTL := s.jwtService.GetRefreshTokenExpiry()
-	err = s.cacheRepo.Set(ctx, newRefreshTokenKey, fmt.Sprintf("%d", claims.UserID), refreshTokenTTL)
+	refreshTokenValue := fmt.Sprintf(`{"user_id":%d,"session_id":"%s"}`, claims.UserID, sessionID)
+	err = s.cacheRepo.Set(ctx, newRefreshTokenKey, refreshTokenValue, refreshTokenTTL)
 	if err != nil {
 		log.Error("Failed to store new refresh token in Redis",
 			"error", err,
 			"user_id", claims.UserID,
 		)
 		return nil, fmt.Errorf("failed to store new refresh token: %w", err)
+	}
+
+	// 6.5. Associate new refresh token with session (if session exists)
+	if sessionID != "" {
+		newRefreshTokenHash := hashToken(newRefreshToken)
+		if err := s.sessionService.AssociateRefreshToken(ctx, newRefreshTokenHash, sessionID, refreshTokenTTL); err != nil {
+			log.Warn("Failed to associate new refresh token with session",
+				"error", err,
+				"session_id", sessionID,
+			)
+		} else {
+			// Update last activity of the session
+			if err := s.sessionService.UpdateSession(ctx, sessionID, map[string]interface{}{
+				"lastActivity": time.Now().Unix(),
+			}); err != nil {
+				log.Warn("Failed to update session last activity",
+					"error", err,
+					"session_id", sessionID,
+				)
+			}
+		}
 	}
 
 	// 7. Delete old refresh token from Redis (invalidate it - token rotation)
@@ -320,6 +396,16 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*r
 			"user_id", claims.UserID,
 		)
 		return nil, fmt.Errorf("failed to invalidate old refresh token: %w", err)
+	}
+
+	// 7.5. Delete old refresh token association (if exists)
+	if sessionID != "" {
+		if err := s.sessionService.DeleteRefreshTokenAssociation(ctx, refreshTokenHash); err != nil {
+			log.Warn("Failed to delete old refresh token association",
+				"error", err,
+				"session_id", sessionID,
+			)
+		}
 	}
 
 	log.Info("Token refresh successful with rotation",
@@ -368,13 +454,25 @@ func (s *AuthService) Logout(ctx context.Context, accessToken string, refreshTok
 		}
 	}
 
-	// 2. Invalidate refresh token (remove from Redis)
+	// 2. Invalidate refresh token and associated session
+	var sessionID string
+	var userID int64
 	if refreshToken != "" {
-		// Validate refresh token (optional but good for error messages)
-		_, err := s.jwtService.ValidateRefreshToken(refreshToken)
+		// Validate refresh token to get user ID
+		claims, err := s.jwtService.ValidateRefreshToken(refreshToken)
+		if err == nil && claims != nil {
+			userID = claims.UserID
+		}
+
+		// Get session ID associated with refresh token
+		refreshTokenHash := hashToken(refreshToken)
+		sessionID, err = s.sessionService.GetSessionByRefreshToken(ctx, refreshTokenHash)
 		if err != nil {
-			// If token is invalid, we still try to delete it (idempotent operation)
-			// This prevents information leakage about token validity
+			// Session association might not exist (legacy tokens), continue without it
+			log := logger.GetLogger()
+			log.Warn("No session association found for refresh token during logout",
+				"error", err,
+			)
 		}
 
 		// Remove refresh token from Redis (idempotent - no error if key doesn't exist)
@@ -382,6 +480,30 @@ func (s *AuthService) Logout(ctx context.Context, accessToken string, refreshTok
 		err = s.cacheRepo.Delete(ctx, refreshTokenKey)
 		if err != nil {
 			return fmt.Errorf("failed to delete refresh token: %w", err)
+		}
+
+		// Delete refresh token association
+		if sessionID != "" {
+			if err := s.sessionService.DeleteRefreshTokenAssociation(ctx, refreshTokenHash); err != nil {
+				log := logger.GetLogger()
+				log.Warn("Failed to delete refresh token association during logout",
+					"error", err,
+					"session_id", sessionID,
+				)
+			}
+		}
+	}
+
+	// 3. Invalidate specific session (if found)
+	if sessionID != "" && userID > 0 {
+		if err := s.sessionService.DeleteUserSession(ctx, userID, sessionID); err != nil {
+			log := logger.GetLogger()
+			log.Warn("Failed to delete session during logout",
+				"error", err,
+				"session_id", sessionID,
+				"user_id", userID,
+			)
+			// Don't fail logout if session deletion fails - tokens are already invalidated
 		}
 	}
 
@@ -541,16 +663,15 @@ func (s *AuthService) ResetPassword(ctx context.Context, token string, newPasswo
 		return fmt.Errorf("failed to update user password: %w", err)
 	}
 
-	// 8. Invalidate all refresh tokens for this user
-	// Note: Currently, we cannot efficiently find all refresh tokens for a user
-	// because the cache repository doesn't support pattern matching or scanning.
-	// Refresh tokens will expire naturally based on their TTL.
-	// In the future, we could:
-	// - Add a method to store user->token mappings
-	// - Use Redis SCAN to find all tokens for a user
-	// - Store tokens in a set per user
-	// For now, tokens will expire based on their TTL, and users will need to log in again
-	// to get new tokens after password reset.
+	// 8. Invalidate all sessions for this user (security: force re-login after password reset)
+	if err := s.sessionService.DeleteAllUserSessions(ctx, user.ID); err != nil {
+		log := logger.GetLogger()
+		log.Warn("Failed to delete all user sessions during password reset",
+			"error", err,
+			"user_id", user.ID,
+		)
+		// Don't fail password reset if session deletion fails
+	}
 
 	return nil
 }
@@ -592,16 +713,15 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentP
 		return fmt.Errorf("failed to update user password: %w", err)
 	}
 
-	// 7. Invalidate all refresh tokens for this user
-	// Note: Currently, we cannot efficiently find all refresh tokens for a user
-	// because the cache repository doesn't support pattern matching or scanning.
-	// Refresh tokens will expire naturally based on their TTL.
-	// In the future, we could:
-	// - Add a method to store user->token mappings
-	// - Use Redis SCAN to find all tokens for a user
-	// - Store tokens in a set per user
-	// For now, tokens will expire based on their TTL, and users will need to log in again
-	// to get new tokens after password change.
+	// 7. Invalidate all sessions for this user (security: force re-login after password change)
+	if err := s.sessionService.DeleteAllUserSessions(ctx, userID); err != nil {
+		log := logger.GetLogger()
+		log.Warn("Failed to delete all user sessions during password change",
+			"error", err,
+			"user_id", userID,
+		)
+		// Don't fail password change if session deletion fails
+	}
 
 	return nil
 }

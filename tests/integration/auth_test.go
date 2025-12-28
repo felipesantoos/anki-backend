@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
 
@@ -29,6 +30,7 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/routes"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
 	emailService "github.com/felipesantos/anki-backend/core/services/email"
+	sessionService "github.com/felipesantos/anki-backend/core/services/session"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	infraEmail "github.com/felipesantos/anki-backend/infra/email"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
@@ -150,11 +152,17 @@ func TestAuth_Register_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	t.Run("successful registration", func(t *testing.T) {
 		reqBody := request.RegisterRequest{
@@ -294,11 +302,17 @@ func TestAuth_Login_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	// First register a user
 	registerReq := request.RegisterRequest{
@@ -419,11 +433,17 @@ func TestAuth_RefreshToken_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	// Register and login a user to get a refresh token
 	registerReq := request.RegisterRequest{
@@ -586,11 +606,17 @@ func TestAuth_Logout_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	// Register and login a user to get a refresh token
 	registerReq := request.RegisterRequest{
@@ -749,11 +775,17 @@ func TestAuth_VerifyEmail_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	t.Run("successful verification", func(t *testing.T) {
 		// First register a user
@@ -843,11 +875,17 @@ func TestAuth_ResendVerificationEmail_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	t.Run("successful resend", func(t *testing.T) {
 		// First register a user
@@ -959,11 +997,17 @@ func TestAuth_RequestPasswordReset_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	t.Run("successful request", func(t *testing.T) {
 		// First register a user
@@ -1061,11 +1105,17 @@ func TestAuth_ResetPassword_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	t.Run("successful reset", func(t *testing.T) {
 		// First register a user
@@ -1291,11 +1341,17 @@ func TestAuth_ChangePassword_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+	
+	// Setup session service
+	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
 
 	t.Run("successful change", func(t *testing.T) {
 		// First register and login a user

@@ -20,7 +20,7 @@ import (
 // mockAuthService is a mock implementation of IAuthService
 type mockAuthService struct {
 	registerFunc            func(ctx context.Context, email string, password string) (*entities.User, error)
-	loginFunc               func(ctx context.Context, email string, password string) (*response.LoginResponse, error)
+	loginFunc               func(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error)
 	refreshTokenFunc        func(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
 	logoutFunc              func(ctx context.Context, accessToken string, refreshToken string) error
 	verifyEmailFunc         func(ctx context.Context, token string) error
@@ -37,9 +37,9 @@ func (m *mockAuthService) Register(ctx context.Context, email string, password s
 	return nil, nil
 }
 
-func (m *mockAuthService) Login(ctx context.Context, email string, password string) (*response.LoginResponse, error) {
+func (m *mockAuthService) Login(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error) {
 	if m.loginFunc != nil {
-		return m.loginFunc(ctx, email, password)
+		return m.loginFunc(ctx, email, password, ipAddress, userAgent)
 	}
 	return nil, nil
 }

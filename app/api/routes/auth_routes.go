@@ -7,12 +7,14 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/core/services/session"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 )
 
 // RegisterAuthRoutes registers authentication routes on the Echo router
-func RegisterAuthRoutes(e *echo.Echo, authService primary.IAuthService, jwtService *jwt.JWTService, cacheRepo secondary.ICacheRepository) {
+func RegisterAuthRoutes(e *echo.Echo, authService primary.IAuthService, jwtService *jwt.JWTService, cacheRepo secondary.ICacheRepository, sessionService *session.SessionService) {
 	authHandler := handlers.NewAuthHandler(authService)
+	sessionHandler := handlers.NewSessionHandler(sessionService)
 
 	// Create auth group
 	authGroup := e.Group("/api/v1/auth")
@@ -33,4 +35,10 @@ func RegisterAuthRoutes(e *echo.Echo, authService primary.IAuthService, jwtServi
 
 	// Register authenticated routes
 	authenticatedAuthGroup.POST("/change-password", authHandler.ChangePassword)
+
+	// Register session management routes
+	authenticatedAuthGroup.GET("/sessions", sessionHandler.GetSessions)
+	authenticatedAuthGroup.GET("/sessions/:id", sessionHandler.GetSession)
+	authenticatedAuthGroup.DELETE("/sessions/:id", sessionHandler.DeleteSession)
+	authenticatedAuthGroup.DELETE("/sessions", sessionHandler.DeleteAllSessions)
 }

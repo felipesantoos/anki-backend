@@ -43,6 +43,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/services/health"
 	"github.com/felipesantos/anki-backend/core/services/jobs"
 	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
+	sessionService "github.com/felipesantos/anki-backend/core/services/session"
 	storageService "github.com/felipesantos/anki-backend/core/services/storage"
 	tracingService "github.com/felipesantos/anki-backend/core/services/tracing"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
@@ -425,9 +426,18 @@ func main() {
 		emailSvc = emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
 	}
 
-	// Initialize Auth Service (with email service)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, rdb, emailSvc)
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, rdb)
+	// Initialize Session Service
+	sessionRepo := redis.NewSessionRepository(rdb.Client, cfg.Session.KeyPrefix)
+	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
+	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
+	log.Info("Session service initialized",
+		"ttl_minutes", cfg.Session.TTLMinutes,
+		"key_prefix", cfg.Session.KeyPrefix,
+	)
+
+	// Initialize Auth Service (with email service and session service)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, rdb, emailSvc, sessionSvc)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, rdb, sessionSvc)
 
 	// Register Email Verification Handler if events are enabled
 	if cfg.Events.Enabled {

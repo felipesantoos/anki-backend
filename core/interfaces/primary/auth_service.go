@@ -17,9 +17,9 @@ type IAuthService interface {
 
 	// Login authenticates a user and returns access and refresh tokens
 	// It validates credentials, generates JWT tokens, stores refresh token in Redis,
-	// and updates the user's last login timestamp
+	// creates a session with metadata (IP, user agent), and updates the user's last login timestamp
 	// Returns login response with tokens and user data, or an error if authentication fails
-	Login(ctx context.Context, email string, password string) (*response.LoginResponse, error)
+	Login(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error)
 
 	// RefreshToken generates a new access token and refresh token using a refresh token (token rotation)
 	// It validates the refresh token, checks if it exists in Redis, generates new tokens,

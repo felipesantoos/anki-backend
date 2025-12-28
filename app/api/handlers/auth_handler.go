@@ -129,8 +129,15 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
+	// Extract IP address and user agent from request
+	ipAddress := c.RealIP()
+	if ipAddress == "" {
+		ipAddress = c.Request().RemoteAddr
+	}
+	userAgent := c.Request().UserAgent()
+
 	// Call service
-	resp, err := h.authService.Login(ctx, req.Email, req.Password)
+	resp, err := h.authService.Login(ctx, req.Email, req.Password, ipAddress, userAgent)
 	if err != nil {
 		return handleLoginError(err)
 	}

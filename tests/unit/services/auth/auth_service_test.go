@@ -12,6 +12,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
+	"github.com/felipesantos/anki-backend/core/services/session"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/config"
 )
@@ -156,6 +157,74 @@ func (m *mockCacheRepository) TTL(ctx context.Context, key string) (time.Duratio
 	return 0, nil
 }
 
+// mockSessionService is a mock implementation of SessionService for testing
+type mockSessionService struct {
+	createSessionWithMetadataFunc func(ctx context.Context, userID int64, metadata session.SessionMetadata) (string, error)
+	getUserSessionsFunc          func(ctx context.Context, userID int64) ([]map[string]interface{}, error)
+	deleteUserSessionFunc         func(ctx context.Context, userID int64, sessionID string) error
+	deleteAllUserSessionsFunc     func(ctx context.Context, userID int64) error
+	associateRefreshTokenFunc     func(ctx context.Context, refreshTokenHash string, sessionID string, ttl time.Duration) error
+	getSessionByRefreshTokenFunc  func(ctx context.Context, refreshTokenHash string) (string, error)
+	deleteRefreshTokenAssociationFunc func(ctx context.Context, refreshTokenHash string) error
+	updateSessionFunc             func(ctx context.Context, sessionID string, data map[string]interface{}) error
+}
+
+func (m *mockSessionService) CreateSessionWithMetadata(ctx context.Context, userID int64, metadata session.SessionMetadata) (string, error) {
+	if m.createSessionWithMetadataFunc != nil {
+		return m.createSessionWithMetadataFunc(ctx, userID, metadata)
+	}
+	return "mock-session-id", nil
+}
+
+func (m *mockSessionService) GetUserSessions(ctx context.Context, userID int64) ([]map[string]interface{}, error) {
+	if m.getUserSessionsFunc != nil {
+		return m.getUserSessionsFunc(ctx, userID)
+	}
+	return []map[string]interface{}{}, nil
+}
+
+func (m *mockSessionService) DeleteUserSession(ctx context.Context, userID int64, sessionID string) error {
+	if m.deleteUserSessionFunc != nil {
+		return m.deleteUserSessionFunc(ctx, userID, sessionID)
+	}
+	return nil
+}
+
+func (m *mockSessionService) DeleteAllUserSessions(ctx context.Context, userID int64) error {
+	if m.deleteAllUserSessionsFunc != nil {
+		return m.deleteAllUserSessionsFunc(ctx, userID)
+	}
+	return nil
+}
+
+func (m *mockSessionService) AssociateRefreshToken(ctx context.Context, refreshTokenHash string, sessionID string, ttl time.Duration) error {
+	if m.associateRefreshTokenFunc != nil {
+		return m.associateRefreshTokenFunc(ctx, refreshTokenHash, sessionID, ttl)
+	}
+	return nil
+}
+
+func (m *mockSessionService) GetSessionByRefreshToken(ctx context.Context, refreshTokenHash string) (string, error) {
+	if m.getSessionByRefreshTokenFunc != nil {
+		return m.getSessionByRefreshTokenFunc(ctx, refreshTokenHash)
+	}
+	return "", errors.New("not found")
+}
+
+func (m *mockSessionService) DeleteRefreshTokenAssociation(ctx context.Context, refreshTokenHash string) error {
+	if m.deleteRefreshTokenAssociationFunc != nil {
+		return m.deleteRefreshTokenAssociationFunc(ctx, refreshTokenHash)
+	}
+	return nil
+}
+
+func (m *mockSessionService) UpdateSession(ctx context.Context, sessionID string, data map[string]interface{}) error {
+	if m.updateSessionFunc != nil {
+		return m.updateSessionFunc(ctx, sessionID, data)
+	}
+	return nil
+}
+
 // createTestJWTService creates a JWT service for testing
 func createTestJWTService(t *testing.T) *jwt.JWTService {
 	cfg := config.JWTConfig{
@@ -170,6 +239,11 @@ func createTestJWTService(t *testing.T) *jwt.JWTService {
 		t.Fatalf("Failed to create JWT service: %v", err)
 	}
 	return service
+}
+
+// createTestSessionService creates a mock session service for testing
+func createTestSessionService() *mockSessionService {
+	return &mockSessionService{}
 }
 
 func TestAuthService_Register_Success(t *testing.T) {
@@ -195,7 +269,8 @@ func TestAuthService_Register_Success(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	user, err := service.Register(ctx, "user@example.com", "password123")
@@ -234,7 +309,8 @@ func TestAuthService_Register_EmailAlreadyExists(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "existing@example.com", "password123")
@@ -256,7 +332,8 @@ func TestAuthService_Register_InvalidEmail(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "invalid-email", "password123")
@@ -282,7 +359,8 @@ func TestAuthService_Register_InvalidPassword(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 
@@ -339,7 +417,8 @@ func TestAuthService_Register_CreatesDefaultDeck(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "user@example.com", "password123")
@@ -379,7 +458,8 @@ func TestAuthService_Register_PublishesEvent(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "user@example.com", "password123")
@@ -430,10 +510,11 @@ func TestAuthService_Login_Success(t *testing.T) {
 	eventBus := &mockEventBus{}
 
 	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
-	resp, err := service.Login(ctx, "user@example.com", "password123")
+	resp, err := service.Login(ctx, "user@example.com", "password123", "192.168.1.1", "Mozilla/5.0")
 
 	if err != nil {
 		t.Fatalf("Login() error = %v, want nil", err)
@@ -509,10 +590,11 @@ func TestAuthService_Login_InvalidCredentials(t *testing.T) {
 			eventBus := &mockEventBus{}
 
 			emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+			sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 			ctx := context.Background()
-			_, err := service.Login(ctx, tt.email, tt.password)
+			_, err := service.Login(ctx, tt.email, tt.password, "192.168.1.1", "Mozilla/5.0")
 
 			if err == nil {
 				t.Fatalf("Login() expected error, got nil")
@@ -533,10 +615,11 @@ func TestAuthService_Login_InvalidEmail(t *testing.T) {
 	eventBus := &mockEventBus{}
 
 	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
-	_, err := service.Login(ctx, "invalid-email", "password123")
+	_, err := service.Login(ctx, "invalid-email", "password123", "192.168.1.1", "Mozilla/5.0")
 
 	if err == nil {
 		t.Fatalf("Login() expected error, got nil")

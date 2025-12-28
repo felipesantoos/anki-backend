@@ -49,6 +49,9 @@ type Config struct {
 
 	// Tracing configuration
 	Tracing TracingConfig
+
+	// Email configuration
+	Email EmailConfig
 }
 
 // ServerConfig holds server-related configuration
@@ -170,6 +173,19 @@ type TracingConfig struct {
 	JaegerEndpoint string  // Jaeger collector endpoint (default: "http://localhost:14268/api/traces")
 	SampleRate     float64 // Sampling rate (0.0 to 1.0, default: 1.0)
 	ConsoleEnabled bool    // Enable console exporter for development
+}
+
+// EmailConfig holds email/SMTP configuration
+type EmailConfig struct {
+	Enabled         bool   // Enable/disable email functionality
+	SMTPHost        string // SMTP server host
+	SMTPPort        int    // SMTP server port (usually 587 for TLS or 465 for SSL)
+	SMTPUser        string // SMTP username
+	SMTPPassword    string // SMTP password
+	FromEmail       string // Email address to send from
+	FromName        string // Display name for sender
+	VerificationURL string // Base URL for verification links
+	UseTLS          bool   // Use TLS for SMTP connection
 }
 
 // ValidationError represents a configuration validation error
@@ -331,6 +347,18 @@ func loadConfig() (*Config, error) {
 		JaegerEndpoint: getEnv("TRACING_JAEGER_ENDPOINT", "http://localhost:14268/api/traces"),
 		SampleRate:     sampleRate,
 		ConsoleEnabled: getEnvAsBool("TRACING_CONSOLE_ENABLED", env == "development"),
+	}
+
+	cfg.Email = EmailConfig{
+		Enabled:         getEnvAsBool("EMAIL_ENABLED", false),
+		SMTPHost:        getEnv("EMAIL_SMTP_HOST", ""),
+		SMTPPort:        getEnvAsInt("EMAIL_SMTP_PORT", 587),
+		SMTPUser:        getEnv("EMAIL_SMTP_USER", ""),
+		SMTPPassword:    getEnv("EMAIL_SMTP_PASSWORD", ""),
+		FromEmail:       getEnv("EMAIL_FROM_EMAIL", "noreply@anki.com"),
+		FromName:        getEnv("EMAIL_FROM_NAME", "Anki Backend"),
+		VerificationURL: getEnv("EMAIL_VERIFICATION_URL", "http://localhost:8080"),
+		UseTLS:          getEnvAsBool("EMAIL_USE_TLS", true),
 	}
 
 	// Validate configuration

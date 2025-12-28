@@ -106,6 +106,12 @@ func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
 	return nil
 }
 
+// Update updates an existing user in the database
+func (r *UserRepository) Update(ctx context.Context, user *entities.User) error {
+	// Use Save which handles both create and update
+	return r.Save(ctx, user)
+}
+
 // FindByEmail finds a user by email address
 // Returns the user if found, nil if not found, or an error if the query fails
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entities.User, error) {

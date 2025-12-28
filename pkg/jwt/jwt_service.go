@@ -130,3 +130,26 @@ func (s *JWTService) GetRefreshTokenExpiry() time.Duration {
 	return s.refreshTokenExpiry
 }
 
+// GenerateEmailVerificationToken generates a JWT token for email verification
+// The token expires in 24 hours
+func (s *JWTService) GenerateEmailVerificationToken(userID int64) (string, error) {
+	expiry := 24 * time.Hour
+	return s.generateToken(userID, "email_verification", expiry)
+}
+
+// ValidateEmailVerificationToken validates an email verification token
+// Returns an error if the token is invalid, expired, or not of type "email_verification"
+func (s *JWTService) ValidateEmailVerificationToken(tokenString string) (*Claims, error) {
+	claims, err := s.ValidateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify that this is an email verification token
+	if claims.Type != "email_verification" {
+		return nil, fmt.Errorf("%w: token is not an email verification token", ErrInvalidToken)
+	}
+
+	return claims, nil
+}
+

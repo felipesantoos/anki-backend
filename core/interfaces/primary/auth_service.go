@@ -32,4 +32,15 @@ type IAuthService interface {
 	// Either accessToken or refreshToken (or both) should be provided
 	// Returns an error if the operation fails
 	Logout(ctx context.Context, accessToken string, refreshToken string) error
+
+	// VerifyEmail verifies a user's email using a verification token
+	// It validates the token, checks if it's an email verification token,
+	// and marks the user's email as verified (idempotent operation)
+	// Returns an error if the token is invalid, expired, or verification fails
+	VerifyEmail(ctx context.Context, token string) error
+
+	// ResendVerificationEmail resends the email verification email to the user
+	// It checks if the email is already verified and returns an error if it is
+	// Returns an error if the user is not found or email sending fails
+	ResendVerificationEmail(ctx context.Context, email string) error
 }

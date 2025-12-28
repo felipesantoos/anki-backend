@@ -39,11 +39,12 @@ const (
 
 // AuthService implements IAuthService
 type AuthService struct {
-	userRepo    secondary.IUserRepository
-	deckRepo    secondary.IDeckRepository
-	eventBus    secondary.IEventBus
-	jwtService  *jwt.JWTService
-	cacheRepo   secondary.ICacheRepository
+	userRepo     secondary.IUserRepository
+	deckRepo     secondary.IDeckRepository
+	eventBus     secondary.IEventBus
+	jwtService   *jwt.JWTService
+	cacheRepo    secondary.ICacheRepository
+	emailService primary.IEmailService
 }
 
 // NewAuthService creates a new AuthService instance
@@ -53,13 +54,15 @@ func NewAuthService(
 	eventBus secondary.IEventBus,
 	jwtService *jwt.JWTService,
 	cacheRepo secondary.ICacheRepository,
+	emailService primary.IEmailService,
 ) primary.IAuthService {
 	return &AuthService{
-		userRepo:   userRepo,
-		deckRepo:   deckRepo,
-		eventBus:   eventBus,
-		jwtService: jwtService,
-		cacheRepo:  cacheRepo,
+		userRepo:     userRepo,
+		deckRepo:     deckRepo,
+		eventBus:     eventBus,
+		jwtService:   jwtService,
+		cacheRepo:    cacheRepo,
+		emailService: emailService,
 	}
 }
 
@@ -347,6 +350,69 @@ func (s *AuthService) Logout(ctx context.Context, accessToken string, refreshTok
 		if err != nil {
 			return fmt.Errorf("failed to delete refresh token: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// VerifyEmail verifies a user's email using a verification token
+func (s *AuthService) VerifyEmail(ctx context.Context, token string) error {
+	// 1. Validate token using JWTService
+	claims, err := s.jwtService.ValidateEmailVerificationToken(token)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidToken, err)
+	}
+
+	// 2. Verify that token type is "email_verification" (already done in ValidateEmailVerificationToken)
+	// But we can double-check for safety
+	if claims.Type != "email_verification" {
+		return ErrInvalidToken
+	}
+
+	// 3. Find user by ID
+	user, err := s.userRepo.FindByID(ctx, claims.UserID)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserNotFound, err)
+	}
+
+	// 4. Check if email is already verified (idempotent operation)
+	if user.EmailVerified {
+		// Already verified, return success (idempotent)
+		return nil
+	}
+
+	// 5. Mark email as verified
+	user.MarkEmailAsVerified()
+
+	// 6. Save to repository
+	err = s.userRepo.Update(ctx, user)
+	if err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+
+	return nil
+}
+
+// ResendVerificationEmail resends the email verification email to the user
+func (s *AuthService) ResendVerificationEmail(ctx context.Context, email string) error {
+	// 1. Find user by email
+	user, err := s.userRepo.FindByEmail(ctx, email)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserNotFound, err)
+	}
+	if user == nil {
+		return ErrUserNotFound
+	}
+
+	// 2. Check if email is already verified
+	if user.EmailVerified {
+		return fmt.Errorf("email already verified")
+	}
+
+	// 3. Send verification email via EmailService
+	err = s.emailService.SendVerificationEmail(ctx, user.ID, user.Email.Value())
+	if err != nil {
+		return fmt.Errorf("failed to send verification email: %w", err)
 	}
 
 	return nil

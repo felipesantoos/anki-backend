@@ -270,3 +270,100 @@ func handleLogoutError(err error) *echo.HTTPError {
 	// For other errors, return 500
 	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to logout")
 }
+
+// VerifyEmail handles GET /api/v1/auth/verify-email requests
+// @Summary Verify user email
+// @Description Verifies a user's email address using a verification token sent via email
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param token query string true "Email verification token"
+// @Success 200 {object} map[string]string "Email verified successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request - token is required"
+// @Failure 401 {object} response.ErrorResponse "Invalid or expired token"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/verify-email [get]
+func (h *AuthHandler) VerifyEmail(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Extract token from query parameter
+	token := c.QueryParam("token")
+	if token == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Token is required")
+	}
+
+	// Call service
+	err := h.authService.VerifyEmail(ctx, token)
+	if err != nil {
+		return handleVerifyEmailError(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "Email verified successfully",
+	})
+}
+
+// ResendVerificationEmail handles POST /api/v1/auth/resend-verification requests
+// @Summary Resend verification email
+// @Description Resends the email verification email to the user
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body request.ResendVerificationRequest true "Resend verification request"
+// @Success 200 {object} map[string]string "Verification email sent successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 404 {object} response.ErrorResponse "User not found"
+// @Failure 409 {object} response.ErrorResponse "Email already verified"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/resend-verification [post]
+func (h *AuthHandler) ResendVerificationEmail(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Bind request body to DTO
+	var req request.ResendVerificationRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if err := validateResendVerificationRequest(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Call service
+	err := h.authService.ResendVerificationEmail(ctx, req.Email)
+	if err != nil {
+		return handleResendVerificationError(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "Verification email sent successfully",
+	})
+}
+
+func validateResendVerificationRequest(req *request.ResendVerificationRequest) error {
+	if req.Email == "" {
+		return fmt.Errorf("email is required")
+	}
+	return nil
+}
+
+func handleVerifyEmailError(err error) *echo.HTTPError {
+	if errors.Is(err, authService.ErrInvalidToken) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid or expired token")
+	}
+	if errors.Is(err, authService.ErrUserNotFound) {
+		return echo.NewHTTPError(http.StatusNotFound, "User not found")
+	}
+	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to verify email")
+}
+
+func handleResendVerificationError(err error) *echo.HTTPError {
+	if errors.Is(err, authService.ErrUserNotFound) {
+		return echo.NewHTTPError(http.StatusNotFound, "User not found")
+	}
+	if strings.Contains(err.Error(), "already verified") {
+		return echo.NewHTTPError(http.StatusConflict, "Email already verified")
+	}
+	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to resend verification email")
+}

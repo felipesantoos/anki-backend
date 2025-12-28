@@ -8,6 +8,7 @@ import (
 
 	"github.com/felipesantos/anki-backend/core/domain/entities"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
+	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
@@ -21,6 +22,7 @@ type mockUserRepository struct {
 	findByEmailFunc func(ctx context.Context, email string) (*entities.User, error)
 	findByIDFunc   func(ctx context.Context, id int64) (*entities.User, error)
 	existsByEmailFunc func(ctx context.Context, email string) (bool, error)
+	updateFunc    func(ctx context.Context, user *entities.User) error
 }
 
 func (m *mockUserRepository) Save(ctx context.Context, user *entities.User) error {
@@ -49,6 +51,13 @@ func (m *mockUserRepository) ExistsByEmail(ctx context.Context, email string) (b
 		return m.existsByEmailFunc(ctx, email)
 	}
 	return false, nil
+}
+
+func (m *mockUserRepository) Update(ctx context.Context, user *entities.User) error {
+	if m.updateFunc != nil {
+		return m.updateFunc(ctx, user)
+	}
+	return nil
 }
 
 // mockDeckRepository is a mock implementation of IDeckRepository
@@ -185,7 +194,8 @@ func TestAuthService_Register_Success(t *testing.T) {
 
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	user, err := service.Register(ctx, "user@example.com", "password123")
@@ -223,7 +233,8 @@ func TestAuthService_Register_EmailAlreadyExists(t *testing.T) {
 
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "existing@example.com", "password123")
@@ -244,7 +255,8 @@ func TestAuthService_Register_InvalidEmail(t *testing.T) {
 
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "invalid-email", "password123")
@@ -269,7 +281,8 @@ func TestAuthService_Register_InvalidPassword(t *testing.T) {
 
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 
@@ -325,7 +338,8 @@ func TestAuthService_Register_CreatesDefaultDeck(t *testing.T) {
 
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "user@example.com", "password123")
@@ -364,7 +378,8 @@ func TestAuthService_Register_PublishesEvent(t *testing.T) {
 
 	jwtSvc := createTestJWTService(t)
 	cacheRepo := &mockCacheRepository{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "user@example.com", "password123")
@@ -834,5 +849,263 @@ func TestAuthService_Logout_AccessTokenOnly(t *testing.T) {
 
 	if !accessTokenBlacklisted {
 		t.Errorf("Logout() should blacklist access token even without refresh token")
+	}
+}
+
+// mockEmailService is a mock implementation of IEmailService
+type mockEmailService struct {
+	sendVerificationEmailFunc func(ctx context.Context, userID int64, email string) error
+}
+
+func (m *mockEmailService) SendVerificationEmail(ctx context.Context, userID int64, email string) error {
+	if m.sendVerificationEmailFunc != nil {
+		return m.sendVerificationEmailFunc(ctx, userID, email)
+	}
+	return nil
+}
+
+func (m *mockEmailService) SendPasswordResetEmail(ctx context.Context, userID int64, email string, resetToken string) error {
+	return errors.New("not implemented")
+}
+
+func TestAuthService_VerifyEmail_Success(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	// Generate a valid verification token
+	token, err := jwtSvc.GenerateEmailVerificationToken(1)
+	if err != nil {
+		t.Fatalf("Failed to generate token: %v", err)
+	}
+
+	userUpdated := false
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			if id == 1 {
+				email, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("password123")
+				return &entities.User{
+					ID:            1,
+					Email:         email,
+					PasswordHash:  password,
+					EmailVerified: false,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+		updateFunc: func(ctx context.Context, user *entities.User) error {
+			userUpdated = true
+			if !user.EmailVerified {
+				t.Errorf("User should be marked as verified")
+			}
+			return nil
+		},
+	}
+
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+	emailSvc := &mockEmailService{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err = service.VerifyEmail(ctx, token)
+
+	if err != nil {
+		t.Fatalf("VerifyEmail() error = %v, want nil", err)
+	}
+
+	if !userUpdated {
+		t.Errorf("VerifyEmail() should update user")
+	}
+}
+
+func TestAuthService_VerifyEmail_InvalidToken(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	userRepo := &mockUserRepository{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+	emailSvc := &mockEmailService{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.VerifyEmail(ctx, "invalid-token")
+
+	if err == nil {
+		t.Errorf("VerifyEmail() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrInvalidToken) {
+		t.Errorf("VerifyEmail() error = %v, want ErrInvalidToken", err)
+	}
+}
+
+func TestAuthService_VerifyEmail_AlreadyVerified(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	// Generate a valid verification token
+	token, err := jwtSvc.GenerateEmailVerificationToken(1)
+	if err != nil {
+		t.Fatalf("Failed to generate token: %v", err)
+	}
+
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			if id == 1 {
+				email, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("password123")
+				user := &entities.User{
+					ID:            1,
+					Email:         email,
+					PasswordHash:  password,
+					EmailVerified: true, // Already verified
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}
+				return user, nil
+			}
+			return nil, errors.New("user not found")
+		},
+	}
+
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+	emailSvc := &mockEmailService{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err = service.VerifyEmail(ctx, token)
+
+	// Should succeed (idempotent operation)
+	if err != nil {
+		t.Fatalf("VerifyEmail() error = %v, want nil (idempotent)", err)
+	}
+}
+
+func TestAuthService_ResendVerificationEmail_Success(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	emailSent := false
+	userRepo := &mockUserRepository{
+		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+			if email == "test@example.com" {
+				emailVO, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("password123")
+				return &entities.User{
+					ID:            1,
+					Email:         emailVO,
+					PasswordHash:  password,
+					EmailVerified: false,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+	}
+
+	emailSvc := &mockEmailService{
+		sendVerificationEmailFunc: func(ctx context.Context, userID int64, email string) error {
+			emailSent = true
+			if userID != 1 {
+				t.Errorf("ResendVerificationEmail() userID = %d, want 1", userID)
+			}
+			if email != "test@example.com" {
+				t.Errorf("ResendVerificationEmail() email = %s, want test@example.com", email)
+			}
+			return nil
+		},
+	}
+
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.ResendVerificationEmail(ctx, "test@example.com")
+
+	if err != nil {
+		t.Fatalf("ResendVerificationEmail() error = %v, want nil", err)
+	}
+
+	if !emailSent {
+		t.Errorf("ResendVerificationEmail() should send email")
+	}
+}
+
+func TestAuthService_ResendVerificationEmail_AlreadyVerified(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	userRepo := &mockUserRepository{
+		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+			if email == "test@example.com" {
+				emailVO, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("password123")
+				return &entities.User{
+					ID:            1,
+					Email:         emailVO,
+					PasswordHash:  password,
+					EmailVerified: true, // Already verified
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.ResendVerificationEmail(ctx, "test@example.com")
+
+	if err == nil {
+		t.Errorf("ResendVerificationEmail() error = nil, want error")
+	}
+
+	if !strings.Contains(err.Error(), "already verified") {
+		t.Errorf("ResendVerificationEmail() error = %v, want 'already verified'", err)
+	}
+}
+
+func TestAuthService_ResendVerificationEmail_UserNotFound(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	userRepo := &mockUserRepository{
+		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+			return nil, errors.New("user not found")
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.ResendVerificationEmail(ctx, "nonexistent@example.com")
+
+	if err == nil {
+		t.Errorf("ResendVerificationEmail() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrUserNotFound) {
+		t.Errorf("ResendVerificationEmail() error = %v, want ErrUserNotFound", err)
 	}
 }

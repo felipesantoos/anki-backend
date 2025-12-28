@@ -28,7 +28,9 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/routes"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
+	emailService "github.com/felipesantos/anki-backend/core/services/email"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
+	infraEmail "github.com/felipesantos/anki-backend/infra/email"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
 	postgresInfra "github.com/felipesantos/anki-backend/infra/postgres"
 	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
@@ -141,10 +143,14 @@ func TestAuth_Register_Integration(t *testing.T) {
 	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
 	require.NoError(t, err)
 
+	// Setup email service (using console repository for tests)
+	emailRepo := infraEmail.NewConsoleRepository(log)
+	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -281,10 +287,14 @@ func TestAuth_Login_Integration(t *testing.T) {
 	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
 	require.NoError(t, err)
 
+	// Setup email service (using console repository for tests)
+	emailRepo := infraEmail.NewConsoleRepository(log)
+	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -402,10 +412,14 @@ func TestAuth_RefreshToken_Integration(t *testing.T) {
 	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
 	require.NoError(t, err)
 
+	// Setup email service (using console repository for tests)
+	emailRepo := infraEmail.NewConsoleRepository(log)
+	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -565,10 +579,14 @@ func TestAuth_Logout_Integration(t *testing.T) {
 	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
 	require.NoError(t, err)
 
+	// Setup email service (using console repository for tests)
+	emailRepo := infraEmail.NewConsoleRepository(log)
+	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -698,5 +716,216 @@ func TestAuth_Logout_Integration(t *testing.T) {
 		e.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+
+func TestAuth_VerifyEmail_Integration(t *testing.T) {
+	db, cleanup := setupAuthTestDB(t)
+	defer cleanup()
+
+	// Setup event bus
+	log := logger.GetLogger()
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	err := eventBus.Start()
+	require.NoError(t, err)
+	defer eventBus.Stop()
+
+	// Setup Redis
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
+	// Setup email service (using console repository for tests)
+	emailRepo := infraEmail.NewConsoleRepository(log)
+	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+
+	// Setup repositories and service
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+
+	// Setup Echo
+	e := echo.New()
+	routes.RegisterAuthRoutes(e, authSvc)
+
+	t.Run("successful verification", func(t *testing.T) {
+		// First register a user
+		registerReq := request.RegisterRequest{
+			Email:           "testverify@example.com",
+			Password:        "password123",
+			PasswordConfirm: "password123",
+		}
+		registerBody, _ := json.Marshal(registerReq)
+		registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+		registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		registerRec := httptest.NewRecorder()
+		e.ServeHTTP(registerRec, registerHTTPReq)
+		require.Equal(t, http.StatusCreated, registerRec.Code)
+
+		var registerResp response.RegisterResponse
+		err = json.Unmarshal(registerRec.Body.Bytes(), &registerResp)
+		require.NoError(t, err)
+		require.False(t, registerResp.User.EmailVerified, "Email should not be verified initially")
+
+		// Generate verification token manually (simulating email link)
+		token, err := jwtSvc.GenerateEmailVerificationToken(registerResp.User.ID)
+		require.NoError(t, err)
+
+		// Verify email
+		verifyReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/auth/verify-email?token=%s", token), nil)
+		verifyRec := httptest.NewRecorder()
+		e.ServeHTTP(verifyRec, verifyReq)
+
+		assert.Equal(t, http.StatusOK, verifyRec.Code)
+
+		var verifyResult map[string]string
+		err = json.Unmarshal(verifyRec.Body.Bytes(), &verifyResult)
+		require.NoError(t, err)
+		assert.Equal(t, "Email verified successfully", verifyResult["message"])
+
+		// Verify that user's email_verified is now true
+		var emailVerified bool
+		err = db.DB.QueryRow("SELECT email_verified FROM users WHERE id = $1", registerResp.User.ID).Scan(&emailVerified)
+		require.NoError(t, err)
+		assert.True(t, emailVerified, "Email should be verified after verification")
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		verifyReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify-email?token=invalid-token", nil)
+		verifyRec := httptest.NewRecorder()
+		e.ServeHTTP(verifyRec, verifyReq)
+
+		assert.Equal(t, http.StatusUnauthorized, verifyRec.Code)
+	})
+
+	t.Run("missing token", func(t *testing.T) {
+		verifyReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify-email", nil)
+		verifyRec := httptest.NewRecorder()
+		e.ServeHTTP(verifyRec, verifyReq)
+
+		assert.Equal(t, http.StatusBadRequest, verifyRec.Code)
+	})
+}
+
+func TestAuth_ResendVerificationEmail_Integration(t *testing.T) {
+	db, cleanup := setupAuthTestDB(t)
+	defer cleanup()
+
+	// Setup event bus
+	log := logger.GetLogger()
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	err := eventBus.Start()
+	require.NoError(t, err)
+	defer eventBus.Stop()
+
+	// Setup Redis
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
+	// Setup email service (using console repository for tests)
+	emailRepo := infraEmail.NewConsoleRepository(log)
+	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+
+	// Setup repositories and service
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+
+	// Setup Echo
+	e := echo.New()
+	routes.RegisterAuthRoutes(e, authSvc)
+
+	t.Run("successful resend", func(t *testing.T) {
+		// First register a user
+		registerReq := request.RegisterRequest{
+			Email:           "testresend@example.com",
+			Password:        "password123",
+			PasswordConfirm: "password123",
+		}
+		registerBody, _ := json.Marshal(registerReq)
+		registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+		registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		registerRec := httptest.NewRecorder()
+		e.ServeHTTP(registerRec, registerHTTPReq)
+		require.Equal(t, http.StatusCreated, registerRec.Code)
+
+		// Resend verification email
+		resendReq := request.ResendVerificationRequest{
+			Email: "testresend@example.com",
+		}
+		resendBody, _ := json.Marshal(resendReq)
+		resendHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/resend-verification", bytes.NewReader(resendBody))
+		resendHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resendRec := httptest.NewRecorder()
+		e.ServeHTTP(resendRec, resendHTTPReq)
+
+		assert.Equal(t, http.StatusOK, resendRec.Code)
+
+		var result map[string]string
+		err = json.Unmarshal(resendRec.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Verification email sent successfully", result["message"])
+	})
+
+	t.Run("user not found", func(t *testing.T) {
+		resendReq := request.ResendVerificationRequest{
+			Email: "nonexistent@example.com",
+		}
+		resendBody, _ := json.Marshal(resendReq)
+		resendHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/resend-verification", bytes.NewReader(resendBody))
+		resendHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resendRec := httptest.NewRecorder()
+		e.ServeHTTP(resendRec, resendHTTPReq)
+
+		assert.Equal(t, http.StatusNotFound, resendRec.Code)
+	})
+
+	t.Run("email already verified", func(t *testing.T) {
+		// Register and verify a user
+		registerReq := request.RegisterRequest{
+			Email:           "testalreadyverified@example.com",
+			Password:        "password123",
+			PasswordConfirm: "password123",
+		}
+		registerBody, _ := json.Marshal(registerReq)
+		registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+		registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		registerRec := httptest.NewRecorder()
+		e.ServeHTTP(registerRec, registerHTTPReq)
+		require.Equal(t, http.StatusCreated, registerRec.Code)
+
+		var registerResp response.RegisterResponse
+		err = json.Unmarshal(registerRec.Body.Bytes(), &registerResp)
+		require.NoError(t, err)
+
+		// Manually verify the email in the database
+		_, err = db.DB.Exec("UPDATE users SET email_verified = true WHERE id = $1", registerResp.User.ID)
+		require.NoError(t, err)
+
+		// Try to resend verification email
+		resendReq := request.ResendVerificationRequest{
+			Email: "testalreadyverified@example.com",
+		}
+		resendBody, _ := json.Marshal(resendReq)
+		resendHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/resend-verification", bytes.NewReader(resendBody))
+		resendHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resendRec := httptest.NewRecorder()
+		e.ServeHTTP(resendRec, resendHTTPReq)
+
+		assert.Equal(t, http.StatusConflict, resendRec.Code)
 	})
 }

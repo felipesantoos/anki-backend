@@ -24,4 +24,8 @@ type IUserRepository interface {
 	// ExistsByEmail checks if a user with the given email already exists
 	// Returns true if exists, false if not, or an error if the query fails
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
+
+	// Update updates an existing user in the database
+	// The user must have a valid ID
+	Update(ctx context.Context, user *entities.User) error
 }

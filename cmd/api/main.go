@@ -48,6 +48,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
+	infraEmail "github.com/felipesantos/anki-backend/infra/email"
 	"github.com/felipesantos/anki-backend/infra/jobs/handlers"
 	infraJobs "github.com/felipesantos/anki-backend/infra/jobs"
 	"github.com/felipesantos/anki-backend/infra/postgres"
@@ -405,8 +406,36 @@ func main() {
 	deckRepo := repositories.NewDeckRepository(db.DB)
 	
 	// Create Auth Service with JWT service and cache repository
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, rdb)
+	// Initialize Email Service
+	var emailSvc primary.IEmailService
+	if cfg.Email.Enabled {
+		log.Info("Initializing email service (SMTP)")
+		var emailRepo secondary.IEmailRepository
+		emailRepo, err = infraEmail.NewSMTPRepository(cfg.Email)
+		if err != nil {
+			log.Error("Failed to create SMTP repository", "error", err)
+			os.Exit(1)
+		}
+		emailSvc = emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+	} else {
+		log.Info("Email service disabled, using console repository")
+		emailRepo := infraEmail.NewConsoleRepository(log)
+		emailSvc = emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+	}
+
+	// Initialize Auth Service (with email service)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, rdb, emailSvc)
 	routes.RegisterAuthRoutes(e, authSvc)
+
+	// Register Email Verification Handler if events are enabled
+	if cfg.Events.Enabled {
+		emailVerificationHandler := eventHandlers.NewEmailVerificationHandler(emailSvc)
+		if err := eventService.Subscribe(domainEvents.UserRegisteredEventType, emailVerificationHandler); err != nil {
+			log.Error("Failed to subscribe email verification handler", "event_type", domainEvents.UserRegisteredEventType, "error", err)
+			os.Exit(1)
+		}
+		log.Info("Email verification handler registered for UserRegistered events")
+	}
 
 	// Start HTTP server
 	serverAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)

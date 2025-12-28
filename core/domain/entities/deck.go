@@ -7,39 +7,105 @@ import (
 // Deck represents a deck (card deck) entity in the domain
 // It contains the core business logic for deck management
 type Deck struct {
-	ID          int64
-	UserID      int64
-	Name        string
-	ParentID    *int64
-	OptionsJSON string // JSONB in database
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   *time.Time
+	id          int64
+	userID      int64
+	name        string
+	parentID    *int64
+	optionsJSON string // JSONB in database
+	createdAt   time.Time
+	updatedAt   time.Time
+	deletedAt   *time.Time
+}
+
+// Getters
+func (d *Deck) GetID() int64 {
+	return d.id
+}
+
+func (d *Deck) GetUserID() int64 {
+	return d.userID
+}
+
+func (d *Deck) GetName() string {
+	return d.name
+}
+
+func (d *Deck) GetParentID() *int64 {
+	return d.parentID
+}
+
+func (d *Deck) GetOptionsJSON() string {
+	return d.optionsJSON
+}
+
+func (d *Deck) GetCreatedAt() time.Time {
+	return d.createdAt
+}
+
+func (d *Deck) GetUpdatedAt() time.Time {
+	return d.updatedAt
+}
+
+func (d *Deck) GetDeletedAt() *time.Time {
+	return d.deletedAt
+}
+
+// Setters
+func (d *Deck) SetID(id int64) {
+	d.id = id
+}
+
+func (d *Deck) SetUserID(userID int64) {
+	d.userID = userID
+}
+
+func (d *Deck) SetName(name string) {
+	d.name = name
+}
+
+func (d *Deck) SetParentID(parentID *int64) {
+	d.parentID = parentID
+}
+
+func (d *Deck) SetOptionsJSON(optionsJSON string) {
+	d.optionsJSON = optionsJSON
+}
+
+func (d *Deck) SetCreatedAt(createdAt time.Time) {
+	d.createdAt = createdAt
+}
+
+func (d *Deck) SetUpdatedAt(updatedAt time.Time) {
+	d.updatedAt = updatedAt
+}
+
+func (d *Deck) SetDeletedAt(deletedAt *time.Time) {
+	d.deletedAt = deletedAt
 }
 
 // IsActive checks if the deck is active (not deleted)
 func (d *Deck) IsActive() bool {
-	return d.DeletedAt == nil
+	return d.deletedAt == nil
 }
 
 // IsRoot checks if the deck is a root deck (has no parent)
 func (d *Deck) IsRoot() bool {
-	return d.ParentID == nil
+	return d.parentID == nil
 }
 
 // GetFullPath returns the full hierarchical path of the deck
 // Example: "Parent::Child::Grandchild"
 // decks parameter should contain all decks in the hierarchy
 func (d *Deck) GetFullPath(decks []*Deck) string {
-	path := []string{d.Name}
+	path := []string{d.GetName()}
 	current := d
 
 	// Build path by traversing up the hierarchy
-	for current.ParentID != nil {
+	for current.GetParentID() != nil {
 		found := false
 		for _, deck := range decks {
-			if deck.ID == *current.ParentID {
-				path = append([]string{deck.Name}, path...)
+			if deck.GetID() == *current.GetParentID() {
+				path = append([]string{deck.GetName()}, path...)
 				current = deck
 				found = true
 				break
@@ -70,6 +136,6 @@ func (d *Deck) CanDelete() bool {
 
 // HasParent checks if the deck has a parent
 func (d *Deck) HasParent() bool {
-	return d.ParentID != nil
+	return d.parentID != nil
 }
 

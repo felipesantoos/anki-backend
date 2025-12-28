@@ -14,23 +14,29 @@ func TestCheckDatabaseLog_IsCompleted(t *testing.T) {
 	}{
 		{
 			name: "completed status",
-			log: &entities.CheckDatabaseLog{
-				Status: entities.CheckStatusCompleted,
-			},
+			log: func() *entities.CheckDatabaseLog {
+				cdl := &entities.CheckDatabaseLog{}
+				cdl.SetStatus(entities.CheckStatusCompleted)
+				return cdl
+			}(),
 			want: true,
 		},
 		{
 			name: "running status",
-			log: &entities.CheckDatabaseLog{
-				Status: entities.CheckStatusRunning,
-			},
+			log: func() *entities.CheckDatabaseLog {
+				cdl := &entities.CheckDatabaseLog{}
+				cdl.SetStatus(entities.CheckStatusRunning)
+				return cdl
+			}(),
 			want: false,
 		},
 		{
 			name: "failed status",
-			log: &entities.CheckDatabaseLog{
-				Status: entities.CheckStatusFailed,
-			},
+			log: func() *entities.CheckDatabaseLog {
+				cdl := &entities.CheckDatabaseLog{}
+				cdl.SetStatus(entities.CheckStatusFailed)
+				return cdl
+			}(),
 			want: false,
 		},
 	}
@@ -53,16 +59,20 @@ func TestCheckDatabaseLog_IsFailed(t *testing.T) {
 	}{
 		{
 			name: "failed status",
-			log: &entities.CheckDatabaseLog{
-				Status: entities.CheckStatusFailed,
-			},
+			log: func() *entities.CheckDatabaseLog {
+				cdl := &entities.CheckDatabaseLog{}
+				cdl.SetStatus(entities.CheckStatusFailed)
+				return cdl
+			}(),
 			want: true,
 		},
 		{
 			name: "completed status",
-			log: &entities.CheckDatabaseLog{
-				Status: entities.CheckStatusCompleted,
-			},
+			log: func() *entities.CheckDatabaseLog {
+				cdl := &entities.CheckDatabaseLog{}
+				cdl.SetStatus(entities.CheckStatusCompleted)
+				return cdl
+			}(),
 			want: false,
 		},
 	}
@@ -85,16 +95,20 @@ func TestCheckDatabaseLog_IsCorrupted(t *testing.T) {
 	}{
 		{
 			name: "corrupted status",
-			log: &entities.CheckDatabaseLog{
-				Status: entities.CheckStatusCorrupted,
-			},
+			log: func() *entities.CheckDatabaseLog {
+				cdl := &entities.CheckDatabaseLog{}
+				cdl.SetStatus(entities.CheckStatusCorrupted)
+				return cdl
+			}(),
 			want: true,
 		},
 		{
 			name: "completed status",
-			log: &entities.CheckDatabaseLog{
-				Status: entities.CheckStatusCompleted,
-			},
+			log: func() *entities.CheckDatabaseLog {
+				cdl := &entities.CheckDatabaseLog{}
+				cdl.SetStatus(entities.CheckStatusCompleted)
+				return cdl
+			}(),
 			want: false,
 		},
 	}

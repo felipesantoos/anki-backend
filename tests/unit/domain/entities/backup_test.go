@@ -7,17 +7,15 @@ import (
 )
 
 func TestBackup_IsAutomatic(t *testing.T) {
-	backup := &entities.Backup{
-		BackupType: entities.BackupTypeAutomatic,
-	}
+	backup := &entities.Backup{}
+	backup.SetBackupType(entities.BackupTypeAutomatic)
 
 	if !backup.IsAutomatic() {
 		t.Errorf("Backup.IsAutomatic() = false, want true")
 	}
 
-	manualBackup := &entities.Backup{
-		BackupType: entities.BackupTypeManual,
-	}
+	manualBackup := &entities.Backup{}
+	manualBackup.SetBackupType(entities.BackupTypeManual)
 
 	if manualBackup.IsAutomatic() {
 		t.Errorf("Backup.IsAutomatic() = true, want false for manual backup")
@@ -25,17 +23,15 @@ func TestBackup_IsAutomatic(t *testing.T) {
 }
 
 func TestBackup_IsManual(t *testing.T) {
-	backup := &entities.Backup{
-		BackupType: entities.BackupTypeManual,
-	}
+	backup := &entities.Backup{}
+	backup.SetBackupType(entities.BackupTypeManual)
 
 	if !backup.IsManual() {
 		t.Errorf("Backup.IsManual() = false, want true")
 	}
 
-	automaticBackup := &entities.Backup{
-		BackupType: entities.BackupTypeAutomatic,
-	}
+	automaticBackup := &entities.Backup{}
+	automaticBackup.SetBackupType(entities.BackupTypeAutomatic)
 
 	if automaticBackup.IsManual() {
 		t.Errorf("Backup.IsManual() = true, want false for automatic backup")
@@ -43,17 +39,15 @@ func TestBackup_IsManual(t *testing.T) {
 }
 
 func TestBackup_IsPreOperation(t *testing.T) {
-	backup := &entities.Backup{
-		BackupType: entities.BackupTypePreOperation,
-	}
+	backup := &entities.Backup{}
+	backup.SetBackupType(entities.BackupTypePreOperation)
 
 	if !backup.IsPreOperation() {
 		t.Errorf("Backup.IsPreOperation() = false, want true")
 	}
 
-	automaticBackup := &entities.Backup{
-		BackupType: entities.BackupTypeAutomatic,
-	}
+	automaticBackup := &entities.Backup{}
+	automaticBackup.SetBackupType(entities.BackupTypeAutomatic)
 
 	if automaticBackup.IsPreOperation() {
 		t.Errorf("Backup.IsPreOperation() = true, want false for automatic backup")

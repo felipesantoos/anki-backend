@@ -16,16 +16,20 @@ func TestNoteType_IsActive(t *testing.T) {
 	}{
 		{
 			name: "active note type",
-			noteType: &entities.NoteType{
-				DeletedAt: nil,
-			},
+			noteType: func() *entities.NoteType {
+				nt := &entities.NoteType{}
+				nt.SetDeletedAt(nil)
+				return nt
+			}(),
 			expected: true,
 		},
 		{
 			name: "deleted note type",
-			noteType: &entities.NoteType{
-				DeletedAt: timePtr(time.Now()),
-			},
+			noteType: func() *entities.NoteType {
+				nt := &entities.NoteType{}
+				nt.SetDeletedAt(timePtr(time.Now()))
+				return nt
+			}(),
 			expected: false,
 		},
 	}
@@ -75,9 +79,8 @@ func TestNoteType_GetFieldCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			noteType := &entities.NoteType{
-				FieldsJSON: tt.fieldsJSON,
-			}
+			noteType := &entities.NoteType{}
+			noteType.SetFieldsJSON(tt.fieldsJSON)
 			got := noteType.GetFieldCount()
 			if got != tt.expected {
 				t.Errorf("NoteType.GetFieldCount() = %v, want %v", got, tt.expected)
@@ -121,9 +124,8 @@ func TestNoteType_GetCardTypeCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			noteType := &entities.NoteType{
-				CardTypesJSON: tt.cardTypesJSON,
-			}
+			noteType := &entities.NoteType{}
+			noteType.SetCardTypesJSON(tt.cardTypesJSON)
 			got := noteType.GetCardTypeCount()
 			if got != tt.expected {
 				t.Errorf("NoteType.GetCardTypeCount() = %v, want %v", got, tt.expected)

@@ -11,9 +11,8 @@ import (
 )
 
 func TestUserPreferences_GetTheme(t *testing.T) {
-	prefs := &entities.UserPreferences{
-		Theme: valueobjects.ThemeTypeDark,
-	}
+	prefs := &entities.UserPreferences{}
+	prefs.SetTheme(valueobjects.ThemeTypeDark)
 
 	if prefs.GetTheme() != valueobjects.ThemeTypeDark {
 		t.Errorf("UserPreferences.GetTheme() = %v, want ThemeTypeDark", prefs.GetTheme())
@@ -21,28 +20,27 @@ func TestUserPreferences_GetTheme(t *testing.T) {
 }
 
 func TestUserPreferences_SetTheme(t *testing.T) {
-	prefs := &entities.UserPreferences{
-		Theme:     valueobjects.ThemeTypeLight,
-		UpdatedAt: time.Now(),
-	}
+	prefs := &entities.UserPreferences{}
+	prefs.SetTheme(valueobjects.ThemeTypeLight)
+	prefs.SetUpdatedAt(time.Now())
 
 	// Set valid theme
 	prefs.SetTheme(valueobjects.ThemeTypeDark)
-	if prefs.Theme != valueobjects.ThemeTypeDark {
+	if prefs.GetTheme() != valueobjects.ThemeTypeDark {
 		t.Errorf("UserPreferences.SetTheme() failed to set theme")
 	}
 
 	// Verify UpdatedAt was changed
-	originalUpdatedAt := prefs.UpdatedAt
+	originalUpdatedAt := prefs.GetUpdatedAt()
 	time.Sleep(1 * time.Millisecond)
 	prefs.SetTheme(valueobjects.ThemeTypeAuto)
-	if prefs.UpdatedAt.Equal(originalUpdatedAt) {
+	if prefs.GetUpdatedAt().Equal(originalUpdatedAt) {
 		t.Errorf("UserPreferences.SetTheme() should update UpdatedAt")
 	}
 
 	// Try to set invalid theme (should not change)
 	prefs.SetTheme(valueobjects.ThemeType("invalid"))
-	if prefs.Theme != valueobjects.ThemeTypeAuto {
+	if prefs.GetTheme() != valueobjects.ThemeTypeAuto {
 		t.Errorf("UserPreferences.SetTheme() should not accept invalid theme")
 	}
 }

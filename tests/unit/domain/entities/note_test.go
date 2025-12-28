@@ -16,16 +16,20 @@ func TestNote_IsActive(t *testing.T) {
 	}{
 		{
 			name: "active note",
-			note: &entities.Note{
-				DeletedAt: nil,
-			},
+			note: func() *entities.Note {
+				n := &entities.Note{}
+				n.SetDeletedAt(nil)
+				return n
+			}(),
 			expected: true,
 		},
 		{
 			name: "deleted note",
-			note: &entities.Note{
-				DeletedAt: timePtr(time.Now()),
-			},
+			note: func() *entities.Note {
+				n := &entities.Note{}
+				n.SetDeletedAt(timePtr(time.Now()))
+				return n
+			}(),
 			expected: false,
 		},
 	}
@@ -41,9 +45,8 @@ func TestNote_IsActive(t *testing.T) {
 }
 
 func TestNote_HasTag(t *testing.T) {
-	note := &entities.Note{
-		Tags: []string{"vocabulary", "spanish", "verb"},
-	}
+	note := &entities.Note{}
+	note.SetTags([]string{"vocabulary", "spanish", "verb"})
 
 	tests := []struct {
 		name     string
@@ -83,13 +86,12 @@ func TestNote_HasTag(t *testing.T) {
 }
 
 func TestNote_AddTag(t *testing.T) {
-	note := &entities.Note{
-		Tags:      []string{"vocabulary"},
-		UpdatedAt: time.Now(),
-	}
+	note := &entities.Note{}
+	note.SetTags([]string{"vocabulary"})
+	note.SetUpdatedAt(time.Now())
 
 	// Add new tag
-	originalUpdatedAt := note.UpdatedAt
+	originalUpdatedAt := note.GetUpdatedAt()
 	time.Sleep(1 * time.Millisecond)
 	note.AddTag("spanish")
 	if !note.HasTag("spanish") {
@@ -97,29 +99,28 @@ func TestNote_AddTag(t *testing.T) {
 	}
 
 	// Verify UpdatedAt was changed when adding new tag
-	if note.UpdatedAt.Equal(originalUpdatedAt) {
+	if note.GetUpdatedAt().Equal(originalUpdatedAt) {
 		t.Errorf("Note.AddTag() should update UpdatedAt when adding new tag")
 	}
 
 	// Try to add duplicate tag (should not add duplicate)
 	note.AddTag("spanish")
-	if len(note.Tags) != 2 {
-		t.Errorf("Note.AddTag() added duplicate tag, want 2 tags, got %d", len(note.Tags))
+	if len(note.GetTags()) != 2 {
+		t.Errorf("Note.AddTag() added duplicate tag, want 2 tags, got %d", len(note.GetTags()))
 	}
 
 	// Try to add empty tag
-	originalTagCount := len(note.Tags)
+	originalTagCount := len(note.GetTags())
 	note.AddTag("")
-	if len(note.Tags) != originalTagCount {
+	if len(note.GetTags()) != originalTagCount {
 		t.Errorf("Note.AddTag() should not add empty tag")
 	}
 }
 
 func TestNote_RemoveTag(t *testing.T) {
-	note := &entities.Note{
-		Tags:      []string{"vocabulary", "spanish", "verb"},
-		UpdatedAt: time.Now(),
-	}
+	note := &entities.Note{}
+	note.SetTags([]string{"vocabulary", "spanish", "verb"})
+	note.SetUpdatedAt(time.Now())
 
 	// Remove existing tag
 	note.RemoveTag("spanish")
@@ -127,14 +128,14 @@ func TestNote_RemoveTag(t *testing.T) {
 		t.Errorf("Note.RemoveTag() failed to remove tag")
 	}
 
-	if len(note.Tags) != 2 {
-		t.Errorf("Note.RemoveTag() wrong tag count, want 2, got %d", len(note.Tags))
+	if len(note.GetTags()) != 2 {
+		t.Errorf("Note.RemoveTag() wrong tag count, want 2, got %d", len(note.GetTags()))
 	}
 
 	// Try to remove non-existent tag
-	originalTagCount := len(note.Tags)
+	originalTagCount := len(note.GetTags())
 	note.RemoveTag("nonexistent")
-	if len(note.Tags) != originalTagCount {
+	if len(note.GetTags()) != originalTagCount {
 		t.Errorf("Note.RemoveTag() should not change tag count for non-existent tag")
 	}
 
@@ -146,59 +147,58 @@ func TestNote_RemoveTag(t *testing.T) {
 }
 
 func TestNote_IsMarked(t *testing.T) {
-	markedNote := &entities.Note{Marked: true}
+	markedNote := &entities.Note{}
+	markedNote.SetMarked(true)
 	if !markedNote.IsMarked() {
 		t.Errorf("Note.IsMarked() = false, want true for marked note")
 	}
 
-	unmarkedNote := &entities.Note{Marked: false}
+	unmarkedNote := &entities.Note{}
+	unmarkedNote.SetMarked(false)
 	if unmarkedNote.IsMarked() {
 		t.Errorf("Note.IsMarked() = true, want false for unmarked note")
 	}
 }
 
 func TestNote_Mark(t *testing.T) {
-	note := &entities.Note{
-		Marked:    false,
-		UpdatedAt: time.Now(),
-	}
+	note := &entities.Note{}
+	note.SetMarked(false)
+	note.SetUpdatedAt(time.Now())
 
 	note.Mark()
-	if !note.Marked {
+	if !note.GetMarked() {
 		t.Errorf("Note.Mark() failed to mark note")
 	}
 
 	// Mark again (should be idempotent)
 	note.Mark()
-	if !note.Marked {
+	if !note.GetMarked() {
 		t.Errorf("Note.Mark() failed to keep note marked")
 	}
 }
 
 func TestNote_Unmark(t *testing.T) {
-	note := &entities.Note{
-		Marked:    true,
-		UpdatedAt: time.Now(),
-	}
+	note := &entities.Note{}
+	note.SetMarked(true)
+	note.SetUpdatedAt(time.Now())
 
 	note.Unmark()
-	if note.Marked {
+	if note.GetMarked() {
 		t.Errorf("Note.Unmark() failed to unmark note")
 	}
 
 	// Unmark again (should be idempotent)
 	note.Unmark()
-	if note.Marked {
+	if note.GetMarked() {
 		t.Errorf("Note.Unmark() failed to keep note unmarked")
 	}
 }
 
 func TestNote_GetFirstField(t *testing.T) {
 	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
-	note := &entities.Note{
-		GUID:       guid,
-		FieldsJSON: `{"Front": "Hello", "Back": "Hola"}`,
-	}
+	note := &entities.Note{}
+	note.SetGUID(guid)
+	note.SetFieldsJSON(`{"Front": "Hello", "Back": "Hola"}`)
 
 	// GetFirstField returns empty string as parsing should be done in service layer
 	// This is expected behavior per the implementation

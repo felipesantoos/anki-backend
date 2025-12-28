@@ -114,16 +114,15 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 
 	// 4. Create user entity
 	now := time.Now()
-	user := &entities.User{
-		ID:            0, // Will be set after save
-		Email:         emailVO,
-		PasswordHash:  passwordVO,
-		EmailVerified: false,
-		CreatedAt:     now,
-		UpdatedAt:     now,
-		LastLoginAt:   nil,
-		DeletedAt:     nil,
-	}
+	user := &entities.User{}
+	user.SetID(0) // Will be set after save
+	user.SetEmail(emailVO)
+	user.SetPasswordHash(passwordVO)
+	user.SetEmailVerified(false)
+	user.SetCreatedAt(now)
+	user.SetUpdatedAt(now)
+	user.SetLastLoginAt(nil)
+	user.SetDeletedAt(nil)
 
 	// 5. Save user to database
 	err = s.userRepo.Save(ctx, user)
@@ -132,7 +131,7 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 	}
 
 	// 6. Create default deck for the user
-	_, err = s.deckRepo.CreateDefaultDeck(ctx, user.ID)
+	_, err = s.deckRepo.CreateDefaultDeck(ctx, user.GetID())
 	if err != nil {
 		// If deck creation fails, we should log the error but not fail the registration
 		// The user was already created, so we return success but log the deck creation failure
@@ -142,8 +141,8 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 
 	// 7. Publish UserRegistered event
 	event := &domainEvents.UserRegistered{
-		UserID:    user.ID,
-		Email:     user.Email.Value(),
+		UserID:    user.GetID(),
+		Email:     user.GetEmail().Value(),
 		Timestamp: now,
 	}
 
@@ -191,13 +190,13 @@ func (s *AuthService) Login(ctx context.Context, email string, password string, 
 	}
 
 	// 6. Generate access token
-	accessToken, err := s.jwtService.GenerateAccessToken(user.ID)
+	accessToken, err := s.jwtService.GenerateAccessToken(user.GetID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
 	// 7. Generate refresh token
-	refreshToken, err := s.jwtService.GenerateRefreshToken(user.ID)
+	refreshToken, err := s.jwtService.GenerateRefreshToken(user.GetID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -210,7 +209,7 @@ func (s *AuthService) Login(ctx context.Context, email string, password string, 
 		DeviceInfo:   extractDeviceInfo(userAgent),
 		LastActivity: now,
 	}
-	sessionID, err := s.sessionService.CreateSessionWithMetadata(ctx, user.ID, sessionMetadata)
+	sessionID, err := s.sessionService.CreateSessionWithMetadata(ctx, user.GetID(), sessionMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
@@ -218,7 +217,7 @@ func (s *AuthService) Login(ctx context.Context, email string, password string, 
 	// 9. Store refresh token in Redis with session ID
 	refreshTokenKey := buildRefreshTokenKey(refreshToken)
 	refreshTokenTTL := s.jwtService.GetRefreshTokenExpiry()
-	refreshTokenValue := fmt.Sprintf(`{"user_id":%d,"session_id":"%s"}`, user.ID, sessionID)
+	refreshTokenValue := fmt.Sprintf(`{"user_id":%d,"session_id":"%s"}`, user.GetID(), sessionID)
 	err = s.cacheRepo.Set(ctx, refreshTokenKey, refreshTokenValue, refreshTokenTTL)
 	if err != nil {
 		// Clean up session if token storage fails
@@ -247,10 +246,10 @@ func (s *AuthService) Login(ctx context.Context, email string, password string, 
 		ExpiresIn:    expiresIn,
 		TokenType:    "Bearer",
 		User: response.UserData{
-			ID:            user.ID,
-			Email:         user.Email.Value(),
-			EmailVerified: user.EmailVerified,
-			CreatedAt:     user.CreatedAt,
+		ID:            user.GetID(),
+		Email:         user.GetEmail().Value(),
+		EmailVerified: user.GetEmailVerified(),
+		CreatedAt:     user.GetCreatedAt(),
 		},
 	}, nil
 }
@@ -531,7 +530,7 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) error {
 	}
 
 	// 4. Check if email is already verified (idempotent operation)
-	if user.EmailVerified {
+	if user.GetEmailVerified() {
 		// Already verified, return success (idempotent)
 		return nil
 	}
@@ -560,12 +559,12 @@ func (s *AuthService) ResendVerificationEmail(ctx context.Context, email string)
 	}
 
 	// 2. Check if email is already verified
-	if user.EmailVerified {
+	if user.GetEmailVerified() {
 		return fmt.Errorf("email already verified")
 	}
 
 	// 3. Send verification email via EmailService
-	err = s.emailService.SendVerificationEmail(ctx, user.ID, user.Email.Value())
+	err = s.emailService.SendVerificationEmail(ctx, user.GetID(), user.GetEmail().Value())
 	if err != nil {
 		return fmt.Errorf("failed to send verification email: %w", err)
 	}
@@ -601,7 +600,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) er
 	}
 
 	// 4. Generate password reset token
-	token, err := s.jwtService.GeneratePasswordResetToken(user.ID)
+	token, err := s.jwtService.GeneratePasswordResetToken(user.GetID())
 	if err != nil {
 		// If token generation fails, return success anyway (don't reveal failure)
 		// In production, this should be logged
@@ -609,7 +608,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) er
 	}
 
 	// 5. Send password reset email
-	err = s.emailService.SendPasswordResetEmail(ctx, user.ID, user.Email.Value(), token)
+	err = s.emailService.SendPasswordResetEmail(ctx, user.GetID(), user.GetEmail().Value(), token)
 	if err != nil {
 		// If email sending fails, return success anyway (don't reveal failure)
 		// In production, this should be logged
@@ -654,8 +653,8 @@ func (s *AuthService) ResetPassword(ctx context.Context, token string, newPasswo
 	}
 
 	// 6. Update user password
-	user.PasswordHash = passwordVO
-	user.UpdatedAt = time.Now()
+	user.SetPasswordHash(passwordVO)
+	user.SetUpdatedAt(time.Now())
 
 	// 7. Save updated user
 	err = s.userRepo.Update(ctx, user)
@@ -664,11 +663,11 @@ func (s *AuthService) ResetPassword(ctx context.Context, token string, newPasswo
 	}
 
 	// 8. Invalidate all sessions for this user (security: force re-login after password reset)
-	if err := s.sessionService.DeleteAllUserSessions(ctx, user.ID); err != nil {
+	if err := s.sessionService.DeleteAllUserSessions(ctx, user.GetID()); err != nil {
 		log := logger.GetLogger()
 		log.Warn("Failed to delete all user sessions during password reset",
 			"error", err,
-			"user_id", user.ID,
+			"user_id", user.GetID(),
 		)
 		// Don't fail password reset if session deletion fails
 	}
@@ -704,8 +703,8 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentP
 	}
 
 	// 5. Update user password
-	user.PasswordHash = passwordVO
-	user.UpdatedAt = time.Now()
+	user.SetPasswordHash(passwordVO)
+	user.SetUpdatedAt(time.Now())
 
 	// 6. Save updated user
 	err = s.userRepo.Update(ctx, user)

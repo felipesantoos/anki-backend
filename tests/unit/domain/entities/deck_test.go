@@ -15,16 +15,20 @@ func TestDeck_IsActive(t *testing.T) {
 	}{
 		{
 			name: "active deck",
-			deck: &entities.Deck{
-				DeletedAt: nil,
-			},
+			deck: func() *entities.Deck {
+				d := &entities.Deck{}
+				d.SetDeletedAt(nil)
+				return d
+			}(),
 			expected: true,
 		},
 		{
 			name: "deleted deck",
-			deck: &entities.Deck{
-				DeletedAt: timePtr(time.Now()),
-			},
+			deck: func() *entities.Deck {
+				d := &entities.Deck{}
+				d.SetDeletedAt(timePtr(time.Now()))
+				return d
+			}(),
 			expected: false,
 		},
 	}
@@ -47,16 +51,20 @@ func TestDeck_IsRoot(t *testing.T) {
 	}{
 		{
 			name: "root deck",
-			deck: &entities.Deck{
-				ParentID: nil,
-			},
+			deck: func() *entities.Deck {
+				d := &entities.Deck{}
+				d.SetParentID(nil)
+				return d
+			}(),
 			expected: true,
 		},
 		{
 			name: "child deck",
-			deck: &entities.Deck{
-				ParentID: int64Ptr(1),
-			},
+			deck: func() *entities.Deck {
+				d := &entities.Deck{}
+				d.SetParentID(int64Ptr(1))
+				return d
+			}(),
 			expected: false,
 		},
 	}
@@ -72,20 +80,19 @@ func TestDeck_IsRoot(t *testing.T) {
 }
 
 func TestDeck_GetFullPath(t *testing.T) {
-	parent := &entities.Deck{
-		ID:   1,
-		Name: "Parent",
-	}
-	child := &entities.Deck{
-		ID:       2,
-		Name:     "Child",
-		ParentID: int64Ptr(1),
-	}
-	grandchild := &entities.Deck{
-		ID:       3,
-		Name:     "Grandchild",
-		ParentID: int64Ptr(2),
-	}
+	parent := &entities.Deck{}
+	parent.SetID(1)
+	parent.SetName("Parent")
+	
+	child := &entities.Deck{}
+	child.SetID(2)
+	child.SetName("Child")
+	child.SetParentID(int64Ptr(1))
+	
+	grandchild := &entities.Deck{}
+	grandchild.SetID(3)
+	grandchild.SetName("Grandchild")
+	grandchild.SetParentID(int64Ptr(2))
 
 	allDecks := []*entities.Deck{parent, child, grandchild}
 
@@ -114,8 +121,14 @@ func TestDeck_GetFullPath(t *testing.T) {
 			expected: "Parent::Child::Grandchild",
 		},
 		{
-			name:     "orphaned deck",
-			deck:     &entities.Deck{ID: 4, Name: "Orphan", ParentID: int64Ptr(999)},
+			name: "orphaned deck",
+			deck: func() *entities.Deck {
+				d := &entities.Deck{}
+				d.SetID(4)
+				d.SetName("Orphan")
+				d.SetParentID(int64Ptr(999))
+				return d
+			}(),
 			decks:    allDecks,
 			expected: "Orphan",
 		},
@@ -132,17 +145,15 @@ func TestDeck_GetFullPath(t *testing.T) {
 }
 
 func TestDeck_CanDelete(t *testing.T) {
-	deck := &entities.Deck{
-		DeletedAt: nil,
-	}
+	deck := &entities.Deck{}
+	deck.SetDeletedAt(nil)
 
 	if !deck.CanDelete() {
 		t.Errorf("Deck.CanDelete() = false, want true for active deck")
 	}
 
-	deletedDeck := &entities.Deck{
-		DeletedAt: timePtr(time.Now()),
-	}
+	deletedDeck := &entities.Deck{}
+	deletedDeck.SetDeletedAt(timePtr(time.Now()))
 
 	if deletedDeck.CanDelete() {
 		t.Errorf("Deck.CanDelete() = true, want false for deleted deck")
@@ -157,16 +168,20 @@ func TestDeck_HasParent(t *testing.T) {
 	}{
 		{
 			name: "has parent",
-			deck: &entities.Deck{
-				ParentID: int64Ptr(1),
-			},
+			deck: func() *entities.Deck {
+				d := &entities.Deck{}
+				d.SetParentID(int64Ptr(1))
+				return d
+			}(),
 			expected: true,
 		},
 		{
 			name: "no parent",
-			deck: &entities.Deck{
-				ParentID: nil,
-			},
+			deck: func() *entities.Deck {
+				d := &entities.Deck{}
+				d.SetParentID(nil)
+				return d
+			}(),
 			expected: false,
 		},
 	}

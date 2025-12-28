@@ -16,16 +16,20 @@ func TestMedia_IsActive(t *testing.T) {
 	}{
 		{
 			name: "active media",
-			media: &entities.Media{
-				DeletedAt: nil,
-			},
+			media: func() *entities.Media {
+				m := &entities.Media{}
+				m.SetDeletedAt(nil)
+				return m
+			}(),
 			expected: true,
 		},
 		{
 			name: "deleted media",
-			media: &entities.Media{
-				DeletedAt: timePtr(time.Now()),
-			},
+			media: func() *entities.Media {
+				m := &entities.Media{}
+				m.SetDeletedAt(timePtr(time.Now()))
+				return m
+			}(),
 			expected: false,
 		},
 	}
@@ -80,9 +84,8 @@ func TestMedia_GetFileExtension(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			media := &entities.Media{
-				Filename: tt.filename,
-			}
+			media := &entities.Media{}
+			media.SetFilename(tt.filename)
 			got := media.GetFileExtension()
 			if got != tt.expected {
 				t.Errorf("Media.GetFileExtension() = %v, want %v", got, tt.expected)

@@ -37,32 +37,31 @@ func TestOwnership_DeckRepository_Isolation(t *testing.T) {
 	require.NoError(t, err)
 	password1, err := valueobjects.NewPassword("password123")
 	require.NoError(t, err)
-	user1 := &entities.User{
-		Email:         email1,
-		PasswordHash:  password1,
-		EmailVerified: false,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-	}
+	user1 := &entities.User{}
+	user1.SetEmail(email1)
+	user1.SetPasswordHash(password1)
+	user1.SetEmailVerified(false)
+	now := time.Now()
+	user1.SetCreatedAt(now)
+	user1.SetUpdatedAt(now)
 	err = userRepo.Save(ctx, user1)
 	require.NoError(t, err, "Failed to create user 1")
-	user1ID := user1.ID
+	user1ID := user1.GetID()
 
 	// Create user 2
 	email2, err := valueobjects.NewEmail(user2Email)
 	require.NoError(t, err)
 	password2, err := valueobjects.NewPassword("password123")
 	require.NoError(t, err)
-	user2 := &entities.User{
-		Email:         email2,
-		PasswordHash:  password2,
-		EmailVerified: false,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-	}
+	user2 := &entities.User{}
+	user2.SetEmail(email2)
+	user2.SetPasswordHash(password2)
+	user2.SetEmailVerified(false)
+	user2.SetCreatedAt(now)
+	user2.SetUpdatedAt(now)
 	err = userRepo.Save(ctx, user2)
 	require.NoError(t, err, "Failed to create user 2")
-	user2ID := user2.ID
+	user2ID := user2.GetID()
 
 	// Create decks for user 1
 	deck1ID, err := deckRepo.CreateDefaultDeck(ctx, user1ID)

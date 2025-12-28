@@ -28,7 +28,7 @@ func NewUserRepository(db *sql.DB) secondary.IUserRepository {
 // If the user has an ID, it updates the existing user
 // If the user has no ID, it creates a new user and returns it with the ID set
 func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
-	if user.ID == 0 {
+	if user.GetID() == 0 {
 		// Insert new user
 		query := `
 			INSERT INTO users (email, password_hash, email_verified, created_at, updated_at, last_login_at, deleted_at)
@@ -46,6 +46,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
 			deletedAt = model.DeletedAt
 		}
 
+		var userID int64
 		err := r.db.QueryRowContext(ctx, query,
 			model.Email,
 			model.PasswordHash,
@@ -54,7 +55,10 @@ func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
 			model.UpdatedAt,
 			lastLoginAt,
 			deletedAt,
-		).Scan(&user.ID)
+		).Scan(&userID)
+		if err == nil {
+			user.SetID(userID)
+		}
 
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)

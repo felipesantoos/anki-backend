@@ -23,22 +23,21 @@ func ToDomain(model *models.UserModel) (*entities.User, error) {
 	// Create password from hash (no validation needed, already hashed)
 	password := valueobjects.NewPasswordFromHash(model.PasswordHash)
 
-	user := &entities.User{
-		ID:            model.ID,
-		Email:         email,
-		PasswordHash:  password,
-		EmailVerified: model.EmailVerified,
-		CreatedAt:     model.CreatedAt,
-		UpdatedAt:     model.UpdatedAt,
-	}
+	user := &entities.User{}
+	user.SetID(model.ID)
+	user.SetEmail(email)
+	user.SetPasswordHash(password)
+	user.SetEmailVerified(model.EmailVerified)
+	user.SetCreatedAt(model.CreatedAt)
+	user.SetUpdatedAt(model.UpdatedAt)
 
 	// Handle nullable fields
 	if model.LastLoginAt.Valid {
-		user.LastLoginAt = &model.LastLoginAt.Time
+		user.SetLastLoginAt(&model.LastLoginAt.Time)
 	}
 
 	if model.DeletedAt.Valid {
-		user.DeletedAt = &model.DeletedAt.Time
+		user.SetDeletedAt(&model.DeletedAt.Time)
 	}
 
 	return user, nil
@@ -47,25 +46,25 @@ func ToDomain(model *models.UserModel) (*entities.User, error) {
 // ToModel converts a User entity (domain representation) to a UserModel (database representation)
 func ToModel(user *entities.User) *models.UserModel {
 	model := &models.UserModel{
-		ID:            user.ID,
-		Email:         user.Email.Value(),
-		PasswordHash:  user.PasswordHash.Hash(),
-		EmailVerified: user.EmailVerified,
-		CreatedAt:     user.CreatedAt,
-		UpdatedAt:     user.UpdatedAt,
+		ID:            user.GetID(),
+		Email:         user.GetEmail().Value(),
+		PasswordHash:  user.GetPasswordHash().Hash(),
+		EmailVerified: user.GetEmailVerified(),
+		CreatedAt:     user.GetCreatedAt(),
+		UpdatedAt:     user.GetUpdatedAt(),
 	}
 
 	// Handle nullable fields
-	if user.LastLoginAt != nil {
+	if user.GetLastLoginAt() != nil {
 		model.LastLoginAt = sql.NullTime{
-			Time:  *user.LastLoginAt,
+			Time:  *user.GetLastLoginAt(),
 			Valid: true,
 		}
 	}
 
-	if user.DeletedAt != nil {
+	if user.GetDeletedAt() != nil {
 		model.DeletedAt = sql.NullTime{
-			Time:  *user.DeletedAt,
+			Time:  *user.GetDeletedAt(),
 			Valid: true,
 		}
 	}

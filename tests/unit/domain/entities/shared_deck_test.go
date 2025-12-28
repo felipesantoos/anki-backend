@@ -16,16 +16,20 @@ func TestSharedDeck_IsActive(t *testing.T) {
 	}{
 		{
 			name: "active shared deck",
-			sharedDeck: &entities.SharedDeck{
-				DeletedAt: nil,
-			},
+			sharedDeck: func() *entities.SharedDeck {
+				sd := &entities.SharedDeck{}
+				sd.SetDeletedAt(nil)
+				return sd
+			}(),
 			expected: true,
 		},
 		{
 			name: "deleted shared deck",
-			sharedDeck: &entities.SharedDeck{
-				DeletedAt: timePtr(time.Now()),
-			},
+			sharedDeck: func() *entities.SharedDeck {
+				sd := &entities.SharedDeck{}
+				sd.SetDeletedAt(timePtr(time.Now()))
+				return sd
+			}(),
 			expected: false,
 		},
 	}
@@ -41,55 +45,53 @@ func TestSharedDeck_IsActive(t *testing.T) {
 }
 
 func TestSharedDeck_UpdateRating(t *testing.T) {
-	deck := &entities.SharedDeck{
-		RatingAverage: 0.0,
-		RatingCount:   0,
-		UpdatedAt:     time.Now(),
-	}
+	deck := &entities.SharedDeck{}
+	deck.SetRatingAverage(0.0)
+	deck.SetRatingCount(0)
+	deck.SetUpdatedAt(time.Now())
 
 	// First rating
 	deck.UpdateRating(4.0)
-	if deck.RatingAverage != 4.0 {
-		t.Errorf("SharedDeck.UpdateRating() average = %v, want 4.0", deck.RatingAverage)
+	if deck.GetRatingAverage() != 4.0 {
+		t.Errorf("SharedDeck.UpdateRating() average = %v, want 4.0", deck.GetRatingAverage())
 	}
-	if deck.RatingCount != 1 {
-		t.Errorf("SharedDeck.UpdateRating() count = %v, want 1", deck.RatingCount)
+	if deck.GetRatingCount() != 1 {
+		t.Errorf("SharedDeck.UpdateRating() count = %v, want 1", deck.GetRatingCount())
 	}
 
 	// Second rating
 	deck.UpdateRating(5.0)
 	expectedAvg := (4.0 + 5.0) / 2.0
-	if deck.RatingAverage != expectedAvg {
-		t.Errorf("SharedDeck.UpdateRating() average = %v, want %v", deck.RatingAverage, expectedAvg)
+	if deck.GetRatingAverage() != expectedAvg {
+		t.Errorf("SharedDeck.UpdateRating() average = %v, want %v", deck.GetRatingAverage(), expectedAvg)
 	}
-	if deck.RatingCount != 2 {
-		t.Errorf("SharedDeck.UpdateRating() count = %v, want 2", deck.RatingCount)
+	if deck.GetRatingCount() != 2 {
+		t.Errorf("SharedDeck.UpdateRating() count = %v, want 2", deck.GetRatingCount())
 	}
 
 	// Invalid rating (should not update)
-	originalAvg := deck.RatingAverage
-	originalCount := deck.RatingCount
+	originalAvg := deck.GetRatingAverage()
+	originalCount := deck.GetRatingCount()
 	deck.UpdateRating(6.0) // Invalid (> 5)
-	if deck.RatingAverage != originalAvg || deck.RatingCount != originalCount {
+	if deck.GetRatingAverage() != originalAvg || deck.GetRatingCount() != originalCount {
 		t.Errorf("SharedDeck.UpdateRating() should not accept invalid rating")
 	}
 }
 
 func TestSharedDeck_IncrementDownloadCount(t *testing.T) {
-	deck := &entities.SharedDeck{
-		DownloadCount: 10,
-		UpdatedAt:    time.Now(),
-	}
+	deck := &entities.SharedDeck{}
+	deck.SetDownloadCount(10)
+	deck.SetUpdatedAt(time.Now())
 
-	originalUpdatedAt := deck.UpdatedAt
+	originalUpdatedAt := deck.GetUpdatedAt()
 	time.Sleep(1 * time.Millisecond)
 
 	deck.IncrementDownloadCount()
-	if deck.DownloadCount != 11 {
-		t.Errorf("SharedDeck.IncrementDownloadCount() count = %v, want 11", deck.DownloadCount)
+	if deck.GetDownloadCount() != 11 {
+		t.Errorf("SharedDeck.IncrementDownloadCount() count = %v, want 11", deck.GetDownloadCount())
 	}
 
-	if deck.UpdatedAt.Equal(originalUpdatedAt) {
+	if deck.GetUpdatedAt().Equal(originalUpdatedAt) {
 		t.Errorf("SharedDeck.IncrementDownloadCount() should update UpdatedAt")
 	}
 }

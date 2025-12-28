@@ -17,16 +17,20 @@ func TestProfile_IsActive(t *testing.T) {
 	}{
 		{
 			name: "active profile",
-			profile: &entities.Profile{
-				DeletedAt: nil,
-			},
+			profile: func() *entities.Profile {
+				p := &entities.Profile{}
+				p.SetDeletedAt(nil)
+				return p
+			}(),
 			expected: true,
 		},
 		{
 			name: "deleted profile",
-			profile: &entities.Profile{
-				DeletedAt: timePtr(time.Now()),
-			},
+			profile: func() *entities.Profile {
+				p := &entities.Profile{}
+				p.SetDeletedAt(timePtr(time.Now()))
+				return p
+			}(),
 			expected: false,
 		},
 	}
@@ -42,11 +46,10 @@ func TestProfile_IsActive(t *testing.T) {
 }
 
 func TestProfile_EnableAnkiWebSync(t *testing.T) {
-	profile := &entities.Profile{
-		AnkiWebSyncEnabled: false,
-		AnkiWebUsername:    nil,
-		UpdatedAt:         time.Now(),
-	}
+	profile := &entities.Profile{}
+	profile.SetAnkiWebSyncEnabled(false)
+	profile.SetAnkiWebUsername(nil)
+	profile.SetUpdatedAt(time.Now())
 
 	// Enable with valid username
 	err := profile.EnableAnkiWebSync("testuser")
@@ -54,11 +57,11 @@ func TestProfile_EnableAnkiWebSync(t *testing.T) {
 		t.Errorf("Profile.EnableAnkiWebSync() error = %v, want nil", err)
 	}
 
-	if !profile.AnkiWebSyncEnabled {
+	if !profile.GetAnkiWebSyncEnabled() {
 		t.Errorf("Profile.EnableAnkiWebSync() failed to enable sync")
 	}
 
-	if profile.AnkiWebUsername == nil || *profile.AnkiWebUsername != "testuser" {
+	if profile.GetAnkiWebUsername() == nil || *profile.GetAnkiWebUsername() != "testuser" {
 		t.Errorf("Profile.EnableAnkiWebSync() failed to set username")
 	}
 
@@ -74,18 +77,17 @@ func TestProfile_EnableAnkiWebSync(t *testing.T) {
 
 func TestProfile_DisableAnkiWebSync(t *testing.T) {
 	username := "testuser"
-	profile := &entities.Profile{
-		AnkiWebSyncEnabled: true,
-		AnkiWebUsername:    &username,
-		UpdatedAt:          time.Now(),
-	}
+	profile := &entities.Profile{}
+	profile.SetAnkiWebSyncEnabled(true)
+	profile.SetAnkiWebUsername(&username)
+	profile.SetUpdatedAt(time.Now())
 
 	profile.DisableAnkiWebSync()
-	if profile.AnkiWebSyncEnabled {
+	if profile.GetAnkiWebSyncEnabled() {
 		t.Errorf("Profile.DisableAnkiWebSync() failed to disable sync")
 	}
 
-	if profile.AnkiWebUsername != nil {
+	if profile.GetAnkiWebUsername() != nil {
 		t.Errorf("Profile.DisableAnkiWebSync() failed to clear username")
 	}
 }

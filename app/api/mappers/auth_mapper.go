@@ -16,10 +16,10 @@ func ToDomain(req *request.RegisterRequest) (string, string) {
 func ToRegisterResponse(user *entities.User) *response.RegisterResponse {
 	return &response.RegisterResponse{
 		User: response.UserData{
-			ID:            user.ID,
-			Email:         user.Email.Value(),
-			EmailVerified: user.EmailVerified,
-			CreatedAt:     user.CreatedAt,
+			ID:            user.GetID(),
+			Email:         user.GetEmail().Value(),
+			EmailVerified: user.GetEmailVerified(),
+			CreatedAt:     user.GetCreatedAt(),
 		},
 	}
 }
@@ -32,10 +32,10 @@ func ToLoginResponse(user *entities.User, accessToken, refreshToken string, expi
 		ExpiresIn:    expiresIn,
 		TokenType:    "Bearer",
 		User: response.UserData{
-			ID:            user.ID,
-			Email:         user.Email.Value(),
-			EmailVerified: user.EmailVerified,
-			CreatedAt:     user.CreatedAt,
+			ID:            user.GetID(),
+			Email:         user.GetEmail().Value(),
+			EmailVerified: user.GetEmailVerified(),
+			CreatedAt:     user.GetCreatedAt(),
 		},
 	}
 }

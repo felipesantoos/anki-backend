@@ -19,55 +19,65 @@ func TestCard_IsDue(t *testing.T) {
 	}{
 		{
 			name: "new card is always due",
-			card: &entities.Card{
-				State:     valueobjects.CardStateNew,
-				Suspended: false,
-				Buried:    false,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateNew)
+				c.SetSuspended(false)
+				c.SetBuried(false)
+				return c
+			}(),
 			now:      now,
 			expected: true,
 		},
 		{
 			name: "review card due",
-			card: &entities.Card{
-				State:     valueobjects.CardStateReview,
-				Due:       now - 1000,
-				Suspended: false,
-				Buried:    false,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateReview)
+				c.SetDue(now - 1000)
+				c.SetSuspended(false)
+				c.SetBuried(false)
+				return c
+			}(),
 			now:      now,
 			expected: true,
 		},
 		{
 			name: "review card not due",
-			card: &entities.Card{
-				State:     valueobjects.CardStateReview,
-				Due:       now + 1000,
-				Suspended: false,
-				Buried:    false,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateReview)
+				c.SetDue(now + 1000)
+				c.SetSuspended(false)
+				c.SetBuried(false)
+				return c
+			}(),
 			now:      now,
 			expected: false,
 		},
 		{
 			name: "suspended card not due",
-			card: &entities.Card{
-				State:     valueobjects.CardStateReview,
-				Due:       now - 1000,
-				Suspended: true,
-				Buried:    false,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateReview)
+				c.SetDue(now - 1000)
+				c.SetSuspended(true)
+				c.SetBuried(false)
+				return c
+			}(),
 			now:      now,
 			expected: false,
 		},
 		{
 			name: "buried card not due",
-			card: &entities.Card{
-				State:     valueobjects.CardStateReview,
-				Due:       now - 1000,
-				Suspended: false,
-				Buried:    true,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateReview)
+				c.SetDue(now - 1000)
+				c.SetSuspended(false)
+				c.SetBuried(true)
+				return c
+			}(),
 			now:      now,
 			expected: false,
 		},
@@ -91,34 +101,42 @@ func TestCard_IsStudyable(t *testing.T) {
 	}{
 		{
 			name: "studyable card",
-			card: &entities.Card{
-				Suspended: false,
-				Buried:    false,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetSuspended(false)
+				c.SetBuried(false)
+				return c
+			}(),
 			expected: true,
 		},
 		{
 			name: "suspended card not studyable",
-			card: &entities.Card{
-				Suspended: true,
-				Buried:    false,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetSuspended(true)
+				c.SetBuried(false)
+				return c
+			}(),
 			expected: false,
 		},
 		{
 			name: "buried card not studyable",
-			card: &entities.Card{
-				Suspended: false,
-				Buried:    true,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetSuspended(false)
+				c.SetBuried(true)
+				return c
+			}(),
 			expected: false,
 		},
 		{
 			name: "suspended and buried card not studyable",
-			card: &entities.Card{
-				Suspended: true,
-				Buried:    true,
-			},
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetSuspended(true)
+				c.SetBuried(true)
+				return c
+			}(),
 			expected: false,
 		},
 	}
@@ -143,32 +161,48 @@ func TestCard_StateChecks(t *testing.T) {
 		isRelearn bool
 	}{
 		{
-			name:      "new card",
-			card:      &entities.Card{State: valueobjects.CardStateNew},
+			name: "new card",
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateNew)
+				return c
+			}(),
 			isNew:     true,
 			isLearn:   false,
 			isReview:  false,
 			isRelearn: false,
 		},
 		{
-			name:      "learning card",
-			card:      &entities.Card{State: valueobjects.CardStateLearn},
+			name: "learning card",
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateLearn)
+				return c
+			}(),
 			isNew:     false,
 			isLearn:   true,
 			isReview:  false,
 			isRelearn: false,
 		},
 		{
-			name:      "review card",
-			card:      &entities.Card{State: valueobjects.CardStateReview},
+			name: "review card",
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateReview)
+				return c
+			}(),
 			isNew:     false,
 			isLearn:   false,
 			isReview:  true,
 			isRelearn: false,
 		},
 		{
-			name:      "relearning card",
-			card:      &entities.Card{State: valueobjects.CardStateRelearn},
+			name: "relearning card",
+			card: func() *entities.Card {
+				c := &entities.Card{}
+				c.SetState(valueobjects.CardStateRelearn)
+				return c
+			}(),
 			isNew:     false,
 			isLearn:   false,
 			isReview:  false,
@@ -196,7 +230,8 @@ func TestCard_StateChecks(t *testing.T) {
 
 func TestCard_GetNextReviewTime(t *testing.T) {
 	due := int64(1000000000000)
-	card := &entities.Card{Due: due}
+	card := &entities.Card{}
+	card.SetDue(due)
 
 	if card.GetNextReviewTime() != due {
 		t.Errorf("Card.GetNextReviewTime() = %v, want %v", card.GetNextReviewTime(), due)
@@ -204,82 +239,77 @@ func TestCard_GetNextReviewTime(t *testing.T) {
 }
 
 func TestCard_Suspend(t *testing.T) {
-	card := &entities.Card{
-		Suspended: false,
-		UpdatedAt: time.Now(),
-	}
+	card := &entities.Card{}
+	card.SetSuspended(false)
+	card.SetUpdatedAt(time.Now())
 
 	card.Suspend()
-	if !card.Suspended {
+	if !card.GetSuspended() {
 		t.Errorf("Card.Suspend() failed to suspend card")
 	}
 
 	// Suspend again (should be idempotent)
 	card.Suspend()
-	if !card.Suspended {
+	if !card.GetSuspended() {
 		t.Errorf("Card.Suspend() failed to keep card suspended")
 	}
 }
 
 func TestCard_Unsuspend(t *testing.T) {
-	card := &entities.Card{
-		Suspended: true,
-		UpdatedAt: time.Now(),
-	}
+	card := &entities.Card{}
+	card.SetSuspended(true)
+	card.SetUpdatedAt(time.Now())
 
 	card.Unsuspend()
-	if card.Suspended {
+	if card.GetSuspended() {
 		t.Errorf("Card.Unsuspend() failed to unsuspend card")
 	}
 
 	// Unsuspend again (should be idempotent)
 	card.Unsuspend()
-	if card.Suspended {
+	if card.GetSuspended() {
 		t.Errorf("Card.Unsuspend() failed to keep card unsuspended")
 	}
 }
 
 func TestCard_Bury(t *testing.T) {
-	card := &entities.Card{
-		Buried:    false,
-		UpdatedAt: time.Now(),
-	}
+	card := &entities.Card{}
+	card.SetBuried(false)
+	card.SetUpdatedAt(time.Now())
 
 	card.Bury()
-	if !card.Buried {
+	if !card.GetBuried() {
 		t.Errorf("Card.Bury() failed to bury card")
 	}
 
 	// Bury again (should be idempotent)
 	card.Bury()
-	if !card.Buried {
+	if !card.GetBuried() {
 		t.Errorf("Card.Bury() failed to keep card buried")
 	}
 }
 
 func TestCard_Unbury(t *testing.T) {
-	card := &entities.Card{
-		Buried:    true,
-		UpdatedAt: time.Now(),
-	}
+	card := &entities.Card{}
+	card.SetBuried(true)
+	card.SetUpdatedAt(time.Now())
 
 	card.Unbury()
-	if card.Buried {
+	if card.GetBuried() {
 		t.Errorf("Card.Unbury() failed to unbury card")
 	}
 
 	// Unbury again (should be idempotent)
 	card.Unbury()
-	if card.Buried {
+	if card.GetBuried() {
 		t.Errorf("Card.Unbury() failed to keep card unburied")
 	}
 }
 
 func TestCard_SetFlag(t *testing.T) {
-	card := &entities.Card{
-		Flag:      0,
-		UpdatedAt: time.Now(),
-	}
+	card := &entities.Card{}
+	card.SetFlag(0)
+	card.SetUpdatedAt(time.Now())
 
 	tests := []struct {
 		name    string
@@ -315,8 +345,8 @@ func TestCard_SetFlag(t *testing.T) {
 				t.Errorf("Card.SetFlag() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && card.Flag != tt.flag {
-				t.Errorf("Card.SetFlag() flag = %v, want %v", card.Flag, tt.flag)
+			if !tt.wantErr && card.GetFlag() != tt.flag {
+				t.Errorf("Card.SetFlag() flag = %v, want %v", card.GetFlag(), tt.flag)
 			}
 		})
 	}

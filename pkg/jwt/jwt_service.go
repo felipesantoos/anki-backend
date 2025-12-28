@@ -19,7 +19,7 @@ var (
 // Claims represents JWT claims structure
 type Claims struct {
 	UserID int64  `json:"user_id"`
-	Type   string `json:"type"` // "access" or "refresh"
+	Type   string `json:"type"` // "access", "refresh", "email_verification", or "password_reset"
 	jwt.RegisteredClaims
 }
 
@@ -148,6 +148,29 @@ func (s *JWTService) ValidateEmailVerificationToken(tokenString string) (*Claims
 	// Verify that this is an email verification token
 	if claims.Type != "email_verification" {
 		return nil, fmt.Errorf("%w: token is not an email verification token", ErrInvalidToken)
+	}
+
+	return claims, nil
+}
+
+// GeneratePasswordResetToken generates a JWT token for password reset
+// The token expires in 1 hour
+func (s *JWTService) GeneratePasswordResetToken(userID int64) (string, error) {
+	expiry := 1 * time.Hour
+	return s.generateToken(userID, "password_reset", expiry)
+}
+
+// ValidatePasswordResetToken validates a password reset token
+// Returns an error if the token is invalid, expired, or not of type "password_reset"
+func (s *JWTService) ValidatePasswordResetToken(tokenString string) (*Claims, error) {
+	claims, err := s.ValidateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify that this is a password reset token
+	if claims.Type != "password_reset" {
+		return nil, fmt.Errorf("%w: token is not a password reset token", ErrInvalidToken)
 	}
 
 	return claims, nil

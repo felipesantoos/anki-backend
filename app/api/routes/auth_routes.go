@@ -21,4 +21,6 @@ func RegisterAuthRoutes(e *echo.Echo, authService primary.IAuthService) {
 	authGroup.POST("/logout", authHandler.Logout)
 	authGroup.GET("/verify-email", authHandler.VerifyEmail)
 	authGroup.POST("/resend-verification", authHandler.ResendVerificationEmail)
+	authGroup.POST("/request-password-reset", authHandler.RequestPasswordReset)
+	authGroup.POST("/reset-password", authHandler.ResetPassword)
 }

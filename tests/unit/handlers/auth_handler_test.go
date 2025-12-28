@@ -19,10 +19,14 @@ import (
 
 // mockAuthService is a mock implementation of IAuthService
 type mockAuthService struct {
-	registerFunc     func(ctx context.Context, email string, password string) (*entities.User, error)
-	loginFunc        func(ctx context.Context, email string, password string) (*response.LoginResponse, error)
-	refreshTokenFunc func(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
-	logoutFunc       func(ctx context.Context, accessToken string, refreshToken string) error
+	registerFunc            func(ctx context.Context, email string, password string) (*entities.User, error)
+	loginFunc               func(ctx context.Context, email string, password string) (*response.LoginResponse, error)
+	refreshTokenFunc        func(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
+	logoutFunc              func(ctx context.Context, accessToken string, refreshToken string) error
+	verifyEmailFunc         func(ctx context.Context, token string) error
+	resendVerificationEmailFunc func(ctx context.Context, email string) error
+	requestPasswordResetFunc func(ctx context.Context, email string) error
+	resetPasswordFunc        func(ctx context.Context, token string, newPassword string) error
 }
 
 func (m *mockAuthService) Register(ctx context.Context, email string, password string) (*entities.User, error) {
@@ -49,6 +53,34 @@ func (m *mockAuthService) RefreshToken(ctx context.Context, refreshToken string)
 func (m *mockAuthService) Logout(ctx context.Context, accessToken string, refreshToken string) error {
 	if m.logoutFunc != nil {
 		return m.logoutFunc(ctx, accessToken, refreshToken)
+	}
+	return nil
+}
+
+func (m *mockAuthService) VerifyEmail(ctx context.Context, token string) error {
+	if m.verifyEmailFunc != nil {
+		return m.verifyEmailFunc(ctx, token)
+	}
+	return nil
+}
+
+func (m *mockAuthService) ResendVerificationEmail(ctx context.Context, email string) error {
+	if m.resendVerificationEmailFunc != nil {
+		return m.resendVerificationEmailFunc(ctx, email)
+	}
+	return nil
+}
+
+func (m *mockAuthService) RequestPasswordReset(ctx context.Context, email string) error {
+	if m.requestPasswordResetFunc != nil {
+		return m.requestPasswordResetFunc(ctx, email)
+	}
+	return nil
+}
+
+func (m *mockAuthService) ResetPassword(ctx context.Context, token string, newPassword string) error {
+	if m.resetPasswordFunc != nil {
+		return m.resetPasswordFunc(ctx, token, newPassword)
 	}
 	return nil
 }
@@ -617,5 +649,229 @@ func TestAuthHandler_Logout_NoTokens(t *testing.T) {
 		}
 	} else {
 		t.Errorf("Logout() error type = %T, want *echo.HTTPError", err)
+	}
+}
+
+func TestAuthHandler_RequestPasswordReset_Success(t *testing.T) {
+	mockService := &mockAuthService{
+		requestPasswordResetFunc: func(ctx context.Context, email string) error {
+			return nil
+		},
+	}
+
+	handler := handlers.NewAuthHandler(mockService)
+
+	reqBody := map[string]interface{}{
+		"email": "test@example.com",
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/request-password-reset", bytes.NewReader(jsonBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.RequestPasswordReset(c)
+
+	if err != nil {
+		t.Fatalf("RequestPasswordReset() error = %v, want nil", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("RequestPasswordReset() status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("RequestPasswordReset() failed to unmarshal response: %v", err)
+	}
+
+	if result["message"] == "" {
+		t.Errorf("RequestPasswordReset() message should not be empty")
+	}
+}
+
+func TestAuthHandler_RequestPasswordReset_EmptyEmail(t *testing.T) {
+	mockService := &mockAuthService{}
+	handler := handlers.NewAuthHandler(mockService)
+
+	reqBody := map[string]interface{}{
+		"email": "",
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/request-password-reset", bytes.NewReader(jsonBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.RequestPasswordReset(c)
+
+	if err == nil {
+		t.Fatalf("RequestPasswordReset() expected error, got nil")
+	}
+
+	if httpErr, ok := err.(*echo.HTTPError); ok {
+		if httpErr.Code != http.StatusBadRequest {
+			t.Errorf("RequestPasswordReset() status code = %d, want %d", httpErr.Code, http.StatusBadRequest)
+		}
+	} else {
+		t.Errorf("RequestPasswordReset() error type = %T, want *echo.HTTPError", err)
+	}
+}
+
+func TestAuthHandler_ResetPassword_Success(t *testing.T) {
+	mockService := &mockAuthService{
+		resetPasswordFunc: func(ctx context.Context, token string, newPassword string) error {
+			return nil
+		},
+	}
+
+	handler := handlers.NewAuthHandler(mockService)
+
+	reqBody := map[string]interface{}{
+		"token":            "valid-reset-token",
+		"new_password":     "newpassword123",
+		"password_confirm": "newpassword123",
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(jsonBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.ResetPassword(c)
+
+	if err != nil {
+		t.Fatalf("ResetPassword() error = %v, want nil", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("ResetPassword() status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("ResetPassword() failed to unmarshal response: %v", err)
+	}
+
+	if result["message"] != "Password reset successfully. Please log in with your new password." {
+		t.Errorf("ResetPassword() message = %v, want 'Password reset successfully. Please log in with your new password.'", result["message"])
+	}
+}
+
+func TestAuthHandler_ResetPassword_InvalidToken(t *testing.T) {
+	mockService := &mockAuthService{
+		resetPasswordFunc: func(ctx context.Context, token string, newPassword string) error {
+			return authService.ErrInvalidToken
+		},
+	}
+
+	handler := handlers.NewAuthHandler(mockService)
+
+	reqBody := map[string]interface{}{
+		"token":            "invalid-token",
+		"new_password":     "newpassword123",
+		"password_confirm": "newpassword123",
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(jsonBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.ResetPassword(c)
+
+	if err == nil {
+		t.Fatalf("ResetPassword() expected error, got nil")
+	}
+
+	if httpErr, ok := err.(*echo.HTTPError); ok {
+		if httpErr.Code != http.StatusUnauthorized {
+			t.Errorf("ResetPassword() status code = %d, want %d", httpErr.Code, http.StatusUnauthorized)
+		}
+	} else {
+		t.Errorf("ResetPassword() error type = %T, want *echo.HTTPError", err)
+	}
+}
+
+func TestAuthHandler_ResetPassword_ValidationErrors(t *testing.T) {
+	mockService := &mockAuthService{}
+	handler := handlers.NewAuthHandler(mockService)
+
+	e := echo.New()
+
+	tests := []struct {
+		name    string
+		reqBody map[string]interface{}
+		wantCode int
+	}{
+		{
+			name: "empty token",
+			reqBody: map[string]interface{}{
+				"token":            "",
+				"new_password":     "newpassword123",
+				"password_confirm": "newpassword123",
+			},
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name: "empty password",
+			reqBody: map[string]interface{}{
+				"token":            "valid-token",
+				"new_password":     "",
+				"password_confirm": "",
+			},
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name: "password too short",
+			reqBody: map[string]interface{}{
+				"token":            "valid-token",
+				"new_password":     "short",
+				"password_confirm": "short",
+			},
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name: "password mismatch",
+			reqBody: map[string]interface{}{
+				"token":            "valid-token",
+				"new_password":     "newpassword123",
+				"password_confirm": "differentpassword123",
+			},
+			wantCode: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jsonBody, _ := json.Marshal(tt.reqBody)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(jsonBody))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			err := handler.ResetPassword(c)
+
+			if err == nil {
+				t.Fatalf("ResetPassword() expected error, got nil")
+			}
+
+			if httpErr, ok := err.(*echo.HTTPError); ok {
+				if httpErr.Code != tt.wantCode {
+					t.Errorf("ResetPassword() status code = %d, want %d", httpErr.Code, tt.wantCode)
+				}
+			} else {
+				t.Errorf("ResetPassword() error type = %T, want *echo.HTTPError", err)
+			}
+		})
 	}
 }

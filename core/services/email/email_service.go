@@ -58,10 +58,22 @@ func (s *EmailService) SendVerificationEmail(ctx context.Context, userID int64, 
 }
 
 // SendPasswordResetEmail sends a password reset email to the user
-// This is reserved for future implementation
 func (s *EmailService) SendPasswordResetEmail(ctx context.Context, userID int64, userEmail string, resetToken string) error {
-	// TODO: Implement password reset email
-	return fmt.Errorf("password reset email not yet implemented")
+	// Build reset URL
+	resetURL := s.buildPasswordResetURL(resetToken)
+
+	// Generate email content
+	htmlBody := email.GeneratePasswordResetEmailHTML(resetURL)
+	textBody := email.GeneratePasswordResetEmailText(resetURL)
+
+	// Send email
+	subject := "Reset Your Password - Anki Backend"
+	err := s.emailRepo.SendEmail(ctx, userEmail, subject, htmlBody, textBody)
+	if err != nil {
+		return fmt.Errorf("failed to send password reset email: %w", err)
+	}
+
+	return nil
 }
 
 // buildVerificationURL builds the full verification URL with token
@@ -75,5 +87,18 @@ func (s *EmailService) buildVerificationURL(token string) string {
 	// Build URL with token query parameter
 	verificationURL := fmt.Sprintf("%s/api/v1/auth/verify-email?token=%s", baseURL, url.QueryEscape(token))
 	return verificationURL
+}
+
+// buildPasswordResetURL builds the full password reset URL with token
+func (s *EmailService) buildPasswordResetURL(token string) string {
+	baseURL := s.emailConfig.VerificationURL
+	// Ensure base URL doesn't end with /
+	if len(baseURL) > 0 && baseURL[len(baseURL)-1] == '/' {
+		baseURL = baseURL[:len(baseURL)-1]
+	}
+	
+	// Build URL with token query parameter
+	resetURL := fmt.Sprintf("%s/api/v1/auth/reset-password?token=%s", baseURL, url.QueryEscape(token))
+	return resetURL
 }
 

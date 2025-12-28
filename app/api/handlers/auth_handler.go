@@ -367,3 +367,124 @@ func handleResendVerificationError(err error) *echo.HTTPError {
 	}
 	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to resend verification email")
 }
+
+// RequestPasswordReset handles POST /api/v1/auth/request-password-reset requests
+// @Summary Request password reset
+// @Description Sends a password reset email to the user. Always returns success to avoid revealing if email exists.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body request.RequestPasswordResetRequest true "Password reset request"
+// @Success 200 {object} map[string]string "Password reset email sent successfully (if email exists)"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/request-password-reset [post]
+func (h *AuthHandler) RequestPasswordReset(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Bind request body to DTO
+	var req request.RequestPasswordResetRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if err := validateRequestPasswordResetRequest(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Call service - always returns success to avoid revealing email existence
+	err := h.authService.RequestPasswordReset(ctx, req.Email)
+	if err != nil {
+		// Even if there's an error, return success to avoid revealing information
+		// In production, this should be logged
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "If the email exists, a password reset link has been sent",
+	})
+}
+
+// ResetPassword handles POST /api/v1/auth/reset-password requests
+// @Summary Reset password
+// @Description Resets user password using a reset token received via email
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body request.ResetPasswordRequest true "Reset password request"
+// @Success 200 {object} map[string]string "Password reset successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request (e.g., invalid password, password mismatch)"
+// @Failure 401 {object} response.ErrorResponse "Invalid or expired token"
+// @Failure 404 {object} response.ErrorResponse "User not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/reset-password [post]
+func (h *AuthHandler) ResetPassword(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Bind request body to DTO
+	var req request.ResetPasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if err := validateResetPasswordRequest(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Call service
+	err := h.authService.ResetPassword(ctx, req.Token, req.NewPassword)
+	if err != nil {
+		return handleResetPasswordError(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "Password reset successfully. Please log in with your new password.",
+	})
+}
+
+func validateRequestPasswordResetRequest(req *request.RequestPasswordResetRequest) error {
+	if strings.TrimSpace(req.Email) == "" {
+		return fmt.Errorf("email is required")
+	}
+	return nil
+}
+
+func validateResetPasswordRequest(req *request.ResetPasswordRequest) error {
+	var errors []string
+
+	if strings.TrimSpace(req.Token) == "" {
+		errors = append(errors, "token is required")
+	}
+
+	if strings.TrimSpace(req.NewPassword) == "" {
+		errors = append(errors, "new_password is required")
+	}
+
+	if len(req.NewPassword) < 8 {
+		errors = append(errors, "password must have at least 8 characters")
+	}
+
+	if req.NewPassword != req.PasswordConfirm {
+		errors = append(errors, "password confirmation does not match")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("validation errors: %s", strings.Join(errors, ", "))
+	}
+
+	return nil
+}
+
+func handleResetPasswordError(err error) *echo.HTTPError {
+	if errors.Is(err, authService.ErrInvalidToken) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid or expired token")
+	}
+	if errors.Is(err, authService.ErrUserNotFound) {
+		return echo.NewHTTPError(http.StatusNotFound, "User not found")
+	}
+	if errors.Is(err, authService.ErrInvalidPassword) {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to reset password")
+}

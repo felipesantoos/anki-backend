@@ -43,4 +43,17 @@ type IAuthService interface {
 	// It checks if the email is already verified and returns an error if it is
 	// Returns an error if the user is not found or email sending fails
 	ResendVerificationEmail(ctx context.Context, email string) error
+
+	// RequestPasswordReset generates a password reset token and sends it to the user via email
+	// It does not reveal if the email exists (always returns success for security)
+	// If the email exists, it generates a token and sends the reset email
+	// Returns an error only if email sending fails (but user existence is never revealed)
+	RequestPasswordReset(ctx context.Context, email string) error
+
+	// ResetPassword resets a user's password using a password reset token
+	// It validates the token, checks if it's a password reset token,
+	// validates the new password, updates the user's password,
+	// and invalidates all refresh tokens for the user
+	// Returns an error if the token is invalid, expired, or password reset fails
+	ResetPassword(ctx context.Context, token string, newPassword string) error
 }

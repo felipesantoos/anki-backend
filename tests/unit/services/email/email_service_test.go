@@ -122,3 +122,59 @@ func TestEmailService_SendVerificationEmail_GeneratesValidToken(t *testing.T) {
 	// For now, we just verify the URL structure is correct
 }
 
+func TestEmailService_SendPasswordResetEmail_Success(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	var htmlBody string
+	emailRepo := &mockEmailRepository{
+		sendEmailFunc: func(ctx context.Context, to, subject, htmlBodyParam, textBody string) error {
+			htmlBody = htmlBodyParam
+			assert.Equal(t, "test@example.com", to)
+			assert.Contains(t, subject, "Reset Your Password")
+			return nil
+		},
+	}
+
+	emailConfig := config.EmailConfig{
+		VerificationURL: "http://localhost:3000",
+	}
+
+	service := email.NewEmailService(emailRepo, jwtSvc, emailConfig)
+
+	ctx := context.Background()
+	resetToken := "test-reset-token-123"
+	err := service.SendPasswordResetEmail(ctx, 123, "test@example.com", resetToken)
+	require.NoError(t, err)
+
+	// Verify that the reset token is in the URL
+	assert.Contains(t, htmlBody, "/api/v1/auth/reset-password?token=test-reset-token-123")
+}
+
+func TestEmailService_SendPasswordResetEmail_Disabled(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	emailSent := false
+	emailRepo := &mockEmailRepository{
+		sendEmailFunc: func(ctx context.Context, to, subject, htmlBodyParam, textBody string) error {
+			emailSent = true
+			return nil
+		},
+	}
+
+	emailConfig := config.EmailConfig{
+		VerificationURL: "http://localhost:3000",
+		Enabled:         false, // Email disabled
+	}
+
+	service := email.NewEmailService(emailRepo, jwtSvc, emailConfig)
+
+	ctx := context.Background()
+	resetToken := "test-reset-token-123"
+	err := service.SendPasswordResetEmail(ctx, 123, "test@example.com", resetToken)
+	require.NoError(t, err) // Should not return error even if disabled
+	
+	// Email should still be sent (the service doesn't check Enabled flag, repository does)
+	// This is a design choice - the service always attempts to send
+	assert.True(t, emailSent)
+}
+

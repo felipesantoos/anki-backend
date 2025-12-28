@@ -43,3 +43,44 @@ This link will expire in 24 hours.
 If you didn't create an account, you can safely ignore this email.`, verificationURL)
 }
 
+// GeneratePasswordResetEmailHTML generates the HTML content for password reset email
+func GeneratePasswordResetEmailHTML(resetLink string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Reset Your Password</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+	<div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px;">
+		<h1 style="color: #2c3e50; margin-top: 0;">Reset Your Password</h1>
+		<p>You requested to reset your password for your Anki Backend account.</p>
+		<p>Please click the button below to reset your password:</p>
+		<div style="text-align: center; margin: 30px 0;">
+			<a href="%s" style="background-color: #e74c3c; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Reset Password</a>
+		</div>
+		<p>Or copy and paste this link into your browser:</p>
+		<p style="word-break: break-all; color: #7f8c8d; font-size: 12px;">%s</p>
+		<p style="color: #7f8c8d; font-size: 12px; margin-top: 30px;">This link will expire in 1 hour.</p>
+		<p style="color: #7f8c8d; font-size: 12px;">If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+	</div>
+</body>
+</html>`, resetLink, resetLink)
+}
+
+// GeneratePasswordResetEmailText generates the plain text content for password reset email
+func GeneratePasswordResetEmailText(resetLink string) string {
+	return fmt.Sprintf(`Reset Your Password
+
+You requested to reset your password for your Anki Backend account.
+
+Please click the link below to reset your password:
+
+%s
+
+This link will expire in 1 hour.
+
+If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.`, resetLink)
+}
+

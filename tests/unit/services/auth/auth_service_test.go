@@ -855,6 +855,7 @@ func TestAuthService_Logout_AccessTokenOnly(t *testing.T) {
 // mockEmailService is a mock implementation of IEmailService
 type mockEmailService struct {
 	sendVerificationEmailFunc func(ctx context.Context, userID int64, email string) error
+	sendPasswordResetEmailFunc func(ctx context.Context, userID int64, email string, resetToken string) error
 }
 
 func (m *mockEmailService) SendVerificationEmail(ctx context.Context, userID int64, email string) error {
@@ -865,7 +866,10 @@ func (m *mockEmailService) SendVerificationEmail(ctx context.Context, userID int
 }
 
 func (m *mockEmailService) SendPasswordResetEmail(ctx context.Context, userID int64, email string, resetToken string) error {
-	return errors.New("not implemented")
+	if m.sendPasswordResetEmailFunc != nil {
+		return m.sendPasswordResetEmailFunc(ctx, userID, email, resetToken)
+	}
+	return nil
 }
 
 func TestAuthService_VerifyEmail_Success(t *testing.T) {
@@ -1107,5 +1111,316 @@ func TestAuthService_ResendVerificationEmail_UserNotFound(t *testing.T) {
 
 	if !errors.Is(err, authService.ErrUserNotFound) {
 		t.Errorf("ResendVerificationEmail() error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestAuthService_RequestPasswordReset_Success(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	emailSent := false
+	userRepo := &mockUserRepository{
+		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+			if email == "test@example.com" {
+				emailVO, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("password123")
+				return &entities.User{
+					ID:            1,
+					Email:         emailVO,
+					PasswordHash:  password,
+					EmailVerified: true,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+	}
+
+	emailSvc := &mockEmailService{
+		sendPasswordResetEmailFunc: func(ctx context.Context, userID int64, email string, resetToken string) error {
+			emailSent = true
+			if userID != 1 {
+				t.Errorf("RequestPasswordReset() userID = %d, want 1", userID)
+			}
+			if email != "test@example.com" {
+				t.Errorf("RequestPasswordReset() email = %s, want test@example.com", email)
+			}
+			if resetToken == "" {
+				t.Errorf("RequestPasswordReset() resetToken should not be empty")
+			}
+			return nil
+		},
+	}
+
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.RequestPasswordReset(ctx, "test@example.com")
+
+	if err != nil {
+		t.Errorf("RequestPasswordReset() error = %v, want nil", err)
+	}
+
+	if !emailSent {
+		t.Errorf("RequestPasswordReset() should send password reset email")
+	}
+}
+
+func TestAuthService_RequestPasswordReset_EmailNotFound(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	emailSent := false
+	userRepo := &mockUserRepository{
+		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+			return nil, nil // User not found
+		},
+	}
+
+	emailSvc := &mockEmailService{
+		sendPasswordResetEmailFunc: func(ctx context.Context, userID int64, email string, resetToken string) error {
+			emailSent = true
+			return nil
+		},
+	}
+
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.RequestPasswordReset(ctx, "nonexistent@example.com")
+
+	// Should return success even if email doesn't exist (security)
+	if err != nil {
+		t.Errorf("RequestPasswordReset() error = %v, want nil (should not reveal email existence)", err)
+	}
+
+	if emailSent {
+		t.Errorf("RequestPasswordReset() should not send email if user not found")
+	}
+}
+
+func TestAuthService_RequestPasswordReset_InvalidEmail(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	emailSent := false
+	userRepo := &mockUserRepository{}
+
+	emailSvc := &mockEmailService{
+		sendPasswordResetEmailFunc: func(ctx context.Context, userID int64, email string, resetToken string) error {
+			emailSent = true
+			return nil
+		},
+	}
+
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.RequestPasswordReset(ctx, "invalid-email")
+
+	// Should return success even if email is invalid (security)
+	if err != nil {
+		t.Errorf("RequestPasswordReset() error = %v, want nil (should not reveal email validity)", err)
+	}
+
+	if emailSent {
+		t.Errorf("RequestPasswordReset() should not send email if email is invalid")
+	}
+}
+
+func TestAuthService_ResetPassword_Success(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	// Generate a valid password reset token
+	token, err := jwtSvc.GeneratePasswordResetToken(1)
+	if err != nil {
+		t.Fatalf("Failed to generate token: %v", err)
+	}
+
+	userUpdated := false
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			if id == 1 {
+				email, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("oldpassword123")
+				return &entities.User{
+					ID:            1,
+					Email:         email,
+					PasswordHash:  password,
+					EmailVerified: true,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+		updateFunc: func(ctx context.Context, user *entities.User) error {
+			userUpdated = true
+			// Verify password was updated
+			if !user.VerifyPassword("newpassword123") {
+				t.Errorf("ResetPassword() should update password correctly")
+			}
+			return nil
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err = service.ResetPassword(ctx, token, "newpassword123")
+
+	if err != nil {
+		t.Fatalf("ResetPassword() error = %v, want nil", err)
+	}
+
+	if !userUpdated {
+		t.Errorf("ResetPassword() should update user password")
+	}
+}
+
+func TestAuthService_ResetPassword_InvalidToken(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	userRepo := &mockUserRepository{}
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.ResetPassword(ctx, "invalid-token", "newpassword123")
+
+	if err == nil {
+		t.Errorf("ResetPassword() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrInvalidToken) {
+		t.Errorf("ResetPassword() error = %v, want ErrInvalidToken", err)
+	}
+}
+
+func TestAuthService_ResetPassword_WrongTokenType(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	// Generate an access token (not password reset token)
+	token, err := jwtSvc.GenerateAccessToken(1)
+	if err != nil {
+		t.Fatalf("Failed to generate token: %v", err)
+	}
+
+	userRepo := &mockUserRepository{}
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err = service.ResetPassword(ctx, token, "newpassword123")
+
+	if err == nil {
+		t.Errorf("ResetPassword() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrInvalidToken) {
+		t.Errorf("ResetPassword() error = %v, want ErrInvalidToken", err)
+	}
+}
+
+func TestAuthService_ResetPassword_UserNotFound(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	// Generate a valid password reset token for non-existent user
+	token, err := jwtSvc.GeneratePasswordResetToken(999)
+	if err != nil {
+		t.Fatalf("Failed to generate token: %v", err)
+	}
+
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			return nil, nil // User not found
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err = service.ResetPassword(ctx, token, "newpassword123")
+
+	if err == nil {
+		t.Errorf("ResetPassword() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrUserNotFound) {
+		t.Errorf("ResetPassword() error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestAuthService_ResetPassword_InvalidPassword(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+	
+	// Generate a valid password reset token
+	token, err := jwtSvc.GeneratePasswordResetToken(1)
+	if err != nil {
+		t.Fatalf("Failed to generate token: %v", err)
+	}
+
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			if id == 1 {
+				email, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("oldpassword123")
+				return &entities.User{
+					ID:            1,
+					Email:         email,
+					PasswordHash:  password,
+					EmailVerified: true,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err = service.ResetPassword(ctx, token, "short") // Password too short
+
+	if err == nil {
+		t.Errorf("ResetPassword() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrInvalidPassword) {
+		t.Errorf("ResetPassword() error = %v, want ErrInvalidPassword", err)
 	}
 }

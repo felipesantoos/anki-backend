@@ -929,3 +929,335 @@ func TestAuth_ResendVerificationEmail_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, resendRec.Code)
 	})
 }
+
+func TestAuth_RequestPasswordReset_Integration(t *testing.T) {
+	db, cleanup := setupAuthTestDB(t)
+	defer cleanup()
+
+	// Setup event bus
+	log := logger.GetLogger()
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	err := eventBus.Start()
+	require.NoError(t, err)
+	defer eventBus.Stop()
+
+	// Setup Redis
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
+	// Setup email service (using console repository for tests)
+	emailRepo := infraEmail.NewConsoleRepository(log)
+	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+
+	// Setup repositories and service
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+
+	// Setup Echo
+	e := echo.New()
+	routes.RegisterAuthRoutes(e, authSvc)
+
+	t.Run("successful request", func(t *testing.T) {
+		// First register a user
+		registerReq := request.RegisterRequest{
+			Email:           "testreset@example.com",
+			Password:        "password123",
+			PasswordConfirm: "password123",
+		}
+		registerBody, _ := json.Marshal(registerReq)
+		registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+		registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		registerRec := httptest.NewRecorder()
+		e.ServeHTTP(registerRec, registerHTTPReq)
+		require.Equal(t, http.StatusCreated, registerRec.Code)
+
+		// Request password reset
+		resetReq := request.RequestPasswordResetRequest{
+			Email: "testreset@example.com",
+		}
+		resetBody, _ := json.Marshal(resetReq)
+		resetHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/request-password-reset", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec := httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+
+		assert.Equal(t, http.StatusOK, resetRec.Code)
+
+		var result map[string]string
+		err = json.Unmarshal(resetRec.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Contains(t, result["message"], "If the email exists")
+	})
+
+	t.Run("email not found - should still return success", func(t *testing.T) {
+		// Request password reset for non-existent email
+		resetReq := request.RequestPasswordResetRequest{
+			Email: "nonexistent@example.com",
+		}
+		resetBody, _ := json.Marshal(resetReq)
+		resetHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/request-password-reset", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec := httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+
+		// Should return success even if email doesn't exist (security)
+		assert.Equal(t, http.StatusOK, resetRec.Code)
+
+		var result map[string]string
+		err = json.Unmarshal(resetRec.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Contains(t, result["message"], "If the email exists")
+	})
+
+	t.Run("invalid email format", func(t *testing.T) {
+		resetReq := request.RequestPasswordResetRequest{
+			Email: "invalid-email",
+		}
+		resetBody, _ := json.Marshal(resetReq)
+		resetHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/request-password-reset", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec := httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+
+		// Should still return success (security - don't reveal email validity)
+		assert.Equal(t, http.StatusOK, resetRec.Code)
+	})
+}
+
+func TestAuth_ResetPassword_Integration(t *testing.T) {
+	db, cleanup := setupAuthTestDB(t)
+	defer cleanup()
+
+	// Setup event bus
+	log := logger.GetLogger()
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	err := eventBus.Start()
+	require.NoError(t, err)
+	defer eventBus.Stop()
+
+	// Setup Redis
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT service
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
+	// Setup email service (using console repository for tests)
+	emailRepo := infraEmail.NewConsoleRepository(log)
+	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
+
+	// Setup repositories and service
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc)
+
+	// Setup Echo
+	e := echo.New()
+	routes.RegisterAuthRoutes(e, authSvc)
+
+	t.Run("successful reset", func(t *testing.T) {
+		// First register a user
+		registerReq := request.RegisterRequest{
+			Email:           "testresetpass@example.com",
+			Password:        "oldpassword123",
+			PasswordConfirm: "oldpassword123",
+		}
+		registerBody, _ := json.Marshal(registerReq)
+		registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+		registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		registerRec := httptest.NewRecorder()
+		e.ServeHTTP(registerRec, registerHTTPReq)
+		require.Equal(t, http.StatusCreated, registerRec.Code)
+
+		var registerResp response.RegisterResponse
+		err = json.Unmarshal(registerRec.Body.Bytes(), &registerResp)
+		require.NoError(t, err)
+
+		// Generate password reset token manually (simulating email link)
+		token, err := jwtSvc.GeneratePasswordResetToken(registerResp.User.ID)
+		require.NoError(t, err)
+
+		// Reset password
+		resetReq := request.ResetPasswordRequest{
+			Token:           token,
+			NewPassword:     "newpassword123",
+			PasswordConfirm: "newpassword123",
+		}
+		resetBody, _ := json.Marshal(resetReq)
+		resetHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec := httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+
+		assert.Equal(t, http.StatusOK, resetRec.Code)
+
+		var result map[string]string
+		err = json.Unmarshal(resetRec.Body.Bytes(), &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Password reset successfully. Please log in with your new password.", result["message"])
+
+		// Verify that old password no longer works
+		loginReq := request.LoginRequest{
+			Email:    "testresetpass@example.com",
+			Password: "oldpassword123",
+		}
+		loginBody, _ := json.Marshal(loginReq)
+		loginHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+		loginHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		loginRec := httptest.NewRecorder()
+		e.ServeHTTP(loginRec, loginHTTPReq)
+
+		assert.Equal(t, http.StatusUnauthorized, loginRec.Code, "Old password should not work")
+
+		// Verify that new password works
+		loginReq2 := request.LoginRequest{
+			Email:    "testresetpass@example.com",
+			Password: "newpassword123",
+		}
+		loginBody2, _ := json.Marshal(loginReq2)
+		loginHTTPReq2 := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody2))
+		loginHTTPReq2.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		loginRec2 := httptest.NewRecorder()
+		e.ServeHTTP(loginRec2, loginHTTPReq2)
+
+		assert.Equal(t, http.StatusOK, loginRec2.Code, "New password should work")
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		resetReq := request.ResetPasswordRequest{
+			Token:           "invalid-token",
+			NewPassword:     "newpassword123",
+			PasswordConfirm: "newpassword123",
+		}
+		resetBody, _ := json.Marshal(resetReq)
+		resetHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec := httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+
+		assert.Equal(t, http.StatusUnauthorized, resetRec.Code)
+	})
+
+	t.Run("wrong token type", func(t *testing.T) {
+		// Register a user
+		registerReq := request.RegisterRequest{
+			Email:           "testwrongtoken@example.com",
+			Password:        "password123",
+			PasswordConfirm: "password123",
+		}
+		registerBody, _ := json.Marshal(registerReq)
+		registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+		registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		registerRec := httptest.NewRecorder()
+		e.ServeHTTP(registerRec, registerHTTPReq)
+		require.Equal(t, http.StatusCreated, registerRec.Code)
+
+		var registerResp response.RegisterResponse
+		err = json.Unmarshal(registerRec.Body.Bytes(), &registerResp)
+		require.NoError(t, err)
+
+		// Generate access token (not password reset token)
+		accessToken, err := jwtSvc.GenerateAccessToken(registerResp.User.ID)
+		require.NoError(t, err)
+
+		// Try to use access token as reset token
+		resetReq := request.ResetPasswordRequest{
+			Token:           accessToken,
+			NewPassword:     "newpassword123",
+			PasswordConfirm: "newpassword123",
+		}
+		resetBody, _ := json.Marshal(resetReq)
+		resetHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec := httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+
+		assert.Equal(t, http.StatusUnauthorized, resetRec.Code)
+	})
+
+	t.Run("invalid password", func(t *testing.T) {
+		// Register a user
+		registerReq := request.RegisterRequest{
+			Email:           "testinvalidpass@example.com",
+			Password:        "password123",
+			PasswordConfirm: "password123",
+		}
+		registerBody, _ := json.Marshal(registerReq)
+		registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+		registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		registerRec := httptest.NewRecorder()
+		e.ServeHTTP(registerRec, registerHTTPReq)
+		require.Equal(t, http.StatusCreated, registerRec.Code)
+
+		var registerResp response.RegisterResponse
+		err = json.Unmarshal(registerRec.Body.Bytes(), &registerResp)
+		require.NoError(t, err)
+
+		// Generate password reset token
+		token, err := jwtSvc.GeneratePasswordResetToken(registerResp.User.ID)
+		require.NoError(t, err)
+
+		// Try to reset with short password
+		resetReq := request.ResetPasswordRequest{
+			Token:           token,
+			NewPassword:     "short",
+			PasswordConfirm: "short",
+		}
+		resetBody, _ := json.Marshal(resetReq)
+		resetHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec := httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+
+		assert.Equal(t, http.StatusBadRequest, resetRec.Code)
+	})
+
+	t.Run("password mismatch", func(t *testing.T) {
+		// Register a user
+		registerReq := request.RegisterRequest{
+			Email:           "testmismatch@example.com",
+			Password:        "password123",
+			PasswordConfirm: "password123",
+		}
+		registerBody, _ := json.Marshal(registerReq)
+		registerHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(registerBody))
+		registerHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		registerRec := httptest.NewRecorder()
+		e.ServeHTTP(registerRec, registerHTTPReq)
+		require.Equal(t, http.StatusCreated, registerRec.Code)
+
+		var registerResp response.RegisterResponse
+		err = json.Unmarshal(registerRec.Body.Bytes(), &registerResp)
+		require.NoError(t, err)
+
+		// Generate password reset token
+		token, err := jwtSvc.GeneratePasswordResetToken(registerResp.User.ID)
+		require.NoError(t, err)
+
+		// Try to reset with mismatched passwords
+		resetReq := request.ResetPasswordRequest{
+			Token:           token,
+			NewPassword:     "newpassword123",
+			PasswordConfirm: "differentpassword123",
+		}
+		resetBody, _ := json.Marshal(resetReq)
+		resetHTTPReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec := httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+
+		assert.Equal(t, http.StatusBadRequest, resetRec.Code)
+	})
+}

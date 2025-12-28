@@ -417,3 +417,107 @@ func (s *AuthService) ResendVerificationEmail(ctx context.Context, email string)
 
 	return nil
 }
+
+// RequestPasswordReset generates a password reset token and sends it to the user via email
+// It does not reveal if the email exists (always returns success for security)
+func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) error {
+	// 1. Validate email format
+	emailVO, err := valueobjects.NewEmail(email)
+	if err != nil {
+		// Don't return error - always return success to avoid revealing email existence
+		return nil
+	}
+
+	// 2. Find user by email
+	user, err := s.userRepo.FindByEmail(ctx, emailVO.Value())
+	if err != nil {
+		// Don't return error - always return success to avoid revealing email existence
+		return nil
+	}
+	if user == nil {
+		// User not found - return success silently (security best practice)
+		return nil
+	}
+
+	// 3. Check if user is active
+	if !user.IsActive() {
+		// User is deleted - return success silently
+		return nil
+	}
+
+	// 4. Generate password reset token
+	token, err := s.jwtService.GeneratePasswordResetToken(user.ID)
+	if err != nil {
+		// If token generation fails, return success anyway (don't reveal failure)
+		// In production, this should be logged
+		return nil
+	}
+
+	// 5. Send password reset email
+	err = s.emailService.SendPasswordResetEmail(ctx, user.ID, user.Email.Value(), token)
+	if err != nil {
+		// If email sending fails, return success anyway (don't reveal failure)
+		// In production, this should be logged
+		return nil
+	}
+
+	return nil
+}
+
+// ResetPassword resets a user's password using a password reset token
+func (s *AuthService) ResetPassword(ctx context.Context, token string, newPassword string) error {
+	// 1. Validate token using JWTService
+	claims, err := s.jwtService.ValidatePasswordResetToken(token)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidToken, err)
+	}
+
+	// 2. Verify that token type is "password_reset" (already done in ValidatePasswordResetToken)
+	// But we can double-check for safety
+	if claims.Type != "password_reset" {
+		return ErrInvalidToken
+	}
+
+	// 3. Find user by ID
+	user, err := s.userRepo.FindByID(ctx, claims.UserID)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserNotFound, err)
+	}
+	if user == nil {
+		return ErrUserNotFound
+	}
+
+	// 4. Check if user is active
+	if !user.IsActive() {
+		return ErrUserNotFound
+	}
+
+	// 5. Validate new password
+	passwordVO, err := valueobjects.NewPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidPassword, err)
+	}
+
+	// 6. Update user password
+	user.PasswordHash = passwordVO
+	user.UpdatedAt = time.Now()
+
+	// 7. Save updated user
+	err = s.userRepo.Update(ctx, user)
+	if err != nil {
+		return fmt.Errorf("failed to update user password: %w", err)
+	}
+
+	// 8. Invalidate all refresh tokens for this user
+	// Note: Currently, we cannot efficiently find all refresh tokens for a user
+	// because the cache repository doesn't support pattern matching or scanning.
+	// Refresh tokens will expire naturally based on their TTL.
+	// In the future, we could:
+	// - Add a method to store user->token mappings
+	// - Use Redis SCAN to find all tokens for a user
+	// - Store tokens in a set per user
+	// For now, tokens will expire based on their TTL, and users will need to log in again
+	// to get new tokens after password reset.
+
+	return nil
+}

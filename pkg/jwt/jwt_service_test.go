@@ -335,3 +335,89 @@ func TestJWTService_WrongSecretKey(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestJWTService_GeneratePasswordResetToken(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	userID := int64(123)
+
+	// Generate password reset token
+	token, err := service.GeneratePasswordResetToken(userID)
+	require.NoError(t, err)
+	assert.NotEmpty(t, token)
+
+	// Validate token
+	claims, err := service.ValidatePasswordResetToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, userID, claims.UserID)
+	assert.Equal(t, "password_reset", claims.Type)
+
+	// Check expiry (should be 1 hour)
+	expiryTime := claims.ExpiresAt.Time
+	now := time.Now()
+	expectedExpiry := now.Add(1 * time.Hour)
+	// Allow 5 seconds difference
+	assert.WithinDuration(t, expectedExpiry, expiryTime, 5*time.Second)
+}
+
+func TestJWTService_ValidatePasswordResetToken(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	userID := int64(456)
+
+	// Generate password reset token
+	token, err := service.GeneratePasswordResetToken(userID)
+	require.NoError(t, err)
+
+	// Validate token
+	claims, err := service.ValidatePasswordResetToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, userID, claims.UserID)
+	assert.Equal(t, "password_reset", claims.Type)
+}
+
+func TestJWTService_ValidatePasswordResetToken_WrongType(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	userID := int64(789)
+
+	// Generate access token (not password reset token)
+	token, err := service.GenerateAccessToken(userID)
+	require.NoError(t, err)
+
+	// Try to validate as password reset token - should fail
+	_, err = service.ValidatePasswordResetToken(token)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a password reset token")
+}
+
+func TestJWTService_ValidatePasswordResetToken_Expired(t *testing.T) {
+	// This test would require mocking time, which is complex
+	// Instead, we'll rely on the underlying JWT library to handle expiration
+	// The token expiry is tested indirectly through the expiry duration check
+	t.Skip("Token expiration is handled by the JWT library and tested indirectly")
+}
+

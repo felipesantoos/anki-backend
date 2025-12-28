@@ -15,6 +15,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
+	"github.com/felipesantos/anki-backend/pkg/logger"
 )
 
 var (
@@ -227,71 +228,108 @@ func (s *AuthService) Login(ctx context.Context, email string, password string) 
 // It validates the refresh token, checks if it exists in Redis, generates new tokens,
 // stores the new refresh token in Redis, invalidates the old refresh token, and returns both new tokens
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*response.TokenResponse, error) {
+	log := logger.GetLogger()
+
 	// 1. Validate refresh token
-	claims, err := s.jwtService.ValidateToken(refreshToken)
+	claims, err := s.jwtService.ValidateRefreshToken(refreshToken)
 	if err != nil {
+		log.Warn("Refresh token validation failed",
+			"error", err,
+		)
 		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)
 	}
 
-	// 2. Check if token is a refresh token
-	if claims.Type != "refresh" {
-		return nil, ErrInvalidToken
-	}
-
-	// 3. Check if refresh token exists in Redis (not revoked)
+	// 2. Check if refresh token exists in Redis (not revoked)
 	refreshTokenKey := buildRefreshTokenKey(refreshToken)
 	exists, err := s.cacheRepo.Exists(ctx, refreshTokenKey)
 	if err != nil {
+		log.Error("Failed to check refresh token existence in Redis",
+			"error", err,
+			"user_id", claims.UserID,
+		)
 		return nil, fmt.Errorf("failed to check refresh token: %w", err)
 	}
 	if !exists {
+		log.Warn("Refresh token not found in Redis (revoked or expired)",
+			"user_id", claims.UserID,
+		)
 		return nil, ErrInvalidToken
 	}
 
-	// 4. Verify user still exists and is active
+	// 3. Verify user still exists and is active
 	user, err := s.userRepo.FindByID(ctx, claims.UserID)
 	if err != nil {
+		log.Error("Failed to find user during token refresh",
+			"error", err,
+			"user_id", claims.UserID,
+		)
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
 	if user == nil {
+		log.Warn("User not found during token refresh",
+			"user_id", claims.UserID,
+		)
 		return nil, ErrUserNotFound
 	}
 	if !user.IsActive() {
+		log.Warn("Inactive user attempted token refresh",
+			"user_id", claims.UserID,
+		)
 		return nil, ErrInvalidToken
 	}
 
-	// 5. Generate new access token
+	// 4. Generate new access token
 	accessToken, err := s.jwtService.GenerateAccessToken(claims.UserID)
 	if err != nil {
+		log.Error("Failed to generate access token during refresh",
+			"error", err,
+			"user_id", claims.UserID,
+		)
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	// 6. Generate new refresh token (token rotation)
+	// 5. Generate new refresh token (token rotation)
 	newRefreshToken, err := s.jwtService.GenerateRefreshToken(claims.UserID)
 	if err != nil {
+		log.Error("Failed to generate refresh token during rotation",
+			"error", err,
+			"user_id", claims.UserID,
+		)
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// 7. Store new refresh token in Redis with TTL matching refresh token expiry
+	// 6. Store new refresh token in Redis with TTL matching refresh token expiry
 	newRefreshTokenKey := buildRefreshTokenKey(newRefreshToken)
 	refreshTokenTTL := s.jwtService.GetRefreshTokenExpiry()
 	err = s.cacheRepo.Set(ctx, newRefreshTokenKey, fmt.Sprintf("%d", claims.UserID), refreshTokenTTL)
 	if err != nil {
+		log.Error("Failed to store new refresh token in Redis",
+			"error", err,
+			"user_id", claims.UserID,
+		)
 		return nil, fmt.Errorf("failed to store new refresh token: %w", err)
 	}
 
-	// 8. Delete old refresh token from Redis (invalidate it - token rotation)
+	// 7. Delete old refresh token from Redis (invalidate it - token rotation)
 	err = s.cacheRepo.Delete(ctx, refreshTokenKey)
 	if err != nil {
 		// If deletion fails, return error to ensure token rotation integrity
 		// The new token is already stored, but we need to invalidate the old one for security
+		log.Error("Failed to invalidate old refresh token in Redis",
+			"error", err,
+			"user_id", claims.UserID,
+		)
 		return nil, fmt.Errorf("failed to invalidate old refresh token: %w", err)
 	}
 
-	// 9. Calculate expires_in in seconds
+	log.Info("Token refresh successful with rotation",
+		"user_id", claims.UserID,
+	)
+
+	// 8. Calculate expires_in in seconds
 	expiresIn := int(s.jwtService.GetAccessTokenExpiry().Seconds())
 
-	// 10. Build response with both new tokens
+	// 9. Build response with both new tokens
 	return &response.TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
@@ -306,8 +344,8 @@ func (s *AuthService) Logout(ctx context.Context, accessToken string, refreshTok
 	// 1. Invalidate access token (add to blacklist)
 	if accessToken != "" {
 		// Validate access token to get expiration time
-		claims, err := s.jwtService.ValidateToken(accessToken)
-		if err == nil && claims != nil && claims.Type == "access" {
+		claims, err := s.jwtService.ValidateAccessToken(accessToken)
+		if err == nil && claims != nil {
 			// Calculate TTL: time until token expires
 			ttl := time.Until(claims.ExpiresAt.Time)
 			if ttl > 0 {
@@ -333,15 +371,10 @@ func (s *AuthService) Logout(ctx context.Context, accessToken string, refreshTok
 	// 2. Invalidate refresh token (remove from Redis)
 	if refreshToken != "" {
 		// Validate refresh token (optional but good for error messages)
-		claims, err := s.jwtService.ValidateToken(refreshToken)
+		_, err := s.jwtService.ValidateRefreshToken(refreshToken)
 		if err != nil {
 			// If token is invalid, we still try to delete it (idempotent operation)
 			// This prevents information leakage about token validity
-		} else {
-			// Check if token is a refresh token
-			if claims.Type != "refresh" {
-				return ErrInvalidToken
-			}
 		}
 
 		// Remove refresh token from Redis (idempotent - no error if key doesn't exist)

@@ -421,3 +421,302 @@ func TestJWTService_ValidatePasswordResetToken_Expired(t *testing.T) {
 	t.Skip("Token expiration is handled by the JWT library and tested indirectly")
 }
 
+func TestJWTService_ValidateAccessToken(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	userID := int64(123)
+
+	// Generate access token
+	token, err := service.GenerateAccessToken(userID)
+	require.NoError(t, err)
+
+	// Validate access token
+	claims, err := service.ValidateAccessToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, userID, claims.UserID)
+	assert.Equal(t, "access", claims.Type)
+}
+
+func TestJWTService_ValidateAccessToken_WrongType(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	userID := int64(456)
+
+	// Test with refresh token (wrong type)
+	refreshToken, err := service.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+
+	_, err = service.ValidateAccessToken(refreshToken)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not an access token")
+
+	// Test with email verification token (wrong type)
+	emailToken, err := service.GenerateEmailVerificationToken(userID)
+	require.NoError(t, err)
+
+	_, err = service.ValidateAccessToken(emailToken)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not an access token")
+
+	// Test with password reset token (wrong type)
+	resetToken, err := service.GeneratePasswordResetToken(userID)
+	require.NoError(t, err)
+
+	_, err = service.ValidateAccessToken(resetToken)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not an access token")
+}
+
+func TestJWTService_ValidateRefreshToken(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	userID := int64(789)
+
+	// Generate refresh token
+	token, err := service.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+
+	// Validate refresh token
+	claims, err := service.ValidateRefreshToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, userID, claims.UserID)
+	assert.Equal(t, "refresh", claims.Type)
+}
+
+func TestJWTService_ValidateRefreshToken_WrongType(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	userID := int64(101112)
+
+	// Test with access token (wrong type)
+	accessToken, err := service.GenerateAccessToken(userID)
+	require.NoError(t, err)
+
+	_, err = service.ValidateRefreshToken(accessToken)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a refresh token")
+
+	// Test with email verification token (wrong type)
+	emailToken, err := service.GenerateEmailVerificationToken(userID)
+	require.NoError(t, err)
+
+	_, err = service.ValidateRefreshToken(emailToken)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a refresh token")
+
+	// Test with password reset token (wrong type)
+	resetToken, err := service.GeneratePasswordResetToken(userID)
+	require.NoError(t, err)
+
+	_, err = service.ValidateRefreshToken(resetToken)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a refresh token")
+}
+
+func TestJWTService_ValidateToken_InvalidIssuer(t *testing.T) {
+	cfg1 := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "issuer-1",
+	}
+
+	cfg2 := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "issuer-2",
+	}
+
+	service1, err := NewJWTService(cfg1)
+	require.NoError(t, err)
+
+	service2, err := NewJWTService(cfg2)
+	require.NoError(t, err)
+
+	userID := int64(131415)
+
+	// Generate token with service1
+	token, err := service1.GenerateAccessToken(userID)
+	require.NoError(t, err)
+
+	// Try to validate with service2 (different issuer) - should fail
+	_, err = service2.ValidateToken(token)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidIssuer)
+	assert.Contains(t, err.Error(), "expected issuer-2")
+	assert.Contains(t, err.Error(), "got issuer-1")
+}
+
+func TestJWTService_ValidateAccessToken_InvalidIssuer(t *testing.T) {
+	cfg1 := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "issuer-a",
+	}
+
+	cfg2 := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "issuer-b",
+	}
+
+	service1, err := NewJWTService(cfg1)
+	require.NoError(t, err)
+
+	service2, err := NewJWTService(cfg2)
+	require.NoError(t, err)
+
+	userID := int64(161718)
+
+	// Generate access token with service1
+	token, err := service1.GenerateAccessToken(userID)
+	require.NoError(t, err)
+
+	// Try to validate with service2 (different issuer) - should fail
+	_, err = service2.ValidateAccessToken(token)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid token issuer")
+}
+
+func TestJWTService_ValidateRefreshToken_InvalidIssuer(t *testing.T) {
+	cfg1 := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "issuer-x",
+	}
+
+	cfg2 := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "issuer-y",
+	}
+
+	service1, err := NewJWTService(cfg1)
+	require.NoError(t, err)
+
+	service2, err := NewJWTService(cfg2)
+	require.NoError(t, err)
+
+	userID := int64(192021)
+
+	// Generate refresh token with service1
+	token, err := service1.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+
+	// Try to validate with service2 (different issuer) - should fail
+	_, err = service2.ValidateRefreshToken(token)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid token issuer")
+}
+
+func TestJWTService_ValidateAccessToken_InvalidToken(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		token string
+	}{
+		{
+			name:  "empty token",
+			token: "",
+		},
+		{
+			name:  "malformed token",
+			token: "not.a.valid.jwt",
+		},
+		{
+			name:  "random string",
+			token: "randomstring",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := service.ValidateAccessToken(tt.token)
+			assert.Error(t, err)
+		})
+	}
+}
+
+func TestJWTService_ValidateRefreshToken_InvalidToken(t *testing.T) {
+	cfg := config.JWTConfig{
+		SecretKey:          "this-is-a-valid-secret-key-with-at-least-32-chars",
+		AccessTokenExpiry:  15,
+		RefreshTokenExpiry: 7,
+		Issuer:             "test-issuer",
+	}
+
+	service, err := NewJWTService(cfg)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		token string
+	}{
+		{
+			name:  "empty token",
+			token: "",
+		},
+		{
+			name:  "malformed token",
+			token: "not.a.valid.jwt",
+		},
+		{
+			name:  "random string",
+			token: "randomstring",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := service.ValidateRefreshToken(tt.token)
+			assert.Error(t, err)
+		})
+	}
+}
+

@@ -10,7 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	"github.com/felipesantos/anki-backend/pkg/jwt"
+	jwtpkg "github.com/felipesantos/anki-backend/pkg/jwt"
 )
 
 const (
@@ -23,7 +23,7 @@ const (
 // AuthMiddleware creates a middleware for JWT authentication
 // It extracts and validates JWT tokens from Authorization header,
 // checks if token is blacklisted, and stores userID in context
-func AuthMiddleware(jwtService *jwt.JWTService, cacheRepo secondary.ICacheRepository) echo.MiddlewareFunc {
+func AuthMiddleware(jwtService *jwtpkg.JWTService, cacheRepo secondary.ICacheRepository) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Extract token from Authorization header
@@ -58,14 +58,13 @@ func AuthMiddleware(jwtService *jwt.JWTService, cacheRepo secondary.ICacheReposi
 			}
 
 			// Validate token
-			claims, err := jwtService.ValidateToken(tokenString)
+			claims, err := jwtService.ValidateAccessToken(tokenString)
 			if err != nil {
+				// Check if it's a token type mismatch error
+				if strings.Contains(err.Error(), "not an access token") {
+					return echo.NewHTTPError(http.StatusUnauthorized, "Invalid token type")
+				}
 				return echo.NewHTTPError(http.StatusUnauthorized, "Invalid or expired token")
-			}
-
-			// Verify that token is an access token
-			if claims.Type != "access" {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Invalid token type")
 			}
 
 			// Store user ID and token in context

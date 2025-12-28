@@ -14,6 +14,8 @@ var (
 	ErrInvalidToken = errors.New("invalid token")
 	// ErrTokenExpired is returned when token has expired
 	ErrTokenExpired = errors.New("token expired")
+	// ErrInvalidIssuer is returned when token issuer doesn't match
+	ErrInvalidIssuer = errors.New("invalid token issuer")
 )
 
 // Claims represents JWT claims structure
@@ -108,6 +110,11 @@ func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
 		return nil, ErrInvalidToken
 	}
 
+	// Validate issuer
+	if claims.Issuer != s.issuer {
+		return nil, fmt.Errorf("%w: expected %s, got %s", ErrInvalidIssuer, s.issuer, claims.Issuer)
+	}
+
 	return claims, nil
 }
 
@@ -171,6 +178,38 @@ func (s *JWTService) ValidatePasswordResetToken(tokenString string) (*Claims, er
 	// Verify that this is a password reset token
 	if claims.Type != "password_reset" {
 		return nil, fmt.Errorf("%w: token is not a password reset token", ErrInvalidToken)
+	}
+
+	return claims, nil
+}
+
+// ValidateAccessToken validates an access token
+// Returns an error if the token is invalid, expired, or not of type "access"
+func (s *JWTService) ValidateAccessToken(tokenString string) (*Claims, error) {
+	claims, err := s.ValidateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify that this is an access token
+	if claims.Type != "access" {
+		return nil, fmt.Errorf("%w: token is not an access token", ErrInvalidToken)
+	}
+
+	return claims, nil
+}
+
+// ValidateRefreshToken validates a refresh token
+// Returns an error if the token is invalid, expired, or not of type "refresh"
+func (s *JWTService) ValidateRefreshToken(tokenString string) (*Claims, error) {
+	claims, err := s.ValidateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify that this is a refresh token
+	if claims.Type != "refresh" {
+		return nil, fmt.Errorf("%w: token is not a refresh token", ErrInvalidToken)
 	}
 
 	return claims, nil

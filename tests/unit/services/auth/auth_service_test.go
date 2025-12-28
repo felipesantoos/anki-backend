@@ -3,12 +3,12 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
@@ -429,7 +429,8 @@ func TestAuthService_Login_Success(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	resp, err := service.Login(ctx, "user@example.com", "password123")
@@ -507,7 +508,8 @@ func TestAuthService_Login_InvalidCredentials(t *testing.T) {
 			deckRepo := &mockDeckRepository{}
 			eventBus := &mockEventBus{}
 
-			service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+			emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 			ctx := context.Background()
 			_, err := service.Login(ctx, tt.email, tt.password)
@@ -530,7 +532,8 @@ func TestAuthService_Login_InvalidEmail(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	_, err := service.Login(ctx, "invalid-email", "password123")
@@ -596,7 +599,8 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	resp, err := service.RefreshToken(ctx, refreshToken)
@@ -647,7 +651,8 @@ func TestAuthService_RefreshToken_InvalidToken(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	_, err := service.RefreshToken(ctx, "invalid-token")
@@ -687,7 +692,8 @@ func TestAuthService_RefreshToken_TokenNotInCache(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	_, err = service.RefreshToken(ctx, refreshToken)
@@ -727,7 +733,8 @@ func TestAuthService_RefreshToken_WrongTokenType(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	_, err = service.RefreshToken(ctx, accessToken)
@@ -773,7 +780,8 @@ func TestAuthService_Logout_Success(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	err = service.Logout(ctx, accessToken, refreshToken)
@@ -805,7 +813,8 @@ func TestAuthService_Logout_InvalidToken(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	// Logout should still succeed even with invalid tokens (idempotent operation)
@@ -838,7 +847,8 @@ func TestAuthService_Logout_AccessTokenOnly(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo)
+	emailSvc := &mockEmailService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
 
 	ctx := context.Background()
 	err = service.Logout(ctx, accessToken, "")

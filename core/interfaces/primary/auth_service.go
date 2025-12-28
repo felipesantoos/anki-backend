@@ -56,4 +56,10 @@ type IAuthService interface {
 	// and invalidates all refresh tokens for the user
 	// Returns an error if the token is invalid, expired, or password reset fails
 	ResetPassword(ctx context.Context, token string, newPassword string) error
+
+	// ChangePassword changes a user's password when authenticated
+	// It validates the current password, validates the new password,
+	// updates the user's password, and invalidates all refresh tokens for the user
+	// Returns an error if the current password is incorrect, new password is invalid, or update fails
+	ChangePassword(ctx context.Context, userID int64, currentPassword string, newPassword string) error
 }

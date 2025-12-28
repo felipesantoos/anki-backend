@@ -27,6 +27,7 @@ type mockAuthService struct {
 	resendVerificationEmailFunc func(ctx context.Context, email string) error
 	requestPasswordResetFunc func(ctx context.Context, email string) error
 	resetPasswordFunc        func(ctx context.Context, token string, newPassword string) error
+	changePasswordFunc       func(ctx context.Context, userID int64, currentPassword string, newPassword string) error
 }
 
 func (m *mockAuthService) Register(ctx context.Context, email string, password string) (*entities.User, error) {
@@ -81,6 +82,13 @@ func (m *mockAuthService) RequestPasswordReset(ctx context.Context, email string
 func (m *mockAuthService) ResetPassword(ctx context.Context, token string, newPassword string) error {
 	if m.resetPasswordFunc != nil {
 		return m.resetPasswordFunc(ctx, token, newPassword)
+	}
+	return nil
+}
+
+func (m *mockAuthService) ChangePassword(ctx context.Context, userID int64, currentPassword string, newPassword string) error {
+	if m.changePasswordFunc != nil {
+		return m.changePasswordFunc(ctx, userID, currentPassword, newPassword)
 	}
 	return nil
 }

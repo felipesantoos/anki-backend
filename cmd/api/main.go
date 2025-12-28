@@ -45,7 +45,9 @@ import (
 	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
 	storageService "github.com/felipesantos/anki-backend/core/services/storage"
 	tracingService "github.com/felipesantos/anki-backend/core/services/tracing"
+	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	emailService "github.com/felipesantos/anki-backend/core/services/email"
 	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	infraEmail "github.com/felipesantos/anki-backend/infra/email"
@@ -425,7 +427,7 @@ func main() {
 
 	// Initialize Auth Service (with email service)
 	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, rdb, emailSvc)
-	routes.RegisterAuthRoutes(e, authSvc)
+	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, rdb)
 
 	// Register Email Verification Handler if events are enabled
 	if cfg.Events.Enabled {

@@ -521,3 +521,54 @@ func (s *AuthService) ResetPassword(ctx context.Context, token string, newPasswo
 
 	return nil
 }
+
+// ChangePassword changes a user's password when authenticated
+func (s *AuthService) ChangePassword(ctx context.Context, userID int64, currentPassword string, newPassword string) error {
+	// 1. Find user by ID
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserNotFound, err)
+	}
+	if user == nil {
+		return ErrUserNotFound
+	}
+
+	// 2. Check if user is active
+	if !user.IsActive() {
+		return ErrUserNotFound
+	}
+
+	// 3. Verify current password
+	if !user.VerifyPassword(currentPassword) {
+		return ErrInvalidCredentials
+	}
+
+	// 4. Validate new password
+	passwordVO, err := valueobjects.NewPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidPassword, err)
+	}
+
+	// 5. Update user password
+	user.PasswordHash = passwordVO
+	user.UpdatedAt = time.Now()
+
+	// 6. Save updated user
+	err = s.userRepo.Update(ctx, user)
+	if err != nil {
+		return fmt.Errorf("failed to update user password: %w", err)
+	}
+
+	// 7. Invalidate all refresh tokens for this user
+	// Note: Currently, we cannot efficiently find all refresh tokens for a user
+	// because the cache repository doesn't support pattern matching or scanning.
+	// Refresh tokens will expire naturally based on their TTL.
+	// In the future, we could:
+	// - Add a method to store user->token mappings
+	// - Use Redis SCAN to find all tokens for a user
+	// - Store tokens in a set per user
+	// For now, tokens will expire based on their TTL, and users will need to log in again
+	// to get new tokens after password change.
+
+	return nil
+}

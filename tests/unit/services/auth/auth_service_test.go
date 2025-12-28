@@ -1424,3 +1424,160 @@ func TestAuthService_ResetPassword_InvalidPassword(t *testing.T) {
 		t.Errorf("ResetPassword() error = %v, want ErrInvalidPassword", err)
 	}
 }
+
+func TestAuthService_ChangePassword_Success(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+
+	userUpdated := false
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			if id == 1 {
+				email, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("oldpassword123")
+				return &entities.User{
+					ID:            1,
+					Email:         email,
+					PasswordHash:  password,
+					EmailVerified: true,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+		updateFunc: func(ctx context.Context, user *entities.User) error {
+			userUpdated = true
+			// Verify password was updated
+			if !user.VerifyPassword("newpassword123") {
+				t.Errorf("ChangePassword() should update password correctly")
+			}
+			return nil
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.ChangePassword(ctx, 1, "oldpassword123", "newpassword123")
+
+	if err != nil {
+		t.Fatalf("ChangePassword() error = %v, want nil", err)
+	}
+
+	if !userUpdated {
+		t.Errorf("ChangePassword() should update user password")
+	}
+}
+
+func TestAuthService_ChangePassword_InvalidCurrentPassword(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			if id == 1 {
+				email, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("oldpassword123")
+				return &entities.User{
+					ID:            1,
+					Email:         email,
+					PasswordHash:  password,
+					EmailVerified: true,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.ChangePassword(ctx, 1, "wrongpassword123", "newpassword123")
+
+	if err == nil {
+		t.Errorf("ChangePassword() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrInvalidCredentials) {
+		t.Errorf("ChangePassword() error = %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestAuthService_ChangePassword_UserNotFound(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			return nil, nil // User not found
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.ChangePassword(ctx, 999, "oldpassword123", "newpassword123")
+
+	if err == nil {
+		t.Errorf("ChangePassword() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrUserNotFound) {
+		t.Errorf("ChangePassword() error = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestAuthService_ChangePassword_InvalidNewPassword(t *testing.T) {
+	jwtSvc := createTestJWTService(t)
+
+	userRepo := &mockUserRepository{
+		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+			if id == 1 {
+				email, _ := valueobjects.NewEmail("test@example.com")
+				password, _ := valueobjects.NewPassword("oldpassword123")
+				return &entities.User{
+					ID:            1,
+					Email:         email,
+					PasswordHash:  password,
+					EmailVerified: true,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}, nil
+			}
+			return nil, errors.New("user not found")
+		},
+	}
+
+	emailSvc := &mockEmailService{}
+	deckRepo := &mockDeckRepository{}
+	eventBus := &mockEventBus{}
+	cacheRepo := &mockCacheRepository{}
+
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+
+	ctx := context.Background()
+	err := service.ChangePassword(ctx, 1, "oldpassword123", "short") // Password too short
+
+	if err == nil {
+		t.Errorf("ChangePassword() error = nil, want error")
+	}
+
+	if !errors.Is(err, authService.ErrInvalidPassword) {
+		t.Errorf("ChangePassword() error = %v, want ErrInvalidPassword", err)
+	}
+}

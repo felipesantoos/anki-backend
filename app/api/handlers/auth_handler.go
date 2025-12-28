@@ -10,6 +10,7 @@ import (
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/mappers"
+	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
 )
@@ -487,4 +488,89 @@ func handleResetPasswordError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to reset password")
+}
+
+// ChangePassword handles POST /api/v1/auth/change-password requests
+// @Summary Change password
+// @Description Changes user password. Requires authentication via JWT Bearer token.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Authorization header string true "Bearer JWT token (access token)"
+// @Param request body request.ChangePasswordRequest true "Change password request"
+// @Success 200 {object} map[string]string "Password changed successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request (e.g., invalid password, password mismatch)"
+// @Failure 401 {object} response.ErrorResponse "Not authenticated or current password is incorrect"
+// @Failure 404 {object} response.ErrorResponse "User not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/change-password [post]
+func (h *AuthHandler) ChangePassword(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Extract user ID from context (set by auth middleware)
+	userID := middlewares.GetUserID(c)
+	if userID == 0 {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Authentication required")
+	}
+
+	// Bind request body to DTO
+	var req request.ChangePasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if err := validateChangePasswordRequest(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Call service
+	err := h.authService.ChangePassword(ctx, userID, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		return handleChangePasswordError(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "Password changed successfully. Please log in with your new password.",
+	})
+}
+
+func validateChangePasswordRequest(req *request.ChangePasswordRequest) error {
+	var errors []string
+
+	if strings.TrimSpace(req.CurrentPassword) == "" {
+		errors = append(errors, "current_password is required")
+	}
+
+	if strings.TrimSpace(req.NewPassword) == "" {
+		errors = append(errors, "new_password is required")
+	}
+
+	if len(req.NewPassword) < 8 {
+		errors = append(errors, "password must have at least 8 characters")
+	}
+
+	if req.NewPassword != req.PasswordConfirm {
+		errors = append(errors, "password confirmation does not match")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("validation errors: %s", strings.Join(errors, ", "))
+	}
+
+	return nil
+}
+
+func handleChangePasswordError(err error) *echo.HTTPError {
+	if errors.Is(err, authService.ErrInvalidCredentials) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "Current password is incorrect")
+	}
+	if errors.Is(err, authService.ErrUserNotFound) {
+		return echo.NewHTTPError(http.StatusNotFound, "User not found")
+	}
+	if errors.Is(err, authService.ErrInvalidPassword) {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	return echo.NewHTTPError(http.StatusInternalServerError, "Failed to change password")
 }

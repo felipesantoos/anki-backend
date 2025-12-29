@@ -1,0 +1,502 @@
+package repositories
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/lib/pq"
+	"github.com/felipesantos/anki-backend/core/domain/entities/note"
+	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/infra/database/mappers"
+	"github.com/felipesantos/anki-backend/infra/database/models"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
+)
+
+// NoteRepository implements INoteRepository using PostgreSQL
+type NoteRepository struct {
+	db *sql.DB
+}
+
+// NewNoteRepository creates a new NoteRepository instance
+func NewNoteRepository(db *sql.DB) secondary.INoteRepository {
+	return &NoteRepository{
+		db: db,
+	}
+}
+
+// Save saves or updates a note in the database
+func (r *NoteRepository) Save(ctx context.Context, userID int64, noteEntity *note.Note) error {
+	model := mappers.NoteToModel(noteEntity)
+
+	if noteEntity.GetID() == 0 {
+		// Insert new note
+		query := `
+			INSERT INTO notes (user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at)
+			VALUES ($1, $2, $3, $4, $5::TEXT[], $6, $7, $8, $9)
+			RETURNING id
+		`
+
+		now := time.Now()
+		if model.CreatedAt.IsZero() {
+			model.CreatedAt = now
+		}
+		if model.UpdatedAt.IsZero() {
+			model.UpdatedAt = now
+		}
+
+		var tagsArray []string
+		if model.Tags.Valid {
+			// Parse tags from PostgreSQL format string
+			tagsStr := model.Tags.String
+			if len(tagsStr) >= 2 && tagsStr[0] == '{' && tagsStr[len(tagsStr)-1] == '}' {
+				inner := tagsStr[1 : len(tagsStr)-1]
+				if inner != "" {
+					parts := strings.Split(inner, ",")
+					for _, part := range parts {
+						part = strings.TrimSpace(part)
+						if len(part) >= 2 && part[0] == '"' && part[len(part)-1] == '"' {
+							part = part[1 : len(part)-1]
+						}
+						if part != "" {
+							tagsArray = append(tagsArray, part)
+						}
+					}
+				}
+			}
+		}
+
+		var deletedAt sql.NullTime
+		if model.DeletedAt.Valid {
+			deletedAt = model.DeletedAt
+		}
+
+		var noteID int64
+		err := r.db.QueryRowContext(ctx, query,
+			userID,
+			model.GUID,
+			model.NoteTypeID,
+			model.FieldsJSON,
+			pq.Array(tagsArray), // Use pq.Array for PostgreSQL arrays
+			model.Marked,
+			model.CreatedAt,
+			model.UpdatedAt,
+			deletedAt,
+		).Scan(&noteID)
+		if err != nil {
+			return fmt.Errorf("failed to create note: %w", err)
+		}
+
+		noteEntity.SetID(noteID)
+		return nil
+	}
+
+	// Update existing note - validate ownership first
+	existingNote, err := r.FindByID(ctx, userID, noteEntity.GetID())
+	if err != nil {
+		return err
+	}
+	if existingNote == nil {
+		return ownership.ErrResourceNotFound
+	}
+
+	// Update note
+	query := `
+		UPDATE notes
+		SET guid = $1, note_type_id = $2, fields_json = $3, tags = $4::TEXT[], marked = $5, updated_at = $6, deleted_at = $7
+		WHERE id = $8 AND user_id = $9 AND deleted_at IS NULL
+	`
+
+	now := time.Now()
+	model.UpdatedAt = now
+
+	var tagsArray []string
+	if model.Tags.Valid {
+		tagsStr := model.Tags.String
+		if len(tagsStr) >= 2 && tagsStr[0] == '{' && tagsStr[len(tagsStr)-1] == '}' {
+			inner := tagsStr[1 : len(tagsStr)-1]
+			if inner != "" {
+				parts := strings.Split(inner, ",")
+				for _, part := range parts {
+					part = strings.TrimSpace(part)
+					if len(part) >= 2 && part[0] == '"' && part[len(part)-1] == '"' {
+						part = part[1 : len(part)-1]
+					}
+					if part != "" {
+						tagsArray = append(tagsArray, part)
+					}
+				}
+			}
+		}
+	}
+
+	var deletedAt sql.NullTime
+	if model.DeletedAt.Valid {
+		deletedAt = model.DeletedAt
+	}
+
+	result, err := r.db.ExecContext(ctx, query,
+		model.GUID,
+		model.NoteTypeID,
+		model.FieldsJSON,
+		pq.Array(tagsArray),
+		model.Marked,
+		model.UpdatedAt,
+		deletedAt,
+		model.ID,
+		userID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update note: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ownership.ErrResourceNotFound
+	}
+
+	return nil
+}
+
+// FindByID finds a note by ID, filtering by userID to ensure ownership
+func (r *NoteRepository) FindByID(ctx context.Context, userID int64, id int64) (*note.Note, error) {
+	query := `
+		SELECT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+	`
+
+	var model models.NoteModel
+	var tagsStr string
+	var deletedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(
+		&model.ID,
+		&model.UserID,
+		&model.GUID,
+		&model.NoteTypeID,
+		&model.FieldsJSON,
+		&tagsStr,
+		&model.Marked,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+		&deletedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ownership.ErrResourceNotFound
+		}
+		return nil, fmt.Errorf("failed to find note: %w", err)
+	}
+
+	if tagsStr != "" {
+		model.Tags = sql.NullString{String: tagsStr, Valid: true}
+	}
+	if deletedAt.Valid {
+		model.DeletedAt = deletedAt
+	}
+
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
+	return mappers.NoteToDomain(&model)
+}
+
+// FindByUserID finds all notes for a user
+func (r *NoteRepository) FindByUserID(ctx context.Context, userID int64) ([]*note.Note, error) {
+	query := `
+		SELECT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE user_id = $1 AND deleted_at IS NULL
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find notes by user ID: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []*note.Note
+	for rows.Next() {
+		var model models.NoteModel
+		var tagsStr string
+		var deletedAt sql.NullTime
+
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.GUID,
+			&model.NoteTypeID,
+			&model.FieldsJSON,
+			&tagsStr,
+			&model.Marked,
+			&model.CreatedAt,
+			&model.UpdatedAt,
+			&deletedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan note: %w", err)
+		}
+
+		if tagsStr != "" {
+			model.Tags = sql.NullString{String: tagsStr, Valid: true}
+		}
+		if deletedAt.Valid {
+			model.DeletedAt = deletedAt
+		}
+
+		noteEntity, err := mappers.NoteToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert note to domain: %w", err)
+		}
+		notes = append(notes, noteEntity)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating notes: %w", err)
+	}
+
+	return notes, nil
+}
+
+// Update updates an existing note, validating ownership
+func (r *NoteRepository) Update(ctx context.Context, userID int64, id int64, noteEntity *note.Note) error {
+	return r.Save(ctx, userID, noteEntity)
+}
+
+// Delete deletes a note, validating ownership (soft delete)
+func (r *NoteRepository) Delete(ctx context.Context, userID int64, id int64) error {
+	// Validate ownership first
+	existingNote, err := r.FindByID(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if existingNote == nil {
+		return ownership.ErrResourceNotFound
+	}
+
+	// Soft delete
+	query := `
+		UPDATE notes
+		SET deleted_at = $1
+		WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL
+	`
+
+	now := time.Now()
+	result, err := r.db.ExecContext(ctx, query, now, id, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete note: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ownership.ErrResourceNotFound
+	}
+
+	return nil
+}
+
+// Exists checks if a note exists and belongs to the user
+func (r *NoteRepository) Exists(ctx context.Context, userID int64, id int64) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM notes
+			WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+		)
+	`
+
+	var exists bool
+	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check note existence: %w", err)
+	}
+
+	return exists, nil
+}
+
+// FindByNoteTypeID finds all notes of a specific note type for a user
+func (r *NoteRepository) FindByNoteTypeID(ctx context.Context, userID int64, noteTypeID int64) ([]*note.Note, error) {
+	query := `
+		SELECT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE user_id = $1 AND note_type_id = $2 AND deleted_at IS NULL
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, noteTypeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find notes by note type ID: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []*note.Note
+	for rows.Next() {
+		var model models.NoteModel
+		var tagsStr string
+		var deletedAt sql.NullTime
+
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.GUID,
+			&model.NoteTypeID,
+			&model.FieldsJSON,
+			&tagsStr,
+			&model.Marked,
+			&model.CreatedAt,
+			&model.UpdatedAt,
+			&deletedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan note: %w", err)
+		}
+
+		if tagsStr != "" {
+			model.Tags = sql.NullString{String: tagsStr, Valid: true}
+		}
+		if deletedAt.Valid {
+			model.DeletedAt = deletedAt
+		}
+
+		noteEntity, err := mappers.NoteToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert note to domain: %w", err)
+		}
+		notes = append(notes, noteEntity)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating notes: %w", err)
+	}
+
+	return notes, nil
+}
+
+// FindByGUID finds a note by GUID, filtering by userID to ensure ownership
+func (r *NoteRepository) FindByGUID(ctx context.Context, userID int64, guid string) (*note.Note, error) {
+	query := `
+		SELECT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE guid = $1 AND user_id = $2 AND deleted_at IS NULL
+	`
+
+	var model models.NoteModel
+	var tagsStr string
+	var deletedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, guid, userID).Scan(
+		&model.ID,
+		&model.UserID,
+		&model.GUID,
+		&model.NoteTypeID,
+		&model.FieldsJSON,
+		&tagsStr,
+		&model.Marked,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+		&deletedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find note by GUID: %w", err)
+	}
+
+	if tagsStr != "" {
+		model.Tags = sql.NullString{String: tagsStr, Valid: true}
+	}
+	if deletedAt.Valid {
+		model.DeletedAt = deletedAt
+	}
+
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
+	return mappers.NoteToDomain(&model)
+}
+
+// FindByTags finds all notes containing any of the specified tags for a user
+func (r *NoteRepository) FindByTags(ctx context.Context, userID int64, tags []string) ([]*note.Note, error) {
+	if len(tags) == 0 {
+		return []*note.Note{}, nil
+	}
+
+	query := `
+		SELECT DISTINCT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE user_id = $1 AND deleted_at IS NULL AND tags && $2::TEXT[]
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, pq.Array(tags))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find notes by tags: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []*note.Note
+	for rows.Next() {
+		var model models.NoteModel
+		var tagsStr string
+		var deletedAt sql.NullTime
+
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.GUID,
+			&model.NoteTypeID,
+			&model.FieldsJSON,
+			&tagsStr,
+			&model.Marked,
+			&model.CreatedAt,
+			&model.UpdatedAt,
+			&deletedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan note: %w", err)
+		}
+
+		if tagsStr != "" {
+			model.Tags = sql.NullString{String: tagsStr, Valid: true}
+		}
+		if deletedAt.Valid {
+			model.DeletedAt = deletedAt
+		}
+
+		noteEntity, err := mappers.NoteToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert note to domain: %w", err)
+		}
+		notes = append(notes, noteEntity)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating notes: %w", err)
+	}
+
+	return notes, nil
+}
+
+// Ensure NoteRepository implements INoteRepository
+var _ secondary.INoteRepository = (*NoteRepository)(nil)
+

@@ -12,14 +12,14 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/handlers"
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	userEntity "github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
 )
 
 // mockAuthService is a mock implementation of IAuthService
 type mockAuthService struct {
-	registerFunc            func(ctx context.Context, email string, password string) (*entities.User, error)
+	registerFunc            func(ctx context.Context, email string, password string) (*userEntity.User, error)
 	loginFunc               func(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error)
 	refreshTokenFunc        func(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
 	logoutFunc              func(ctx context.Context, accessToken string, refreshToken string) error
@@ -30,7 +30,7 @@ type mockAuthService struct {
 	changePasswordFunc       func(ctx context.Context, userID int64, currentPassword string, newPassword string) error
 }
 
-func (m *mockAuthService) Register(ctx context.Context, email string, password string) (*entities.User, error) {
+func (m *mockAuthService) Register(ctx context.Context, email string, password string) (*userEntity.User, error) {
 	if m.registerFunc != nil {
 		return m.registerFunc(ctx, email, password)
 	}
@@ -93,17 +93,19 @@ func (m *mockAuthService) ChangePassword(ctx context.Context, userID int64, curr
 	return nil
 }
 
-func createTestUser() *entities.User {
+func createTestUser() *userEntity.User {
 	email, _ := valueobjects.NewEmail("user@example.com")
 	password, _ := valueobjects.NewPassword("password123")
-	return &entities.User{
-		ID:            1,
-		Email:         email,
-		PasswordHash:  password,
-		EmailVerified: false,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-	}
+	now := time.Now()
+	u, _ := userEntity.NewBuilder().
+		WithID(1).
+		WithEmail(email).
+		WithPasswordHash(password).
+		WithEmailVerified(false).
+		WithCreatedAt(now).
+		WithUpdatedAt(now).
+		Build()
+	return u
 }
 
 func TestAuthHandler_Register_Success(t *testing.T) {
@@ -181,7 +183,7 @@ func TestAuthHandler_Register_InvalidRequest(t *testing.T) {
 
 func TestAuthHandler_Register_EmailAlreadyExists(t *testing.T) {
 	mockService := &mockAuthService{
-		registerFunc: func(ctx context.Context, email string, password string) (*entities.User, error) {
+		registerFunc: func(ctx context.Context, email string, password string) (*userEntity.User, error) {
 			return nil, authService.ErrEmailAlreadyExists
 		},
 	}

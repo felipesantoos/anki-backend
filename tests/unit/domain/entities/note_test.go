@@ -4,30 +4,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 )
 
 func TestNote_IsActive(t *testing.T) {
 	tests := []struct {
 		name     string
-		note     *entities.Note
+		note     *note.Note
 		expected bool
 	}{
 		{
 			name: "active note",
-			note: func() *entities.Note {
-				n := &entities.Note{}
-				n.SetDeletedAt(nil)
+			note: func() *note.Note {
+				guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+				n, _ := note.NewBuilder().WithUserID(1).WithGUID(guid).WithNoteTypeID(1).WithDeletedAt(nil).Build()
 				return n
 			}(),
 			expected: true,
 		},
 		{
 			name: "deleted note",
-			note: func() *entities.Note {
-				n := &entities.Note{}
-				n.SetDeletedAt(timePtr(time.Now()))
+			note: func() *note.Note {
+				guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440001")
+				now := time.Now()
+				n, _ := note.NewBuilder().WithUserID(1).WithGUID(guid).WithNoteTypeID(1).WithDeletedAt(&now).Build()
 				return n
 			}(),
 			expected: false,
@@ -45,8 +46,8 @@ func TestNote_IsActive(t *testing.T) {
 }
 
 func TestNote_HasTag(t *testing.T) {
-	note := &entities.Note{}
-	note.SetTags([]string{"vocabulary", "spanish", "verb"})
+	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	noteEntity, _ := note.NewBuilder().WithUserID(1).WithGUID(guid).WithNoteTypeID(1).WithTags([]string{"vocabulary", "spanish", "verb"}).Build()
 
 	tests := []struct {
 		name     string
@@ -77,7 +78,7 @@ func TestNote_HasTag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := note.HasTag(tt.tag)
+			got := noteEntity.HasTag(tt.tag)
 			if got != tt.expected {
 				t.Errorf("Note.HasTag(%q) = %v, want %v", tt.tag, got, tt.expected)
 			}
@@ -86,126 +87,118 @@ func TestNote_HasTag(t *testing.T) {
 }
 
 func TestNote_AddTag(t *testing.T) {
-	note := &entities.Note{}
-	note.SetTags([]string{"vocabulary"})
-	note.SetUpdatedAt(time.Now())
+	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	noteEntity, _ := note.NewBuilder().WithUserID(1).WithGUID(guid).WithNoteTypeID(1).WithTags([]string{"vocabulary"}).WithUpdatedAt(time.Now()).Build()
 
 	// Add new tag
-	originalUpdatedAt := note.GetUpdatedAt()
+	originalUpdatedAt := noteEntity.GetUpdatedAt()
 	time.Sleep(1 * time.Millisecond)
-	note.AddTag("spanish")
-	if !note.HasTag("spanish") {
+	noteEntity.AddTag("spanish")
+	if !noteEntity.HasTag("spanish") {
 		t.Errorf("Note.AddTag() failed to add tag")
 	}
 
 	// Verify UpdatedAt was changed when adding new tag
-	if note.GetUpdatedAt().Equal(originalUpdatedAt) {
+	if noteEntity.GetUpdatedAt().Equal(originalUpdatedAt) {
 		t.Errorf("Note.AddTag() should update UpdatedAt when adding new tag")
 	}
 
 	// Try to add duplicate tag (should not add duplicate)
-	note.AddTag("spanish")
-	if len(note.GetTags()) != 2 {
-		t.Errorf("Note.AddTag() added duplicate tag, want 2 tags, got %d", len(note.GetTags()))
+	noteEntity.AddTag("spanish")
+	if len(noteEntity.GetTags()) != 2 {
+		t.Errorf("Note.AddTag() added duplicate tag, want 2 tags, got %d", len(noteEntity.GetTags()))
 	}
 
 	// Try to add empty tag
-	originalTagCount := len(note.GetTags())
-	note.AddTag("")
-	if len(note.GetTags()) != originalTagCount {
+	originalTagCount := len(noteEntity.GetTags())
+	noteEntity.AddTag("")
+	if len(noteEntity.GetTags()) != originalTagCount {
 		t.Errorf("Note.AddTag() should not add empty tag")
 	}
 }
 
 func TestNote_RemoveTag(t *testing.T) {
-	note := &entities.Note{}
-	note.SetTags([]string{"vocabulary", "spanish", "verb"})
-	note.SetUpdatedAt(time.Now())
+	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	noteEntity, _ := note.NewBuilder().WithUserID(1).WithGUID(guid).WithNoteTypeID(1).WithTags([]string{"vocabulary", "spanish", "verb"}).WithUpdatedAt(time.Now()).Build()
 
 	// Remove existing tag
-	note.RemoveTag("spanish")
-	if note.HasTag("spanish") {
+	noteEntity.RemoveTag("spanish")
+	if noteEntity.HasTag("spanish") {
 		t.Errorf("Note.RemoveTag() failed to remove tag")
 	}
 
-	if len(note.GetTags()) != 2 {
-		t.Errorf("Note.RemoveTag() wrong tag count, want 2, got %d", len(note.GetTags()))
+	if len(noteEntity.GetTags()) != 2 {
+		t.Errorf("Note.RemoveTag() wrong tag count, want 2, got %d", len(noteEntity.GetTags()))
 	}
 
 	// Try to remove non-existent tag
-	originalTagCount := len(note.GetTags())
-	note.RemoveTag("nonexistent")
-	if len(note.GetTags()) != originalTagCount {
+	originalTagCount := len(noteEntity.GetTags())
+	noteEntity.RemoveTag("nonexistent")
+	if len(noteEntity.GetTags()) != originalTagCount {
 		t.Errorf("Note.RemoveTag() should not change tag count for non-existent tag")
 	}
 
 	// Remove tag case insensitive
-	note.RemoveTag("VOCABULARY")
-	if note.HasTag("vocabulary") {
+	noteEntity.RemoveTag("VOCABULARY")
+	if noteEntity.HasTag("vocabulary") {
 		t.Errorf("Note.RemoveTag() should be case insensitive")
 	}
 }
 
 func TestNote_IsMarked(t *testing.T) {
-	markedNote := &entities.Note{}
-	markedNote.SetMarked(true)
+	guid1, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	markedNote, _ := note.NewBuilder().WithUserID(1).WithGUID(guid1).WithNoteTypeID(1).WithMarked(true).Build()
 	if !markedNote.IsMarked() {
 		t.Errorf("Note.IsMarked() = false, want true for marked note")
 	}
 
-	unmarkedNote := &entities.Note{}
-	unmarkedNote.SetMarked(false)
+	guid2, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440001")
+	unmarkedNote, _ := note.NewBuilder().WithUserID(1).WithGUID(guid2).WithNoteTypeID(1).WithMarked(false).Build()
 	if unmarkedNote.IsMarked() {
 		t.Errorf("Note.IsMarked() = true, want false for unmarked note")
 	}
 }
 
 func TestNote_Mark(t *testing.T) {
-	note := &entities.Note{}
-	note.SetMarked(false)
-	note.SetUpdatedAt(time.Now())
+	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	noteEntity, _ := note.NewBuilder().WithUserID(1).WithGUID(guid).WithNoteTypeID(1).WithMarked(false).WithUpdatedAt(time.Now()).Build()
 
-	note.Mark()
-	if !note.GetMarked() {
+	noteEntity.Mark()
+	if !noteEntity.GetMarked() {
 		t.Errorf("Note.Mark() failed to mark note")
 	}
 
 	// Mark again (should be idempotent)
-	note.Mark()
-	if !note.GetMarked() {
+	noteEntity.Mark()
+	if !noteEntity.GetMarked() {
 		t.Errorf("Note.Mark() failed to keep note marked")
 	}
 }
 
 func TestNote_Unmark(t *testing.T) {
-	note := &entities.Note{}
-	note.SetMarked(true)
-	note.SetUpdatedAt(time.Now())
+	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	noteEntity, _ := note.NewBuilder().WithUserID(1).WithGUID(guid).WithNoteTypeID(1).WithMarked(true).WithUpdatedAt(time.Now()).Build()
 
-	note.Unmark()
-	if note.GetMarked() {
+	noteEntity.Unmark()
+	if noteEntity.GetMarked() {
 		t.Errorf("Note.Unmark() failed to unmark note")
 	}
 
 	// Unmark again (should be idempotent)
-	note.Unmark()
-	if note.GetMarked() {
+	noteEntity.Unmark()
+	if noteEntity.GetMarked() {
 		t.Errorf("Note.Unmark() failed to keep note unmarked")
 	}
 }
 
 func TestNote_GetFirstField(t *testing.T) {
 	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
-	note := &entities.Note{}
-	note.SetGUID(guid)
-	note.SetFieldsJSON(`{"Front": "Hello", "Back": "Hola"}`)
+	noteEntity, _ := note.NewBuilder().WithUserID(1).WithGUID(guid).WithNoteTypeID(1).WithFieldsJSON(`{"Front": "Hello", "Back": "Hola"}`).Build()
 
 	// GetFirstField returns empty string as parsing should be done in service layer
 	// This is expected behavior per the implementation
-	result := note.GetFirstField()
+	result := noteEntity.GetFirstField()
 	if result != "" {
 		t.Errorf("Note.GetFirstField() = %v, want empty string (parsing in service layer)", result)
 	}
 }
-
-

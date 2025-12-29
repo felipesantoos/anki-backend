@@ -4,29 +4,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 )
 
 func TestDeck_IsActive(t *testing.T) {
 	tests := []struct {
 		name     string
-		deck     *entities.Deck
+		deck     *deck.Deck
 		expected bool
 	}{
 		{
 			name: "active deck",
-			deck: func() *entities.Deck {
-				d := &entities.Deck{}
-				d.SetDeletedAt(nil)
+			deck: func() *deck.Deck {
+				d, _ := deck.NewBuilder().WithUserID(1).WithName("Test Deck").WithDeletedAt(nil).Build()
 				return d
 			}(),
 			expected: true,
 		},
 		{
 			name: "deleted deck",
-			deck: func() *entities.Deck {
-				d := &entities.Deck{}
-				d.SetDeletedAt(timePtr(time.Now()))
+			deck: func() *deck.Deck {
+				now := time.Now()
+				d, _ := deck.NewBuilder().WithUserID(1).WithName("Test Deck").WithDeletedAt(&now).Build()
 				return d
 			}(),
 			expected: false,
@@ -46,23 +45,22 @@ func TestDeck_IsActive(t *testing.T) {
 func TestDeck_IsRoot(t *testing.T) {
 	tests := []struct {
 		name     string
-		deck     *entities.Deck
+		deck     *deck.Deck
 		expected bool
 	}{
 		{
 			name: "root deck",
-			deck: func() *entities.Deck {
-				d := &entities.Deck{}
-				d.SetParentID(nil)
+			deck: func() *deck.Deck {
+				d, _ := deck.NewBuilder().WithUserID(1).WithName("Root Deck").WithParentID(nil).Build()
 				return d
 			}(),
 			expected: true,
 		},
 		{
 			name: "child deck",
-			deck: func() *entities.Deck {
-				d := &entities.Deck{}
-				d.SetParentID(int64Ptr(1))
+			deck: func() *deck.Deck {
+				parentID := int64(1)
+				d, _ := deck.NewBuilder().WithUserID(1).WithName("Child Deck").WithParentID(&parentID).Build()
 				return d
 			}(),
 			expected: false,
@@ -80,26 +78,20 @@ func TestDeck_IsRoot(t *testing.T) {
 }
 
 func TestDeck_GetFullPath(t *testing.T) {
-	parent := &entities.Deck{}
-	parent.SetID(1)
-	parent.SetName("Parent")
+	parent, _ := deck.NewBuilder().WithID(1).WithUserID(1).WithName("Parent").Build()
 	
-	child := &entities.Deck{}
-	child.SetID(2)
-	child.SetName("Child")
-	child.SetParentID(int64Ptr(1))
+	parentID := int64(1)
+	child, _ := deck.NewBuilder().WithID(2).WithUserID(1).WithName("Child").WithParentID(&parentID).Build()
 	
-	grandchild := &entities.Deck{}
-	grandchild.SetID(3)
-	grandchild.SetName("Grandchild")
-	grandchild.SetParentID(int64Ptr(2))
+	childID := int64(2)
+	grandchild, _ := deck.NewBuilder().WithID(3).WithUserID(1).WithName("Grandchild").WithParentID(&childID).Build()
 
-	allDecks := []*entities.Deck{parent, child, grandchild}
+	allDecks := []*deck.Deck{parent, child, grandchild}
 
 	tests := []struct {
 		name     string
-		deck     *entities.Deck
-		decks    []*entities.Deck
+		deck     *deck.Deck
+		decks    []*deck.Deck
 		expected string
 	}{
 		{
@@ -122,11 +114,9 @@ func TestDeck_GetFullPath(t *testing.T) {
 		},
 		{
 			name: "orphaned deck",
-			deck: func() *entities.Deck {
-				d := &entities.Deck{}
-				d.SetID(4)
-				d.SetName("Orphan")
-				d.SetParentID(int64Ptr(999))
+			deck: func() *deck.Deck {
+				orphanParentID := int64(999)
+				d, _ := deck.NewBuilder().WithID(4).WithUserID(1).WithName("Orphan").WithParentID(&orphanParentID).Build()
 				return d
 			}(),
 			decks:    allDecks,
@@ -145,15 +135,14 @@ func TestDeck_GetFullPath(t *testing.T) {
 }
 
 func TestDeck_CanDelete(t *testing.T) {
-	deck := &entities.Deck{}
-	deck.SetDeletedAt(nil)
+	d, _ := deck.NewBuilder().WithUserID(1).WithName("Test Deck").WithDeletedAt(nil).Build()
 
-	if !deck.CanDelete() {
+	if !d.CanDelete() {
 		t.Errorf("Deck.CanDelete() = false, want true for active deck")
 	}
 
-	deletedDeck := &entities.Deck{}
-	deletedDeck.SetDeletedAt(timePtr(time.Now()))
+	now := time.Now()
+	deletedDeck, _ := deck.NewBuilder().WithUserID(1).WithName("Test Deck").WithDeletedAt(&now).Build()
 
 	if deletedDeck.CanDelete() {
 		t.Errorf("Deck.CanDelete() = true, want false for deleted deck")
@@ -163,23 +152,22 @@ func TestDeck_CanDelete(t *testing.T) {
 func TestDeck_HasParent(t *testing.T) {
 	tests := []struct {
 		name     string
-		deck     *entities.Deck
+		deck     *deck.Deck
 		expected bool
 	}{
 		{
 			name: "has parent",
-			deck: func() *entities.Deck {
-				d := &entities.Deck{}
-				d.SetParentID(int64Ptr(1))
+			deck: func() *deck.Deck {
+				parentID := int64(1)
+				d, _ := deck.NewBuilder().WithUserID(1).WithName("Child Deck").WithParentID(&parentID).Build()
 				return d
 			}(),
 			expected: true,
 		},
 		{
 			name: "no parent",
-			deck: func() *entities.Deck {
-				d := &entities.Deck{}
-				d.SetParentID(nil)
+			deck: func() *deck.Deck {
+				d, _ := deck.NewBuilder().WithUserID(1).WithName("Root Deck").WithParentID(nil).Build()
 				return d
 			}(),
 			expected: false,

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	userEntity "github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
@@ -19,28 +19,28 @@ import (
 
 // mockUserRepository is a mock implementation of IUserRepository
 type mockUserRepository struct {
-	saveFunc       func(ctx context.Context, user *entities.User) error
-	findByEmailFunc func(ctx context.Context, email string) (*entities.User, error)
-	findByIDFunc   func(ctx context.Context, id int64) (*entities.User, error)
+	saveFunc       func(ctx context.Context, user *userEntity.User) error
+	findByEmailFunc func(ctx context.Context, email string) (*userEntity.User, error)
+	findByIDFunc   func(ctx context.Context, id int64) (*userEntity.User, error)
 	existsByEmailFunc func(ctx context.Context, email string) (bool, error)
-	updateFunc    func(ctx context.Context, user *entities.User) error
+	updateFunc    func(ctx context.Context, user *userEntity.User) error
 }
 
-func (m *mockUserRepository) Save(ctx context.Context, user *entities.User) error {
+func (m *mockUserRepository) Save(ctx context.Context, u *userEntity.User) error {
 	if m.saveFunc != nil {
 		return m.saveFunc(ctx, user)
 	}
 	return nil
 }
 
-func (m *mockUserRepository) FindByEmail(ctx context.Context, email string) (*entities.User, error) {
+func (m *mockUserRepository) FindByEmail(ctx context.Context, email string) (*userEntity.User, error) {
 	if m.findByEmailFunc != nil {
 		return m.findByEmailFunc(ctx, email)
 	}
 	return nil, nil
 }
 
-func (m *mockUserRepository) FindByID(ctx context.Context, id int64) (*entities.User, error) {
+func (m *mockUserRepository) FindByID(ctx context.Context, id int64) (*userEntity.User, error) {
 	if m.findByIDFunc != nil {
 		return m.findByIDFunc(ctx, id)
 	}
@@ -54,7 +54,7 @@ func (m *mockUserRepository) ExistsByEmail(ctx context.Context, email string) (b
 	return false, nil
 }
 
-func (m *mockUserRepository) Update(ctx context.Context, user *entities.User) error {
+func (m *mockUserRepository) Update(ctx context.Context, u *userEntity.User) error {
 	if m.updateFunc != nil {
 		return m.updateFunc(ctx, user)
 	}
@@ -251,9 +251,9 @@ func TestAuthService_Register_Success(t *testing.T) {
 		existsByEmailFunc: func(ctx context.Context, email string) (bool, error) {
 			return false, nil // Email doesn't exist
 		},
-		saveFunc: func(ctx context.Context, user *entities.User) error {
+		saveFunc: func(ctx context.Context, u *userEntity.User) error {
 			// Simulate setting ID after save
-			user.ID = 1
+			u.SetID(1)
 			return nil
 		},
 	}
@@ -283,15 +283,15 @@ func TestAuthService_Register_Success(t *testing.T) {
 		t.Fatalf("Register() user = nil, want non-nil")
 	}
 
-	if user.ID == 0 {
+	if user.GetID() == 0 {
 		t.Errorf("Register() user.ID = 0, want non-zero")
 	}
 
-	if user.Email.Value() != "user@example.com" {
-		t.Errorf("Register() user.Email = %v, want 'user@example.com'", user.Email.Value())
+	if user.GetEmail().Value() != "user@example.com" {
+		t.Errorf("Register() user.Email = %v, want 'user@example.com'", user.GetEmail().Value())
 	}
 
-	if user.EmailVerified {
+	if user.GetEmailVerified() {
 		t.Errorf("Register() user.EmailVerified = true, want false")
 	}
 }
@@ -396,9 +396,9 @@ func TestAuthService_Register_CreatesDefaultDeck(t *testing.T) {
 		existsByEmailFunc: func(ctx context.Context, email string) (bool, error) {
 			return false, nil
 		},
-		saveFunc: func(ctx context.Context, user *entities.User) error {
-			user.ID = 1
-			createdUserID = user.ID
+		saveFunc: func(ctx context.Context, u *userEntity.User) error {
+			u.SetID(1)
+			createdUserID = u.GetID()
 			return nil
 		},
 	}
@@ -439,8 +439,8 @@ func TestAuthService_Register_PublishesEvent(t *testing.T) {
 		existsByEmailFunc: func(ctx context.Context, email string) (bool, error) {
 			return false, nil
 		},
-		saveFunc: func(ctx context.Context, user *entities.User) error {
-			user.ID = 1
+		saveFunc: func(ctx context.Context, u *userEntity.User) error {
+			u.SetID(1)
 			return nil
 		},
 	}
@@ -479,23 +479,24 @@ func TestAuthService_Login_Success(t *testing.T) {
 	// Create a test user with password
 	emailVO, _ := valueobjects.NewEmail("user@example.com")
 	passwordVO, _ := valueobjects.NewPassword("password123")
-	testUser := &entities.User{
-		ID:           1,
-		Email:        emailVO,
-		PasswordHash: passwordVO,
-		EmailVerified: false,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}
+	now := time.Now()
+	testUser, _ := userEntity.NewBuilder().
+		WithID(1).
+		WithEmail(emailVO).
+		WithPasswordHash(passwordVO).
+		WithEmailVerified(false).
+		WithCreatedAt(now).
+		WithUpdatedAt(now).
+		Build()
 
 	userRepo := &mockUserRepository{
-		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+		findByEmailFunc: func(ctx context.Context, email string) (*userEntity.User, error) {
 			if email == "user@example.com" {
 				return testUser, nil
 			}
 			return nil, nil
 		},
-		saveFunc: func(ctx context.Context, user *entities.User) error {
+		saveFunc: func(ctx context.Context, u *userEntity.User) error {
 			return nil
 		},
 	}
@@ -552,13 +553,13 @@ func TestAuthService_Login_InvalidCredentials(t *testing.T) {
 		name        string
 		email       string
 		password    string
-		findByEmail func(ctx context.Context, email string) (*entities.User, error)
+		findByEmail func(ctx context.Context, email string) (*userEntity.User, error)
 	}{
 		{
 			name:     "user not found",
 			email:    "nonexistent@example.com",
 			password: "password123",
-			findByEmail: func(ctx context.Context, email string) (*entities.User, error) {
+			findByEmail: func(ctx context.Context, email string) (*userEntity.User, error) {
 				return nil, nil
 			},
 		},
@@ -566,10 +567,10 @@ func TestAuthService_Login_InvalidCredentials(t *testing.T) {
 			name:     "wrong password",
 			email:    "user@example.com",
 			password: "wrongpassword",
-			findByEmail: func(ctx context.Context, email string) (*entities.User, error) {
+			findByEmail: func(ctx context.Context, email string) (*userEntity.User, error) {
 				emailVO, _ := valueobjects.NewEmail("user@example.com")
 				passwordVO, _ := valueobjects.NewPassword("password123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:           1,
 					Email:        emailVO,
 					PasswordHash: passwordVO,
@@ -635,7 +636,7 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 	
 	// Create a test user
 	emailVO, _ := valueobjects.NewEmail("user@example.com")
-	testUser := &entities.User{
+	testUser := userEntity.NewBuilder()
 		ID:           1,
 		Email:        emailVO,
 		EmailVerified: false,
@@ -654,7 +655,7 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 	deletedKeys := make(map[string]bool)
 
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			if id == testUser.ID {
 				return testUser, nil
 			}
@@ -753,7 +754,7 @@ func TestAuthService_RefreshToken_TokenNotInCache(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	
 	emailVO, _ := valueobjects.NewEmail("user@example.com")
-	testUser := &entities.User{
+	testUser := userEntity.NewBuilder()
 		ID:           1,
 		Email:        emailVO,
 		CreatedAt:    time.Now(),
@@ -794,7 +795,7 @@ func TestAuthService_RefreshToken_WrongTokenType(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	
 	emailVO, _ := valueobjects.NewEmail("user@example.com")
-	testUser := &entities.User{
+	testUser := userEntity.NewBuilder()
 		ID:           1,
 		Email:        emailVO,
 		CreatedAt:    time.Now(),
@@ -976,11 +977,11 @@ func TestAuthService_VerifyEmail_Success(t *testing.T) {
 
 	userUpdated := false
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         email,
 					PasswordHash:  password,
@@ -991,7 +992,7 @@ func TestAuthService_VerifyEmail_Success(t *testing.T) {
 			}
 			return nil, errors.New("user not found")
 		},
-		updateFunc: func(ctx context.Context, user *entities.User) error {
+		updateFunc: func(ctx context.Context, user *userEntity.User) error {
 			userUpdated = true
 			if !user.EmailVerified {
 				t.Errorf("User should be marked as verified")
@@ -1052,11 +1053,11 @@ func TestAuthService_VerifyEmail_AlreadyVerified(t *testing.T) {
 	}
 
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				user := &entities.User{
+				user := userEntity.NewBuilder()
 					ID:            1,
 					Email:         email,
 					PasswordHash:  password,
@@ -1091,11 +1092,11 @@ func TestAuthService_ResendVerificationEmail_Success(t *testing.T) {
 	
 	emailSent := false
 	userRepo := &mockUserRepository{
-		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+		findByEmailFunc: func(ctx context.Context, email string) (*userEntity.User, error) {
 			if email == "test@example.com" {
 				emailVO, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         emailVO,
 					PasswordHash:  password,
@@ -1143,11 +1144,11 @@ func TestAuthService_ResendVerificationEmail_AlreadyVerified(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	
 	userRepo := &mockUserRepository{
-		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+		findByEmailFunc: func(ctx context.Context, email string) (*userEntity.User, error) {
 			if email == "test@example.com" {
 				emailVO, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         emailVO,
 					PasswordHash:  password,
@@ -1183,7 +1184,7 @@ func TestAuthService_ResendVerificationEmail_UserNotFound(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	
 	userRepo := &mockUserRepository{
-		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+		findByEmailFunc: func(ctx context.Context, email string) (*userEntity.User, error) {
 			return nil, errors.New("user not found")
 		},
 	}
@@ -1212,11 +1213,11 @@ func TestAuthService_RequestPasswordReset_Success(t *testing.T) {
 	
 	emailSent := false
 	userRepo := &mockUserRepository{
-		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+		findByEmailFunc: func(ctx context.Context, email string) (*userEntity.User, error) {
 			if email == "test@example.com" {
 				emailVO, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         emailVO,
 					PasswordHash:  password,
@@ -1268,7 +1269,7 @@ func TestAuthService_RequestPasswordReset_EmailNotFound(t *testing.T) {
 	
 	emailSent := false
 	userRepo := &mockUserRepository{
-		findByEmailFunc: func(ctx context.Context, email string) (*entities.User, error) {
+		findByEmailFunc: func(ctx context.Context, email string) (*userEntity.User, error) {
 			return nil, nil // User not found
 		},
 	}
@@ -1342,11 +1343,11 @@ func TestAuthService_ResetPassword_Success(t *testing.T) {
 
 	userUpdated := false
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         email,
 					PasswordHash:  password,
@@ -1357,10 +1358,10 @@ func TestAuthService_ResetPassword_Success(t *testing.T) {
 			}
 			return nil, errors.New("user not found")
 		},
-		updateFunc: func(ctx context.Context, user *entities.User) error {
+		updateFunc: func(ctx context.Context, u *userEntity.User) error {
 			userUpdated = true
 			// Verify password was updated
-			if !user.VerifyPassword("newpassword123") {
+			if !u.VerifyPassword("newpassword123") {
 				t.Errorf("ResetPassword() should update password correctly")
 			}
 			return nil
@@ -1448,7 +1449,7 @@ func TestAuthService_ResetPassword_UserNotFound(t *testing.T) {
 	}
 
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			return nil, nil // User not found
 		},
 	}
@@ -1482,11 +1483,11 @@ func TestAuthService_ResetPassword_InvalidPassword(t *testing.T) {
 	}
 
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         email,
 					PasswordHash:  password,
@@ -1523,11 +1524,11 @@ func TestAuthService_ChangePassword_Success(t *testing.T) {
 
 	userUpdated := false
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         email,
 					PasswordHash:  password,
@@ -1538,10 +1539,10 @@ func TestAuthService_ChangePassword_Success(t *testing.T) {
 			}
 			return nil, errors.New("user not found")
 		},
-		updateFunc: func(ctx context.Context, user *entities.User) error {
+		updateFunc: func(ctx context.Context, u *userEntity.User) error {
 			userUpdated = true
 			// Verify password was updated
-			if !user.VerifyPassword("newpassword123") {
+			if !u.VerifyPassword("newpassword123") {
 				t.Errorf("ChangePassword() should update password correctly")
 			}
 			return nil
@@ -1571,11 +1572,11 @@ func TestAuthService_ChangePassword_InvalidCurrentPassword(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         email,
 					PasswordHash:  password,
@@ -1611,7 +1612,7 @@ func TestAuthService_ChangePassword_UserNotFound(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			return nil, nil // User not found
 		},
 	}
@@ -1639,11 +1640,11 @@ func TestAuthService_ChangePassword_InvalidNewPassword(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 
 	userRepo := &mockUserRepository{
-		findByIDFunc: func(ctx context.Context, id int64) (*entities.User, error) {
+		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return &entities.User{
+				return userEntity.NewBuilder()
 					ID:            1,
 					Email:         email,
 					PasswordHash:  password,

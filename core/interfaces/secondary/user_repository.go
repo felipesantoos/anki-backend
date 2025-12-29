@@ -3,7 +3,7 @@ package secondary
 import (
 	"context"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 )
 
 // IUserRepository defines the interface for user data persistence
@@ -11,15 +11,15 @@ type IUserRepository interface {
 	// Save saves or updates a user in the database
 	// If the user has an ID, it updates the existing user
 	// If the user has no ID, it creates a new user and returns it with the ID set
-	Save(ctx context.Context, user *entities.User) error
+	Save(ctx context.Context, userEntity *user.User) error
 
 	// FindByEmail finds a user by email address
 	// Returns the user if found, nil if not found, or an error if the query fails
-	FindByEmail(ctx context.Context, email string) (*entities.User, error)
+	FindByEmail(ctx context.Context, email string) (*user.User, error)
 
 	// FindByID finds a user by ID
 	// Returns the user if found, nil if not found, or an error if the query fails
-	FindByID(ctx context.Context, id int64) (*entities.User, error)
+	FindByID(ctx context.Context, id int64) (*user.User, error)
 
 	// ExistsByEmail checks if a user with the given email already exists
 	// Returns true if exists, false if not, or an error if the query fails
@@ -27,5 +27,5 @@ type IUserRepository interface {
 
 	// Update updates an existing user in the database
 	// The user must have a valid ID
-	Update(ctx context.Context, user *entities.User) error
+	Update(ctx context.Context, userEntity *user.User) error
 }

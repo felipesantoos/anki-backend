@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 )
 
 // IAuthService defines the interface for authentication operations
@@ -13,7 +13,7 @@ type IAuthService interface {
 	// It validates the email uniqueness, hashes the password, creates the user,
 	// creates a default deck, and publishes a UserRegistered event
 	// Returns the created user or an error if registration fails
-	Register(ctx context.Context, email string, password string) (*entities.User, error)
+	Register(ctx context.Context, email string, password string) (*user.User, error)
 
 	// Login authenticates a user and returns access and refresh tokens
 	// It validates credentials, generates JWT tokens, stores refresh token in Redis,

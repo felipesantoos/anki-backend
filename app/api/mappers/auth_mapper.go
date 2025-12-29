@@ -3,7 +3,7 @@ package mappers
 import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 )
 
 // ToDomain converts a RegisterRequest DTO to domain entities
@@ -13,7 +13,7 @@ func ToDomain(req *request.RegisterRequest) (string, string) {
 }
 
 // ToRegisterResponse converts a User entity to RegisterResponse DTO
-func ToRegisterResponse(user *entities.User) *response.RegisterResponse {
+func ToRegisterResponse(user *user.User) *response.RegisterResponse {
 	return &response.RegisterResponse{
 		User: response.UserData{
 			ID:            user.GetID(),
@@ -25,7 +25,7 @@ func ToRegisterResponse(user *entities.User) *response.RegisterResponse {
 }
 
 // ToLoginResponse converts a User entity and tokens to LoginResponse DTO
-func ToLoginResponse(user *entities.User, accessToken, refreshToken string, expiresIn int) *response.LoginResponse {
+func ToLoginResponse(user *user.User, accessToken, refreshToken string, expiresIn int) *response.LoginResponse {
 	return &response.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
@@ -37,28 +37,39 @@ func TestOwnership_DeckRepository_Isolation(t *testing.T) {
 	require.NoError(t, err)
 	password1, err := valueobjects.NewPassword("password123")
 	require.NoError(t, err)
-	user1 := &entities.User{}
-	user1.SetEmail(email1)
-	user1.SetPasswordHash(password1)
-	user1.SetEmailVerified(false)
-	now := time.Now()
-	user1.SetCreatedAt(now)
-	user1.SetUpdatedAt(now)
+	// Create user 1 using builder
+	user1, err := user.NewBuilder().
+		WithID(0).
+		WithEmail(email1).
+		WithPasswordHash(password1).
+		WithEmailVerified(false).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		WithLastLoginAt(nil).
+		WithDeletedAt(nil).
+		Build()
+	require.NoError(t, err, "Failed to build user 1")
 	err = userRepo.Save(ctx, user1)
 	require.NoError(t, err, "Failed to create user 1")
 	user1ID := user1.GetID()
 
-	// Create user 2
+	// Create user 2 using builder
 	email2, err := valueobjects.NewEmail(user2Email)
 	require.NoError(t, err)
 	password2, err := valueobjects.NewPassword("password123")
 	require.NoError(t, err)
-	user2 := &entities.User{}
-	user2.SetEmail(email2)
-	user2.SetPasswordHash(password2)
-	user2.SetEmailVerified(false)
-	user2.SetCreatedAt(now)
-	user2.SetUpdatedAt(now)
+	now := time.Now()
+	user2, err := user.NewBuilder().
+		WithID(0).
+		WithEmail(email2).
+		WithPasswordHash(password2).
+		WithEmailVerified(false).
+		WithCreatedAt(now).
+		WithUpdatedAt(now).
+		WithLastLoginAt(nil).
+		WithDeletedAt(nil).
+		Build()
+	require.NoError(t, err, "Failed to build user 2")
 	err = userRepo.Save(ctx, user2)
 	require.NoError(t, err, "Failed to create user 2")
 	user2ID := user2.GetID()

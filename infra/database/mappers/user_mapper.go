@@ -3,13 +3,13 @@ package mappers
 import (
 	"database/sql"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/infra/database/models"
 )
 
 // ToDomain converts a UserModel (database representation) to a User entity (domain representation)
-func ToDomain(model *models.UserModel) (*entities.User, error) {
+func ToDomain(model *models.UserModel) (*user.User, error) {
 	if model == nil {
 		return nil, nil
 	}
@@ -21,50 +21,50 @@ func ToDomain(model *models.UserModel) (*entities.User, error) {
 	}
 
 	// Create password from hash (no validation needed, already hashed)
-	password := valueobjects.NewPasswordFromHash(model.PasswordHash)
+	passwordHash := valueobjects.NewPasswordFromHash(model.PasswordHash)
 
-	user := &entities.User{}
-	user.SetID(model.ID)
-	user.SetEmail(email)
-	user.SetPasswordHash(password)
-	user.SetEmailVerified(model.EmailVerified)
-	user.SetCreatedAt(model.CreatedAt)
-	user.SetUpdatedAt(model.UpdatedAt)
+	userEntity := &user.User{}
+	userEntity.SetID(model.ID)
+	userEntity.SetEmail(email)
+	userEntity.SetPasswordHash(passwordHash)
+	userEntity.SetEmailVerified(model.EmailVerified)
+	userEntity.SetCreatedAt(model.CreatedAt)
+	userEntity.SetUpdatedAt(model.UpdatedAt)
 
 	// Handle nullable fields
 	if model.LastLoginAt.Valid {
-		user.SetLastLoginAt(&model.LastLoginAt.Time)
+		userEntity.SetLastLoginAt(&model.LastLoginAt.Time)
 	}
 
 	if model.DeletedAt.Valid {
-		user.SetDeletedAt(&model.DeletedAt.Time)
+		userEntity.SetDeletedAt(&model.DeletedAt.Time)
 	}
 
-	return user, nil
+	return userEntity, nil
 }
 
 // ToModel converts a User entity (domain representation) to a UserModel (database representation)
-func ToModel(user *entities.User) *models.UserModel {
+func ToModel(userEntity *user.User) *models.UserModel {
 	model := &models.UserModel{
-		ID:            user.GetID(),
-		Email:         user.GetEmail().Value(),
-		PasswordHash:  user.GetPasswordHash().Hash(),
-		EmailVerified: user.GetEmailVerified(),
-		CreatedAt:     user.GetCreatedAt(),
-		UpdatedAt:     user.GetUpdatedAt(),
+		ID:            userEntity.GetID(),
+		Email:         userEntity.GetEmail().Value(),
+		PasswordHash:  userEntity.GetPasswordHash().Hash(),
+		EmailVerified: userEntity.GetEmailVerified(),
+		CreatedAt:     userEntity.GetCreatedAt(),
+		UpdatedAt:     userEntity.GetUpdatedAt(),
 	}
 
 	// Handle nullable fields
-	if user.GetLastLoginAt() != nil {
+	if userEntity.GetLastLoginAt() != nil {
 		model.LastLoginAt = sql.NullTime{
-			Time:  *user.GetLastLoginAt(),
+			Time:  *userEntity.GetLastLoginAt(),
 			Valid: true,
 		}
 	}
 
-	if user.GetDeletedAt() != nil {
+	if userEntity.GetDeletedAt() != nil {
 		model.DeletedAt = sql.NullTime{
-			Time:  *user.GetDeletedAt(),
+			Time:  *userEntity.GetDeletedAt(),
 			Valid: true,
 		}
 	}

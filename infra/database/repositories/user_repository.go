@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/infra/database/mappers"
 	"github.com/felipesantos/anki-backend/infra/database/models"
@@ -27,8 +27,8 @@ func NewUserRepository(db *sql.DB) secondary.IUserRepository {
 // Save saves or updates a user in the database
 // If the user has an ID, it updates the existing user
 // If the user has no ID, it creates a new user and returns it with the ID set
-func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
-	if user.GetID() == 0 {
+func (r *UserRepository) Save(ctx context.Context, userEntity *user.User) error {
+	if userEntity.GetID() == 0 {
 		// Insert new user
 		query := `
 			INSERT INTO users (email, password_hash, email_verified, created_at, updated_at, last_login_at, deleted_at)
@@ -36,7 +36,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
 			RETURNING id
 		`
 
-		model := mappers.ToModel(user)
+		model := mappers.ToModel(userEntity)
 		var lastLoginAt, deletedAt sql.NullTime
 
 		if model.LastLoginAt.Valid {
@@ -57,7 +57,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
 			deletedAt,
 		).Scan(&userID)
 		if err == nil {
-			user.SetID(userID)
+			userEntity.SetID(userID)
 		}
 
 		if err != nil {
@@ -74,7 +74,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
 		WHERE id = $7
 	`
 
-	model := mappers.ToModel(user)
+	model := mappers.ToModel(userEntity)
 	var lastLoginAt, deletedAt sql.NullTime
 
 	if model.LastLoginAt.Valid {
@@ -111,14 +111,14 @@ func (r *UserRepository) Save(ctx context.Context, user *entities.User) error {
 }
 
 // Update updates an existing user in the database
-func (r *UserRepository) Update(ctx context.Context, user *entities.User) error {
+func (r *UserRepository) Update(ctx context.Context, userEntity *user.User) error {
 	// Use Save which handles both create and update
-	return r.Save(ctx, user)
+	return r.Save(ctx, userEntity)
 }
 
 // FindByEmail finds a user by email address
 // Returns the user if found, nil if not found, or an error if the query fails
-func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entities.User, error) {
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*user.User, error) {
 	query := `
 		SELECT id, email, password_hash, email_verified, created_at, updated_at, last_login_at, deleted_at
 		FROM users
@@ -154,7 +154,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entiti
 
 // FindByID finds a user by ID
 // Returns the user if found, nil if not found, or an error if the query fails
-func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entities.User, error) {
+func (r *UserRepository) FindByID(ctx context.Context, id int64) (*user.User, error) {
 	query := `
 		SELECT id, email, password_hash, email_verified, created_at, updated_at, last_login_at, deleted_at
 		FROM users

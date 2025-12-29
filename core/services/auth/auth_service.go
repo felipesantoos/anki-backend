@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
@@ -90,7 +90,7 @@ func buildAccessTokenBlacklistKey(token string) string {
 // Register creates a new user account with email and password
 // It validates the email uniqueness, hashes the password, creates the user,
 // creates a default deck, and publishes a UserRegistered event
-func (s *AuthService) Register(ctx context.Context, email string, password string) (*entities.User, error) {
+func (s *AuthService) Register(ctx context.Context, email string, password string) (*user.User, error) {
 	// 1. Validate and create email value object
 	emailVO, err := valueobjects.NewEmail(email)
 	if err != nil {
@@ -112,26 +112,30 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 		return nil, fmt.Errorf("%w: %v", ErrInvalidPassword, err)
 	}
 
-	// 4. Create user entity
+	// 4. Create user entity using builder
 	now := time.Now()
-	user := &entities.User{}
-	user.SetID(0) // Will be set after save
-	user.SetEmail(emailVO)
-	user.SetPasswordHash(passwordVO)
-	user.SetEmailVerified(false)
-	user.SetCreatedAt(now)
-	user.SetUpdatedAt(now)
-	user.SetLastLoginAt(nil)
-	user.SetDeletedAt(nil)
+	userEntity, err := user.NewBuilder().
+		WithID(0). // Will be set after save
+		WithEmail(emailVO).
+		WithPasswordHash(passwordVO).
+		WithEmailVerified(false).
+		WithCreatedAt(now).
+		WithUpdatedAt(now).
+		WithLastLoginAt(nil).
+		WithDeletedAt(nil).
+		Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user entity: %w", err)
+	}
 
 	// 5. Save user to database
-	err = s.userRepo.Save(ctx, user)
+	err = s.userRepo.Save(ctx, userEntity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
 	// 6. Create default deck for the user
-	_, err = s.deckRepo.CreateDefaultDeck(ctx, user.GetID())
+	_, err = s.deckRepo.CreateDefaultDeck(ctx, userEntity.GetID())
 	if err != nil {
 		// If deck creation fails, we should log the error but not fail the registration
 		// The user was already created, so we return success but log the deck creation failure
@@ -141,8 +145,8 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 
 	// 7. Publish UserRegistered event
 	event := &domainEvents.UserRegistered{
-		UserID:    user.GetID(),
-		Email:     user.GetEmail().Value(),
+		UserID:    userEntity.GetID(),
+		Email:     userEntity.GetEmail().Value(),
 		Timestamp: now,
 	}
 
@@ -152,7 +156,7 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 		// For now, we'll just continue
 	}
 
-	return user, nil
+	return userEntity, nil
 }
 
 // Login authenticates a user and returns access and refresh tokens

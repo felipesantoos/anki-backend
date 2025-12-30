@@ -53,3 +53,84 @@ func TestProfileService_EnableSync(t *testing.T) {
 	})
 }
 
+func TestProfileService_Update(t *testing.T) {
+	mockRepo := new(MockProfileRepository)
+	service := profileSvc.NewProfileService(mockRepo)
+	ctx := context.Background()
+	userID := int64(1)
+	profileID := int64(100)
+
+	t.Run("Success", func(t *testing.T) {
+		p, _ := profile.NewBuilder().WithID(profileID).WithUserID(userID).WithName("OldName").Build()
+		newName := "NewName"
+
+		mockRepo.On("FindByID", ctx, userID, profileID).Return(p, nil).Once()
+		mockRepo.On("FindByName", ctx, userID, newName).Return(nil, nil).Once()
+		mockRepo.On("Update", ctx, userID, profileID, mock.Anything).Return(nil).Once()
+
+		result, err := service.Update(ctx, userID, profileID, newName)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, newName, result.GetName())
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("ProfileNotFound", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, profileID).Return(nil, nil).Once()
+
+		result, err := service.Update(ctx, userID, profileID, "NewName")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "profile not found")
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("NameAlreadyExists", func(t *testing.T) {
+		p, _ := profile.NewBuilder().WithID(profileID).WithUserID(userID).WithName("OldName").Build()
+		newName := "ExistingName"
+		otherProfile, _ := profile.NewBuilder().WithID(200).WithUserID(userID).WithName(newName).Build()
+
+		mockRepo.On("FindByID", ctx, userID, profileID).Return(p, nil).Once()
+		mockRepo.On("FindByName", ctx, userID, newName).Return(otherProfile, nil).Once()
+
+		result, err := service.Update(ctx, userID, profileID, newName)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "already exists")
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestProfileService_Delete(t *testing.T) {
+	mockRepo := new(MockProfileRepository)
+	service := profileSvc.NewProfileService(mockRepo)
+	ctx := context.Background()
+	userID := int64(1)
+	profileID := int64(100)
+
+	t.Run("Success", func(t *testing.T) {
+		p, _ := profile.NewBuilder().WithID(profileID).WithUserID(userID).WithName("ToDele").Build()
+
+		mockRepo.On("FindByID", ctx, userID, profileID).Return(p, nil).Once()
+		mockRepo.On("Delete", ctx, userID, profileID).Return(nil).Once()
+
+		err := service.Delete(ctx, userID, profileID)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("ProfileNotFound", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, profileID).Return(nil, nil).Once()
+
+		err := service.Delete(ctx, userID, profileID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "profile not found")
+		mockRepo.AssertExpectations(t)
+	})
+}
+

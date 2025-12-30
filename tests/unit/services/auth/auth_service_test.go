@@ -8,6 +8,7 @@ import (
 	"time"
 
 	userEntity "github.com/felipesantos/anki-backend/core/domain/entities/user"
+	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
@@ -28,7 +29,7 @@ type mockUserRepository struct {
 
 func (m *mockUserRepository) Save(ctx context.Context, u *userEntity.User) error {
 	if m.saveFunc != nil {
-		return m.saveFunc(ctx, user)
+		return m.saveFunc(ctx, u)
 	}
 	return nil
 }
@@ -56,8 +57,12 @@ func (m *mockUserRepository) ExistsByEmail(ctx context.Context, email string) (b
 
 func (m *mockUserRepository) Update(ctx context.Context, u *userEntity.User) error {
 	if m.updateFunc != nil {
-		return m.updateFunc(ctx, user)
+		return m.updateFunc(ctx, u)
 	}
+	return nil
+}
+
+func (m *mockUserRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
@@ -71,6 +76,34 @@ func (m *mockDeckRepository) CreateDefaultDeck(ctx context.Context, userID int64
 		return m.createDefaultDeckFunc(ctx, userID)
 	}
 	return 1, nil
+}
+
+func (m *mockDeckRepository) FindByID(ctx context.Context, userID int64, deckID int64) (*deck.Deck, error) {
+	return nil, nil
+}
+
+func (m *mockDeckRepository) FindByUserID(ctx context.Context, userID int64) ([]*deck.Deck, error) {
+	return nil, nil
+}
+
+func (m *mockDeckRepository) FindByParentID(ctx context.Context, userID int64, parentID int64) ([]*deck.Deck, error) {
+	return nil, nil
+}
+
+func (m *mockDeckRepository) Save(ctx context.Context, userID int64, deckEntity *deck.Deck) error {
+	return nil
+}
+
+func (m *mockDeckRepository) Update(ctx context.Context, userID int64, deckID int64, deckEntity *deck.Deck) error {
+	return nil
+}
+
+func (m *mockDeckRepository) Delete(ctx context.Context, userID int64, deckID int64) error {
+	return nil
+}
+
+func (m *mockDeckRepository) Exists(ctx context.Context, userID int64, name string, parentID *int64) (bool, error) {
+	return false, nil
 }
 
 // mockEventBus is a mock implementation of IEventBus
@@ -160,6 +193,7 @@ func (m *mockCacheRepository) TTL(ctx context.Context, key string) (time.Duratio
 // mockSessionService is a mock implementation of SessionService for testing
 type mockSessionService struct {
 	createSessionWithMetadataFunc func(ctx context.Context, userID int64, metadata session.SessionMetadata) (string, error)
+	deleteSessionFunc            func(ctx context.Context, sessionID string) error
 	getUserSessionsFunc          func(ctx context.Context, userID int64) ([]map[string]interface{}, error)
 	deleteUserSessionFunc         func(ctx context.Context, userID int64, sessionID string) error
 	deleteAllUserSessionsFunc     func(ctx context.Context, userID int64) error
@@ -174,6 +208,13 @@ func (m *mockSessionService) CreateSessionWithMetadata(ctx context.Context, user
 		return m.createSessionWithMetadataFunc(ctx, userID, metadata)
 	}
 	return "mock-session-id", nil
+}
+
+func (m *mockSessionService) DeleteSession(ctx context.Context, sessionID string) error {
+	if m.deleteSessionFunc != nil {
+		return m.deleteSessionFunc(ctx, sessionID)
+	}
+	return nil
 }
 
 func (m *mockSessionService) GetUserSessions(ctx context.Context, userID int64) ([]map[string]interface{}, error) {
@@ -537,8 +578,8 @@ func TestAuthService_Login_Success(t *testing.T) {
 		t.Errorf("Login() TokenType = %v, want 'Bearer'", resp.TokenType)
 	}
 
-	if resp.User.ID != testUser.ID {
-		t.Errorf("Login() User.ID = %v, want %v", resp.User.ID, testUser.ID)
+	if resp.User.ID != testUser.GetID() {
+		t.Errorf("Login() User.ID = %v, want %v", resp.User.ID, testUser.GetID())
 	}
 
 	if resp.ExpiresIn <= 0 {
@@ -570,13 +611,13 @@ func TestAuthService_Login_InvalidCredentials(t *testing.T) {
 			findByEmail: func(ctx context.Context, email string) (*userEntity.User, error) {
 				emailVO, _ := valueobjects.NewEmail("user@example.com")
 				passwordVO, _ := valueobjects.NewPassword("password123")
-				return userEntity.NewBuilder()
-					ID:           1,
-					Email:        emailVO,
-					PasswordHash: passwordVO,
-					CreatedAt:    time.Now(),
-					UpdatedAt:    time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(emailVO).
+					WithPasswordHash(passwordVO).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			},
 		},
 	}
@@ -591,7 +632,7 @@ func TestAuthService_Login_InvalidCredentials(t *testing.T) {
 			eventBus := &mockEventBus{}
 
 			emailSvc := &mockEmailService{}
-			sessionSvc := createTestSessionService()
+			sessionSvc := &mockSessionService{}
 	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 			ctx := context.Background()
@@ -636,16 +677,16 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 	
 	// Create a test user
 	emailVO, _ := valueobjects.NewEmail("user@example.com")
-	testUser := userEntity.NewBuilder()
-		ID:           1,
-		Email:        emailVO,
-		EmailVerified: false,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}
+	testUser, _ := userEntity.NewBuilder().
+		WithID(1).
+		WithEmail(emailVO).
+		WithEmailVerified(false).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
 
 	// Generate a refresh token
-	refreshToken, err := jwtSvc.GenerateRefreshToken(testUser.ID)
+	refreshToken, err := jwtSvc.GenerateRefreshToken(testUser.GetID())
 	if err != nil {
 		t.Fatalf("Failed to generate refresh token: %v", err)
 	}
@@ -656,7 +697,7 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 
 	userRepo := &mockUserRepository{
 		findByIDFunc: func(ctx context.Context, id int64) (*userEntity.User, error) {
-			if id == testUser.ID {
+			if id == testUser.GetID() {
 				return testUser, nil
 			}
 			return nil, nil
@@ -683,8 +724,9 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+			emailSvc := &mockEmailService{}
+			sessionSvc := &mockSessionService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	resp, err := service.RefreshToken(ctx, refreshToken)
@@ -735,8 +777,9 @@ func TestAuthService_RefreshToken_InvalidToken(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+			emailSvc := &mockEmailService{}
+			sessionSvc := &mockSessionService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.RefreshToken(ctx, "invalid-token")
@@ -754,14 +797,14 @@ func TestAuthService_RefreshToken_TokenNotInCache(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	
 	emailVO, _ := valueobjects.NewEmail("user@example.com")
-	testUser := userEntity.NewBuilder()
-		ID:           1,
-		Email:        emailVO,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}
+	testUser, _ := userEntity.NewBuilder().
+		WithID(1).
+		WithEmail(emailVO).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
 
-	refreshToken, err := jwtSvc.GenerateRefreshToken(testUser.ID)
+	refreshToken, err := jwtSvc.GenerateRefreshToken(testUser.GetID())
 	if err != nil {
 		t.Fatalf("Failed to generate refresh token: %v", err)
 	}
@@ -776,8 +819,9 @@ func TestAuthService_RefreshToken_TokenNotInCache(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+			emailSvc := &mockEmailService{}
+			sessionSvc := &mockSessionService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err = service.RefreshToken(ctx, refreshToken)
@@ -795,15 +839,15 @@ func TestAuthService_RefreshToken_WrongTokenType(t *testing.T) {
 	jwtSvc := createTestJWTService(t)
 	
 	emailVO, _ := valueobjects.NewEmail("user@example.com")
-	testUser := userEntity.NewBuilder()
-		ID:           1,
-		Email:        emailVO,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}
+	testUser, _ := userEntity.NewBuilder().
+		WithID(1).
+		WithEmail(emailVO).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
 
 	// Generate access token instead of refresh token
-	accessToken, err := jwtSvc.GenerateAccessToken(testUser.ID)
+	accessToken, err := jwtSvc.GenerateAccessToken(testUser.GetID())
 	if err != nil {
 		t.Fatalf("Failed to generate access token: %v", err)
 	}
@@ -817,8 +861,9 @@ func TestAuthService_RefreshToken_WrongTokenType(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+			emailSvc := &mockEmailService{}
+			sessionSvc := &mockSessionService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err = service.RefreshToken(ctx, accessToken)
@@ -864,8 +909,9 @@ func TestAuthService_Logout_Success(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+			emailSvc := &mockEmailService{}
+			sessionSvc := &mockSessionService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.Logout(ctx, accessToken, refreshToken)
@@ -897,8 +943,9 @@ func TestAuthService_Logout_InvalidToken(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+			emailSvc := &mockEmailService{}
+			sessionSvc := &mockSessionService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	// Logout should still succeed even with invalid tokens (idempotent operation)
@@ -931,8 +978,9 @@ func TestAuthService_Logout_AccessTokenOnly(t *testing.T) {
 	deckRepo := &mockDeckRepository{}
 	eventBus := &mockEventBus{}
 
-	emailSvc := &mockEmailService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+			emailSvc := &mockEmailService{}
+			sessionSvc := &mockSessionService{}
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.Logout(ctx, accessToken, "")
@@ -981,20 +1029,20 @@ func TestAuthService_VerifyEmail_Success(t *testing.T) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         email,
-					PasswordHash:  password,
-					EmailVerified: false,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(email).
+					WithPasswordHash(password).
+					WithEmailVerified(false).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
 		updateFunc: func(ctx context.Context, user *userEntity.User) error {
 			userUpdated = true
-			if !user.EmailVerified {
+			if !user.GetEmailVerified() {
 				t.Errorf("User should be marked as verified")
 			}
 			return nil
@@ -1005,8 +1053,8 @@ func TestAuthService_VerifyEmail_Success(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.VerifyEmail(ctx, token)
@@ -1028,8 +1076,8 @@ func TestAuthService_VerifyEmail_InvalidToken(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.VerifyEmail(ctx, "invalid-token")
@@ -1057,14 +1105,14 @@ func TestAuthService_VerifyEmail_AlreadyVerified(t *testing.T) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				user := userEntity.NewBuilder()
-					ID:            1,
-					Email:         email,
-					PasswordHash:  password,
-					EmailVerified: true, // Already verified
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}
+				user, _ := userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(email).
+					WithPasswordHash(password).
+					WithEmailVerified(true). // Already verified
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 				return user, nil
 			}
 			return nil, errors.New("user not found")
@@ -1075,8 +1123,8 @@ func TestAuthService_VerifyEmail_AlreadyVerified(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
-
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.VerifyEmail(ctx, token)
@@ -1096,14 +1144,14 @@ func TestAuthService_ResendVerificationEmail_Success(t *testing.T) {
 			if email == "test@example.com" {
 				emailVO, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         emailVO,
-					PasswordHash:  password,
-					EmailVerified: false,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(emailVO).
+					WithPasswordHash(password).
+					WithEmailVerified(false).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
@@ -1126,7 +1174,8 @@ func TestAuthService_ResendVerificationEmail_Success(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ResendVerificationEmail(ctx, "test@example.com")
@@ -1148,14 +1197,14 @@ func TestAuthService_ResendVerificationEmail_AlreadyVerified(t *testing.T) {
 			if email == "test@example.com" {
 				emailVO, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         emailVO,
-					PasswordHash:  password,
-					EmailVerified: true, // Already verified
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(emailVO).
+					WithPasswordHash(password).
+					WithEmailVerified(true). // Already verified
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
@@ -1166,7 +1215,8 @@ func TestAuthService_ResendVerificationEmail_AlreadyVerified(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ResendVerificationEmail(ctx, "test@example.com")
@@ -1194,7 +1244,8 @@ func TestAuthService_ResendVerificationEmail_UserNotFound(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ResendVerificationEmail(ctx, "nonexistent@example.com")
@@ -1217,14 +1268,14 @@ func TestAuthService_RequestPasswordReset_Success(t *testing.T) {
 			if email == "test@example.com" {
 				emailVO, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("password123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         emailVO,
-					PasswordHash:  password,
-					EmailVerified: true,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(emailVO).
+					WithPasswordHash(password).
+					WithEmailVerified(true).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
@@ -1250,7 +1301,8 @@ func TestAuthService_RequestPasswordReset_Success(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.RequestPasswordReset(ctx, "test@example.com")
@@ -1285,7 +1337,8 @@ func TestAuthService_RequestPasswordReset_EmailNotFound(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.RequestPasswordReset(ctx, "nonexistent@example.com")
@@ -1317,7 +1370,8 @@ func TestAuthService_RequestPasswordReset_InvalidEmail(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.RequestPasswordReset(ctx, "invalid-email")
@@ -1347,14 +1401,14 @@ func TestAuthService_ResetPassword_Success(t *testing.T) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         email,
-					PasswordHash:  password,
-					EmailVerified: true,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(email).
+					WithPasswordHash(password).
+					WithEmailVerified(true).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
@@ -1373,7 +1427,8 @@ func TestAuthService_ResetPassword_Success(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.ResetPassword(ctx, token, "newpassword123")
@@ -1396,7 +1451,8 @@ func TestAuthService_ResetPassword_InvalidToken(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ResetPassword(ctx, "invalid-token", "newpassword123")
@@ -1425,7 +1481,8 @@ func TestAuthService_ResetPassword_WrongTokenType(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.ResetPassword(ctx, token, "newpassword123")
@@ -1459,7 +1516,8 @@ func TestAuthService_ResetPassword_UserNotFound(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.ResetPassword(ctx, token, "newpassword123")
@@ -1487,14 +1545,14 @@ func TestAuthService_ResetPassword_InvalidPassword(t *testing.T) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         email,
-					PasswordHash:  password,
-					EmailVerified: true,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(email).
+					WithPasswordHash(password).
+					WithEmailVerified(true).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
@@ -1505,7 +1563,8 @@ func TestAuthService_ResetPassword_InvalidPassword(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.ResetPassword(ctx, token, "short") // Password too short
@@ -1528,14 +1587,14 @@ func TestAuthService_ChangePassword_Success(t *testing.T) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         email,
-					PasswordHash:  password,
-					EmailVerified: true,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(email).
+					WithPasswordHash(password).
+					WithEmailVerified(true).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
@@ -1554,7 +1613,8 @@ func TestAuthService_ChangePassword_Success(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ChangePassword(ctx, 1, "oldpassword123", "newpassword123")
@@ -1576,14 +1636,14 @@ func TestAuthService_ChangePassword_InvalidCurrentPassword(t *testing.T) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         email,
-					PasswordHash:  password,
-					EmailVerified: true,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(email).
+					WithPasswordHash(password).
+					WithEmailVerified(true).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
@@ -1594,7 +1654,8 @@ func TestAuthService_ChangePassword_InvalidCurrentPassword(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ChangePassword(ctx, 1, "wrongpassword123", "newpassword123")
@@ -1622,7 +1683,8 @@ func TestAuthService_ChangePassword_UserNotFound(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ChangePassword(ctx, 999, "oldpassword123", "newpassword123")
@@ -1644,14 +1706,14 @@ func TestAuthService_ChangePassword_InvalidNewPassword(t *testing.T) {
 			if id == 1 {
 				email, _ := valueobjects.NewEmail("test@example.com")
 				password, _ := valueobjects.NewPassword("oldpassword123")
-				return userEntity.NewBuilder()
-					ID:            1,
-					Email:         email,
-					PasswordHash:  password,
-					EmailVerified: true,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+				return userEntity.NewBuilder().
+					WithID(1).
+					WithEmail(email).
+					WithPasswordHash(password).
+					WithEmailVerified(true).
+					WithCreatedAt(time.Now()).
+					WithUpdatedAt(time.Now()).
+					Build()
 			}
 			return nil, errors.New("user not found")
 		},
@@ -1662,7 +1724,8 @@ func TestAuthService_ChangePassword_InvalidNewPassword(t *testing.T) {
 	eventBus := &mockEventBus{}
 	cacheRepo := &mockCacheRepository{}
 
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc)
+	sessionSvc := createTestSessionService()
+	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ChangePassword(ctx, 1, "oldpassword123", "short") // Password too short

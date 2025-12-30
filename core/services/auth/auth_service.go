@@ -47,7 +47,7 @@ type AuthService struct {
 	jwtService    *jwt.JWTService
 	cacheRepo     secondary.ICacheRepository
 	emailService  primary.IEmailService
-	sessionService *session.SessionService
+	sessionService primary.ISessionService
 }
 
 // NewAuthService creates a new AuthService instance
@@ -58,7 +58,7 @@ func NewAuthService(
 	jwtService *jwt.JWTService,
 	cacheRepo secondary.ICacheRepository,
 	emailService primary.IEmailService,
-	sessionService *session.SessionService,
+	sessionService primary.ISessionService,
 ) primary.IAuthService {
 	return &AuthService{
 		userRepo:       userRepo,

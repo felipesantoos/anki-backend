@@ -206,5 +206,30 @@ func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	return exists, nil
 }
 
+// Delete deletes a user account (soft delete)
+func (r *UserRepository) Delete(ctx context.Context, id int64) error {
+	query := `
+		UPDATE users
+		SET deleted_at = NOW(), updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+
+	result, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return errors.New("user not found or already deleted")
+	}
+
+	return nil
+}
+
 // Ensure UserRepository implements IUserRepository
 var _ secondary.IUserRepository = (*UserRepository)(nil)

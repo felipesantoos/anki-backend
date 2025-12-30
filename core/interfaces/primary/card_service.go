@@ -1,0 +1,41 @@
+package primary
+
+import (
+	"context"
+
+	"github.com/felipesantos/anki-backend/core/domain/entities/card"
+)
+
+// ICardService defines the interface for card management operations
+type ICardService interface {
+	// FindByID finds a card by ID
+	FindByID(ctx context.Context, userID int64, id int64) (*card.Card, error)
+
+	// FindByDeckID finds all cards in a deck
+	FindByDeckID(ctx context.Context, userID int64, deckID int64) ([]*card.Card, error)
+
+	// Update updates an existing card
+	Update(ctx context.Context, userID int64, cardEntity *card.Card) error
+
+	// Delete deletes a card
+	Delete(ctx context.Context, userID int64, id int64) error
+
+	// Suspend suspends a card
+	Suspend(ctx context.Context, userID int64, id int64) error
+
+	// Unsuspend unsuspends a card
+	Unsuspend(ctx context.Context, userID int64, id int64) error
+
+	// Bury buries a card
+	Bury(ctx context.Context, userID int64, id int64) error
+
+	// Unbury unburies a card
+	Unbury(ctx context.Context, userID int64, id int64) error
+
+	// SetFlag sets a colored flag on a card
+	SetFlag(ctx context.Context, userID int64, id int64, flag int) error
+
+	// FindDueCards finds cards that are due for review in a deck
+	FindDueCards(ctx context.Context, userID int64, deckID int64) ([]*card.Card, error)
+}
+

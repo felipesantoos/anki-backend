@@ -28,4 +28,7 @@ type IUserRepository interface {
 	// Update updates an existing user in the database
 	// The user must have a valid ID
 	Update(ctx context.Context, userEntity *user.User) error
+
+	// Delete deletes a user by ID (soft delete)
+	Delete(ctx context.Context, id int64) error
 }

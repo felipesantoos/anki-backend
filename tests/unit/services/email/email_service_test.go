@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/felipesantos/anki-backend/config"
-	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/core/services/email"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/stretchr/testify/assert"

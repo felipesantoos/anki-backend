@@ -288,17 +288,13 @@ func TestSessionService_RefreshSession(t *testing.T) {
 }
 
 func TestSessionService_CreateSessionWithMetadata(t *testing.T) {
-	var capturedSessionID string
 	var capturedData map[string]interface{}
-	var capturedTTL time.Duration
 	var capturedUserID int64
 	var capturedSessionIDForSet string
 
 	repo := &mockSessionRepository{
 		setSessionFunc: func(ctx context.Context, sessionID string, data map[string]interface{}, ttl time.Duration) error {
-			capturedSessionID = sessionID
 			capturedData = data
-			capturedTTL = ttl
 			return nil
 		},
 		addUserSessionFunc: func(ctx context.Context, userID int64, sessionID string) error {

@@ -50,3 +50,19 @@ func TestUserService_Update(t *testing.T) {
 	})
 }
 
+func TestUserService_Delete(t *testing.T) {
+	mockRepo := new(MockUserRepository)
+	service := userSvc.NewUserService(mockRepo)
+	ctx := context.Background()
+	userID := int64(1)
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.On("Delete", ctx, userID).Return(nil).Once()
+
+		err := service.Delete(ctx, userID)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+}
+

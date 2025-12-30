@@ -106,15 +106,15 @@ func setupAuthTestDB(t *testing.T) (*postgresInfra.PostgresRepository, func()) {
 	}
 
 	cleanup := func() {
-		// Clean up test data
-		_, err := repoDB.DB.Exec("DELETE FROM decks WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'test%@example.com')")
+		// Clean up test data using TRUNCATE CASCADE to handle dependencies and reset sequences
+		_, err := repoDB.DB.Exec(`
+			TRUNCATE TABLE users, decks, note_types, notes, cards, reviews, media, note_media, 
+			sync_meta, user_preferences, backups, filtered_decks, deck_options_presets, 
+			deletions_log, saved_searches, flag_names, browser_config, undo_history, 
+			shared_decks, shared_deck_ratings, add_ons, check_database_log, profiles RESTART IDENTITY CASCADE;
+		`)
 		if err != nil {
-			t.Logf("Failed to clean up decks: %v", err)
-		}
-		
-		_, err = repoDB.DB.Exec("DELETE FROM users WHERE email LIKE 'test%@example.com'")
-		if err != nil {
-			t.Logf("Failed to clean up users: %v", err)
+			t.Logf("Failed to clean up database: %v", err)
 		}
 		
 		repoDB.Close()

@@ -86,35 +86,15 @@ func setupTestDB(t *testing.T) (*postgresInfra.PostgresRepository, func()) {
 	}
 
 	cleanup := func() {
-		// Clean up test data in reverse order of dependencies
-		// Use TRUNCATE CASCADE for a fresh start or delete carefully
-		tables := []string{
-			"reviews",
-			"cards",
-			"notes",
-			"media",
-			"decks",
-			"filtered_decks",
-			"deck_options_presets",
-			"note_types",
-			"profiles",
-			"browser_configs",
-			"add_ons",
-			"backups",
-			"check_database_logs",
-			"deletion_logs",
-			"flag_names",
-			"saved_searches",
-			"shared_deck_ratings",
-			"shared_decks",
-			"sync_metas",
-			"undo_histories",
-			"user_preferences",
-			"users",
-		}
-
-		for _, table := range tables {
-			_, _ = repoDB.DB.Exec(fmt.Sprintf("DELETE FROM %s", table))
+		// Clean up test data using TRUNCATE CASCADE to handle dependencies and reset sequences
+		_, err := repoDB.DB.Exec(`
+			TRUNCATE TABLE users, decks, note_types, notes, cards, reviews, media, note_media, 
+			sync_meta, user_preferences, backups, filtered_decks, deck_options_presets, 
+			deletions_log, saved_searches, flag_names, browser_config, undo_history, 
+			shared_decks, shared_deck_ratings, add_ons, check_database_log, profiles RESTART IDENTITY CASCADE;
+		`)
+		if err != nil {
+			t.Logf("Failed to clean up database: %v", err)
 		}
 		repoDB.Close()
 	}

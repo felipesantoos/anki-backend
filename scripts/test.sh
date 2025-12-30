@@ -210,7 +210,7 @@ run_integration_tests() {
     fi
 
     echo ""
-    go test -v -cover ./tests/integration/...
+    go test -v -p 1 -count=1 -cover ./tests/integration/...
     local test_exit=$?
 
     # Optionally stop test services after tests (comment out if you want to keep them running)

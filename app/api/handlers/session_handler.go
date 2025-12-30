@@ -9,16 +9,16 @@ import (
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
-	"github.com/felipesantos/anki-backend/core/services/session"
+	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 )
 
 // SessionHandler handles session management HTTP requests
 type SessionHandler struct {
-	sessionService *session.SessionService
+	sessionService primary.ISessionService
 }
 
 // NewSessionHandler creates a new SessionHandler instance
-func NewSessionHandler(sessionService *session.SessionService) *SessionHandler {
+func NewSessionHandler(sessionService primary.ISessionService) *SessionHandler {
 	return &SessionHandler{
 		sessionService: sessionService,
 	}

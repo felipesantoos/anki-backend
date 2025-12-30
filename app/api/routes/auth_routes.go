@@ -7,12 +7,11 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	"github.com/felipesantos/anki-backend/core/services/session"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 )
 
 // RegisterAuthRoutes registers authentication routes on the Echo router
-func RegisterAuthRoutes(e *echo.Echo, authService primary.IAuthService, jwtService *jwt.JWTService, cacheRepo secondary.ICacheRepository, sessionService *session.SessionService) {
+func RegisterAuthRoutes(e *echo.Echo, authService primary.IAuthService, jwtService *jwt.JWTService, cacheRepo secondary.ICacheRepository, sessionService primary.ISessionService) {
 	authHandler := handlers.NewAuthHandler(authService)
 	sessionHandler := handlers.NewSessionHandler(sessionService)
 

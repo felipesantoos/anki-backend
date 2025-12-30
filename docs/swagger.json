@@ -4085,9 +4085,9 @@
                     "example": 0
                 },
                 "state": {
-                    "description": "Current state (0: new, 1: learning, 2: review, 3: relearning)",
-                    "type": "integer",
-                    "example": 0
+                    "description": "Current state (new, learn, review, relearn)",
+                    "type": "string",
+                    "example": "new"
                 },
                 "suspended": {
                     "description": "Whether suspended",
@@ -4345,9 +4345,6 @@
                 "storage_path": {
                     "type": "string"
                 },
-                "updated_at": {
-                    "type": "string"
-                },
                 "user_id": {
                     "type": "integer"
                 }
@@ -4451,12 +4448,12 @@
                     "type": "integer",
                     "example": 1
                 },
-                "last_sync": {
-                    "type": "string"
-                },
                 "name": {
                     "type": "string",
                     "example": "Pessoal"
+                },
+                "sync_enabled": {
+                    "type": "boolean"
                 },
                 "sync_username": {
                     "type": "string",

@@ -37,45 +37,22 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/app/api/routes"
 	"github.com/felipesantos/anki-backend/config"
+	"github.com/felipesantos/anki-backend/dicontainer"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
-	addonService "github.com/felipesantos/anki-backend/core/services/addon"
-	auditService "github.com/felipesantos/anki-backend/core/services/audit"
-	authService "github.com/felipesantos/anki-backend/core/services/auth"
-	backupService "github.com/felipesantos/anki-backend/core/services/backup"
-	cardService "github.com/felipesantos/anki-backend/core/services/card"
-	deckService "github.com/felipesantos/anki-backend/core/services/deck"
 	"github.com/felipesantos/anki-backend/core/services/events"
 	"github.com/felipesantos/anki-backend/core/services/health"
-	"github.com/felipesantos/anki-backend/core/services/jobs"
-	mediaService "github.com/felipesantos/anki-backend/core/services/media"
 	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
-	noteService "github.com/felipesantos/anki-backend/core/services/note"
-	notetypeService "github.com/felipesantos/anki-backend/core/services/notetype"
-	profileService "github.com/felipesantos/anki-backend/core/services/profile"
-	reviewService "github.com/felipesantos/anki-backend/core/services/review"
-	sessionService "github.com/felipesantos/anki-backend/core/services/session"
-	shareddeckService "github.com/felipesantos/anki-backend/core/services/shareddeck"
-	shareddeckratingService "github.com/felipesantos/anki-backend/core/services/shareddeckrating"
 	storageService "github.com/felipesantos/anki-backend/core/services/storage"
-	syncService "github.com/felipesantos/anki-backend/core/services/sync"
 	tracingService "github.com/felipesantos/anki-backend/core/services/tracing"
-	userService "github.com/felipesantos/anki-backend/core/services/user"
-	userpreferencesService "github.com/felipesantos/anki-backend/core/services/userpreferences"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	emailService "github.com/felipesantos/anki-backend/core/services/email"
-	"github.com/felipesantos/anki-backend/infra/database/repositories"
-	infraEmail "github.com/felipesantos/anki-backend/infra/email"
-	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
+	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	"github.com/felipesantos/anki-backend/infra/jobs/handlers"
 	infraJobs "github.com/felipesantos/anki-backend/infra/jobs"
 	"github.com/felipesantos/anki-backend/infra/postgres"
 	"github.com/felipesantos/anki-backend/infra/redis"
-	"github.com/felipesantos/anki-backend/pkg/database"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
-	// Uncomment to enable automatic migrations on startup
 	"github.com/felipesantos/anki-backend/pkg/migrate"
 )
 
@@ -83,426 +60,156 @@ func main() {
 	// 1. Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		// If unable to load config, use default logger
 		logger.InitLogger("INFO", "development")
 		log := logger.GetLogger()
-		
-		// Provide more detailed error messages for validation errors
 		if validationErr, ok := err.(*config.ValidationError); ok {
 			log.Error("Configuration validation failed", "error", validationErr.Error())
 			fmt.Fprintf(os.Stderr, "\n❌ Configuration Error: %s\n\n", validationErr.Error())
 			os.Exit(1)
 		}
 		if requiredErr, ok := err.(*config.RequiredEnvError); ok {
-			log.Error("Missing required environment variables", 
-				"environment", requiredErr.Environment,
-				"variables", requiredErr.Variables,
-				"error", requiredErr.Error())
+			log.Error("Missing required environment variables", "environment", requiredErr.Environment, "variables", requiredErr.Variables, "error", requiredErr.Error())
 			fmt.Fprintf(os.Stderr, "\n❌ Missing Required Environment Variables:\n")
 			fmt.Fprintf(os.Stderr, "   Environment: %s\n", requiredErr.Environment)
 			fmt.Fprintf(os.Stderr, "   Missing variables: %s\n\n", strings.Join(requiredErr.Variables, ", "))
-			fmt.Fprintf(os.Stderr, "   Please set these variables and try again.\n")
-			fmt.Fprintf(os.Stderr, "   See env.example for reference.\n\n")
 			os.Exit(1)
 		}
-		
 		log.Error("Failed to load configuration", "error", err)
 		fmt.Fprintf(os.Stderr, "\n❌ Failed to load configuration: %v\n\n", err)
 		os.Exit(1)
 	}
 
-	// 2. Initialize logger with configuration
+	// 2. Initialize logger
 	logger.InitLogger(cfg.Logger.Level, cfg.Logger.Environment)
 	log := logger.GetLogger()
+	log.Info("Application starting", "environment", cfg.Logger.Environment, "log_level", cfg.Logger.Level)
 
-	log.Info("Application starting",
-		"environment", cfg.Logger.Environment,
-		"log_level", cfg.Logger.Level,
-	)
-
-	// 2.5. Initialize Tracing Service (if enabled)
+	// 3. Initialize tracing
 	var tracingSvc *tracingService.TracingService
 	if cfg.Tracing.Enabled {
-		log.Info("Initializing tracing system",
-			"service_name", cfg.Tracing.ServiceName,
-			"jaeger_endpoint", cfg.Tracing.JaegerEndpoint,
-			"sample_rate", cfg.Tracing.SampleRate,
-			"console_enabled", cfg.Tracing.ConsoleEnabled,
-		)
-
 		tracingSvc, err = tracingService.NewTracingService(cfg.Tracing)
 		if err != nil {
 			log.Error("Failed to initialize tracing service", "error", err)
 			os.Exit(1)
 		}
-
-		log.Info("Tracing system initialized successfully")
-	} else {
-		log.Info("Tracing system is disabled")
+		log.Info("Tracing system initialized")
 	}
 
-	// 3. Initialize database connection
+	// 4. Initialize database
 	db, err := postgres.NewPostgresRepository(cfg.Database, log)
 	if err != nil {
 		log.Error("Failed to initialize database connection", "error", err)
 		os.Exit(1)
 	}
-
-	// Optional: Run migrations on startup
-	// Uncomment the lines below to run migrations automatically
-	// In production, it's usually better to run migrations manually via CI/CD
-	//
 	if err := migrate.RunMigrations(cfg.Database, log); err != nil {
-	    log.Error("Failed to run migrations", "error", err)
-	    os.Exit(1)
+		log.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
 	}
 
-	// 4. Initialize Redis connection
+	// 5. Initialize Redis
 	rdb, err := redis.NewRedisRepository(cfg.Redis, log)
 	if err != nil {
 		log.Error("Failed to initialize Redis connection", "error", err)
-		// Redis is optional for some applications, but we'll treat it as an error
-		// If optional, you can comment out os.Exit(1)
 		os.Exit(1)
 	}
 
-	// 5. Initialize Storage Service
-	storageRepo, err := storageService.NewStorageRepository(cfg.Storage, log)
+	// 6. Initialize JWT
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
 	if err != nil {
-		log.Error("Failed to initialize storage repository", "error", err)
+		log.Error("Failed to initialize JWT service", "error", err)
 		os.Exit(1)
 	}
-	// Storage service is reserved for future use in handlers/routes
-	_ = storageService.NewStorageService(storageRepo, log)
-	log.Info("Storage service initialized", "type", cfg.Storage.Type)
 
-	// 6. Initialize Health Service
-	healthService := health.NewHealthService(db, rdb)
-
-	// 6.5. Initialize Metrics Service (if enabled)
-	var metricsSvc *metricsService.MetricsService
-	if cfg.Metrics.Enabled {
-		log.Info("Initializing metrics system",
-			"path", cfg.Metrics.Path,
-			"enable_http", cfg.Metrics.EnableHTTPMetrics,
-			"enable_system", cfg.Metrics.EnableSystemMetrics,
-			"enable_business", cfg.Metrics.EnableBusinessMetrics,
-		)
-
-		metricsSvc = metricsService.NewMetricsService()
-
-		// Register HTTP metrics
-		if cfg.Metrics.EnableHTTPMetrics {
-			if err := metricsSvc.RegisterHTTPMetrics(); err != nil {
-				log.Error("Failed to register HTTP metrics", "error", err)
-				os.Exit(1)
-			}
-			log.Info("HTTP metrics registered")
-		}
-
-		// Register system metrics
-		if cfg.Metrics.EnableSystemMetrics {
-			if err := metricsSvc.RegisterSystemMetrics(); err != nil {
-				log.Error("Failed to register system metrics", "error", err)
-				os.Exit(1)
-			}
-
-			// Register database collector
-			if err := metricsSvc.RegisterDatabaseCollector(db.DB); err != nil {
-				log.Error("Failed to register database collector", "error", err)
-				os.Exit(1)
-			}
-
-			// Register Redis collector
-			if err := metricsSvc.RegisterRedisCollector(rdb.Client); err != nil {
-				log.Error("Failed to register Redis collector", "error", err)
-				os.Exit(1)
-			}
-
-			log.Info("System metrics registered")
-		}
-
-		// Register business metrics
-		if cfg.Metrics.EnableBusinessMetrics {
-			if err := metricsSvc.RegisterBusinessMetrics(); err != nil {
-				log.Error("Failed to register business metrics", "error", err)
-				os.Exit(1)
-			}
-			log.Info("Business metrics registered")
-		}
-
-		log.Info("Metrics system initialized successfully")
-	} else {
-		log.Info("Metrics system is disabled")
-	}
-
-	// 7. Initialize Jobs System (if enabled)
-	var workerPool *infraJobs.WorkerPool
-	var scheduler *infraJobs.Scheduler
-
-	if cfg.Jobs.Enabled {
-		log.Info("Initializing jobs system",
-			"worker_count", cfg.Jobs.WorkerCount,
-			"max_retries", cfg.Jobs.MaxRetries,
-			"queue_key", cfg.Jobs.RedisQueueKey,
-			"redis_db", cfg.Jobs.RedisDB,
-		)
-
-		// Create Redis client for jobs (use same connection or separate DB)
-		jobRedisClient := rdb.Client
-		if cfg.Jobs.RedisDB != cfg.Redis.DB {
-			// If using different DB, we need a new client connection
-			// For simplicity, we'll use the same client but note that Redis DB can be changed per command
-			// In production, you might want separate Redis instance for jobs
-			log.Info("Using different Redis DB for jobs",
-				"cache_db", cfg.Redis.DB,
-				"jobs_db", cfg.Jobs.RedisDB,
-			)
-		}
-
-		// Create job queue
-		jobQueue := infraJobs.NewRedisQueue(jobRedisClient, cfg.Jobs.RedisQueueKey)
-
-		// Create job registry
-		jobRegistry := infraJobs.NewJobRegistry()
-
-		// Register job handlers (example handlers - replace with actual handlers)
-		exampleHandler := handlers.NewExampleHandler("example_job")
-		if err := jobRegistry.Register(exampleHandler); err != nil {
-			log.Error("Failed to register job handler", "handler", "example_job", "error", err)
-			os.Exit(1)
-		}
-
-		// Create worker pool
-		workerPool = infraJobs.NewWorkerPool(
-			cfg.Jobs.WorkerCount,
-			jobQueue,
-			jobRegistry,
-			log,
-			cfg.Jobs.MaxRetries,
-			cfg.Jobs.RetryDelaySeconds,
-		)
-
-		// Create scheduler
-		scheduler = infraJobs.NewScheduler(jobQueue, log)
-
-		// Create services (reserved for future use in handlers/routes)
-		// These services can be used to enqueue jobs or schedule recurring tasks from HTTP handlers
-		_ = jobs.NewJobService(jobQueue, cfg.Jobs.MaxRetries)      // Reserved for future use
-		_ = jobs.NewSchedulerService(scheduler)                    // Reserved for future use
-
-		// Start worker pool
-		workerPool.Start()
-
-		// Start scheduler
-		scheduler.Start()
-
-		log.Info("Jobs system initialized successfully")
-	} else {
-		log.Info("Jobs system is disabled")
-	}
-
-	// 7. Initialize Events System (if enabled)
+	// 7. Initialize Events System
 	var eventService *events.EventService
 	var eventBus secondary.IEventBus
-
 	if cfg.Events.Enabled {
-		log.Info("Initializing events system",
-			"worker_count", cfg.Events.WorkerCount,
-			"queue_size", cfg.Events.QueueSize,
-		)
-
-		// Create in-memory event bus
-		eventBus = infraEvents.NewInMemoryEventBus(
-			cfg.Events.WorkerCount,
-			cfg.Events.QueueSize,
-			log,
-		)
-
-		// Create event service
+		eventBus = infraEvents.NewInMemoryEventBus(cfg.Events.WorkerCount, cfg.Events.QueueSize, log)
 		eventService = events.NewEventService(eventBus)
-
-		// Register example handlers
-		exampleHandler := eventHandlers.NewExampleHandler(domainEvents.CardReviewedEventType)
-		if err := eventService.Subscribe(domainEvents.CardReviewedEventType, exampleHandler); err != nil {
-			log.Error("Failed to subscribe event handler", "event_type", domainEvents.CardReviewedEventType, "error", err)
-			os.Exit(1)
-		}
-
-		// Subscribe to other event types
-		noteHandler := eventHandlers.NewExampleHandler(domainEvents.NoteCreatedEventType)
-		if err := eventService.Subscribe(domainEvents.NoteCreatedEventType, noteHandler); err != nil {
-			log.Error("Failed to subscribe event handler", "event_type", domainEvents.NoteCreatedEventType, "error", err)
-			os.Exit(1)
-		}
-
-		deckHandler := eventHandlers.NewExampleHandler(domainEvents.DeckUpdatedEventType)
-		if err := eventService.Subscribe(domainEvents.DeckUpdatedEventType, deckHandler); err != nil {
-			log.Error("Failed to subscribe event handler", "event_type", domainEvents.DeckUpdatedEventType, "error", err)
-			os.Exit(1)
-		}
-
-		// Start event bus
 		if err := eventBus.Start(); err != nil {
 			log.Error("Failed to start event bus", "error", err)
 			os.Exit(1)
 		}
-
-		// EventService is reserved for future use in handlers/routes
-		_ = eventService
-
-		log.Info("Events system initialized successfully")
+		log.Info("Events system initialized")
 	} else {
-		// Create a minimal event bus for auth service if events are disabled
-		// This ensures AuthService always has an event bus available
-		log.Info("Events system is disabled, creating minimal event bus for auth service")
 		eventBus = infraEvents.NewInMemoryEventBus(1, 10, log)
 		if err := eventBus.Start(); err != nil {
-			log.Error("Failed to start minimal event bus for auth", "error", err)
+			log.Error("Failed to start minimal event bus", "error", err)
 			os.Exit(1)
 		}
 	}
 
-	// 8. Initialize HTTP server (Echo)
+	// 8. Initialize DI Package
+	dicontainer.Init(db.DB, rdb, eventBus, jwtSvc, cfg, log)
+
+	// 9. Initialize other infra services (Metrics, Health, Jobs, Storage)
+	healthService := health.NewHealthService(db, rdb)
+	
+	var metricsSvc *metricsService.MetricsService
+	if cfg.Metrics.Enabled {
+		metricsSvc = metricsService.NewMetricsService()
+		if cfg.Metrics.EnableHTTPMetrics {
+			metricsSvc.RegisterHTTPMetrics()
+		}
+		if cfg.Metrics.EnableSystemMetrics {
+			metricsSvc.RegisterSystemMetrics()
+			metricsSvc.RegisterDatabaseCollector(db.DB)
+			metricsSvc.RegisterRedisCollector(rdb.Client)
+		}
+		if cfg.Metrics.EnableBusinessMetrics {
+			metricsSvc.RegisterBusinessMetrics()
+		}
+	}
+
+	var workerPool *infraJobs.WorkerPool
+	var scheduler *infraJobs.Scheduler
+	if cfg.Jobs.Enabled {
+		jobQueue := infraJobs.NewRedisQueue(rdb.Client, cfg.Jobs.RedisQueueKey)
+		jobRegistry := infraJobs.NewJobRegistry()
+		jobRegistry.Register(handlers.NewExampleHandler("example_job"))
+		workerPool = infraJobs.NewWorkerPool(cfg.Jobs.WorkerCount, jobQueue, jobRegistry, log, cfg.Jobs.MaxRetries, cfg.Jobs.RetryDelaySeconds)
+		scheduler = infraJobs.NewScheduler(jobQueue, log)
+		workerPool.Start()
+		scheduler.Start()
+	}
+
+	storageRepo, _ := storageService.NewStorageRepository(cfg.Storage, log)
+	_ = storageService.NewStorageService(storageRepo, log)
+
+	// 10. Setup Echo server
 	e := echo.New()
 	e.HideBanner = true
-
-	// Configure custom error handler (must be set before routes)
 	e.HTTPErrorHandler = middlewares.CustomHTTPErrorHandler
 
-	// Middleware
 	e.Use(middleware.Recover())
-	e.Use(middlewares.CORSMiddleware(cfg.CORS)) // CORS should be early in the chain to handle preflight requests
+	e.Use(middlewares.CORSMiddleware(cfg.CORS))
 	e.Use(middlewares.RequestIDMiddleware())
-	
-	// Tracing middleware (after RequestID, before Metrics)
-	// This ensures request IDs are available for span attributes
 	if cfg.Tracing.Enabled {
 		e.Use(middlewares.TracingMiddlewareWithCustomAttributes())
-		log.Info("Tracing middleware registered")
 	}
-	
-	// Metrics middleware (after RequestID and Tracing, before RateLimit)
-	// This ensures we have request IDs for logging and metrics are collected before rate limiting
 	if cfg.Metrics.Enabled && cfg.Metrics.EnableHTTPMetrics {
 		e.Use(middlewares.MetricsMiddleware(metricsSvc))
 	}
-	
-	// Rate limiting middleware (after logging would go, but we'll add logging middleware later)
-	// Rate limiting should come after RequestID to have request IDs in logs
 	e.Use(middlewares.RateLimitingMiddleware(cfg.RateLimit, rdb.Client))
 
-	// Swagger documentation endpoint
+	// 11. Register routes
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
-
-	// Test endpoint for rate limiting (remove in production if not needed)
-	e.GET("/api/test", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"message": "Test endpoint for rate limiting",
-			"timestamp": time.Now().Unix(),
-		})
-	})
-
-	// 8. Initialize repositories
-	tm := database.NewTransactionManager(db.DB)
-	userRepo := repositories.NewUserRepository(db.DB)
-	deckRepo := repositories.NewDeckRepository(db.DB)
-	cardRepo := repositories.NewCardRepository(db.DB)
-	reviewRepo := repositories.NewReviewRepository(db.DB)
-	noteRepo := repositories.NewNoteRepository(db.DB)
-	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
-	profileRepo := repositories.NewProfileRepository(db.DB)
-	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
-	addOnRepo := repositories.NewAddOnRepository(db.DB)
-	backupRepo := repositories.NewBackupRepository(db.DB)
-	mediaRepo := repositories.NewMediaRepository(db.DB)
-	syncMetaRepo := repositories.NewSyncMetaRepository(db.DB)
-	sharedDeckRepo := repositories.NewSharedDeckRepository(db.DB)
-	sharedDeckRatingRepo := repositories.NewSharedDeckRatingRepository(db.DB)
-	deletionLogRepo := repositories.NewDeletionLogRepository(db.DB)
-	undoHistoryRepo := repositories.NewUndoHistoryRepository(db.DB)
-	filteredDeckRepo := repositories.NewFilteredDeckRepository(db.DB)
-
-	// 9. Initialize services
-	// Core Study
-	deckSvc := deckService.NewDeckService(deckRepo)
-	filteredDeckSvc := deckService.NewFilteredDeckService(filteredDeckRepo)
-	cardSvc := cardService.NewCardService(cardRepo)
-	reviewSvc := reviewService.NewReviewService(reviewRepo, cardRepo, tm)
-
-	// Content Management
-	noteTypeSvc := notetypeService.NewNoteTypeService(noteTypeRepo)
-	noteSvc := noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, tm)
-
-	// User Management
-	userSvc := userService.NewUserService(userRepo)
-	profileSvc := profileService.NewProfileService(profileRepo)
-	userPreferencesSvc := userpreferencesService.NewUserPreferencesService(userPreferencesRepo)
-
-	// System & Sync
-	addOnSvc := addonService.NewAddOnService(addOnRepo)
-	backupSvc := backupService.NewBackupService(backupRepo)
-	mediaSvc := mediaService.NewMediaService(mediaRepo)
-	syncMetaSvc := syncService.NewSyncMetaService(syncMetaRepo)
-
-	// Community & Audit
-	sharedDeckSvc := shareddeckService.NewSharedDeckService(sharedDeckRepo)
-	sharedDeckRatingSvc := shareddeckratingService.NewSharedDeckRatingService(sharedDeckRatingRepo)
-	deletionLogSvc := auditService.NewDeletionLogService(deletionLogRepo)
-	undoHistorySvc := auditService.NewUndoHistoryService(undoHistoryRepo)
-
-	// Email Service
-	var emailSvc primary.IEmailService
-	if cfg.Email.Enabled {
-		log.Info("Initializing email service (SMTP)")
-		var emailRepo secondary.IEmailRepository
-		emailRepo, err = infraEmail.NewSMTPRepository(cfg.Email)
-		if err != nil {
-			log.Error("Failed to create SMTP repository", "error", err)
-			os.Exit(1)
-		}
-		emailSvc = emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
-	} else {
-		log.Info("Email service disabled, using console repository")
-		emailRepo := infraEmail.NewConsoleRepository(log)
-		emailSvc = emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
-	}
-
-	// Session Service
-	sessionRepo := redis.NewSessionRepository(rdb.Client, cfg.Session.KeyPrefix)
-	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
-	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
-	log.Info("Session service initialized",
-		"ttl_minutes", cfg.Session.TTLMinutes,
-		"key_prefix", cfg.Session.KeyPrefix,
-	)
-
-	// Auth Service
-	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, rdb, emailSvc, sessionSvc)
-
-	// 10. Register routes
 	routes.RegisterHealthRoutes(e, healthService)
 	if cfg.Metrics.Enabled {
 		routes.RegisterMetricsRoutes(e, metricsSvc, cfg.Metrics.Path)
 	}
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, rdb, sessionSvc)
-	routes.RegisterStudyRoutes(e, deckSvc, filteredDeckSvc, cardSvc, reviewSvc, jwtSvc, rdb)
-	routes.RegisterContentRoutes(e, noteSvc, noteTypeSvc, jwtSvc, rdb)
-	routes.RegisterUserRoutes(e, userSvc, profileSvc, userPreferencesSvc, jwtSvc, rdb)
-	routes.RegisterSystemRoutes(e, addOnSvc, backupSvc, mediaSvc, syncMetaSvc, jwtSvc, rdb)
-	routes.RegisterCommunityRoutes(e, sharedDeckSvc, sharedDeckRatingSvc, deletionLogSvc, undoHistorySvc, jwtSvc, rdb)
+	routes.RegisterAuthRoutes(e, dicontainer.GetAuthService(), jwtSvc, rdb, dicontainer.GetSessionService())
+	routes.RegisterStudyRoutes(e, dicontainer.GetDeckService(), dicontainer.GetFilteredDeckService(), dicontainer.GetCardService(), dicontainer.GetReviewService(), jwtSvc, rdb)
+	routes.RegisterContentRoutes(e, dicontainer.GetNoteService(), dicontainer.GetNoteTypeService(), jwtSvc, rdb)
+	routes.RegisterUserRoutes(e, dicontainer.GetUserService(), dicontainer.GetProfileService(), dicontainer.GetUserPreferencesService(), jwtSvc, rdb)
+	routes.RegisterSystemRoutes(e, dicontainer.GetAddOnService(), dicontainer.GetBackupService(), dicontainer.GetMediaService(), dicontainer.GetSyncMetaService(), jwtSvc, rdb)
+	routes.RegisterCommunityRoutes(e, dicontainer.GetSharedDeckService(), dicontainer.GetSharedDeckRatingService(), dicontainer.GetDeletionLogService(), dicontainer.GetUndoHistoryService(), jwtSvc, rdb)
 
-	// Register Email Verification Handler if events are enabled
-	if cfg.Events.Enabled {
-		emailVerificationHandler := eventHandlers.NewEmailVerificationHandler(emailSvc)
-		if err := eventService.Subscribe(domainEvents.UserRegisteredEventType, emailVerificationHandler); err != nil {
-			log.Error("Failed to subscribe email verification handler", "event_type", domainEvents.UserRegisteredEventType, "error", err)
-			os.Exit(1)
-		}
-		log.Info("Email verification handler registered for UserRegistered events")
+	if cfg.Events.Enabled && eventService != nil {
+		eventService.Subscribe(domainEvents.UserRegisteredEventType, eventHandlers.NewEmailVerificationHandler(dicontainer.GetEmailService()))
 	}
 
-	// Start HTTP server
+	// 12. Start server
 	serverAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         serverAddr,
@@ -512,110 +219,42 @@ func main() {
 		IdleTimeout:  time.Duration(cfg.Server.IdleTimeout) * time.Second,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start server in goroutine
-	serverErrChan := make(chan error, 1)
+	stop := make(chan bool, 1)
 	go func() {
-		log.Info("Starting HTTP server",
-			"address", serverAddr,
-			"read_timeout", cfg.Server.ReadTimeout,
-			"write_timeout", cfg.Server.WriteTimeout,
-		)
+		log.Info("Starting HTTP server", "address", serverAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("HTTP server error", "error", err)
-			serverErrChan <- err
-			cancel()
+			stop <- true
 		}
 	}()
 
-	// Give the server a moment to start and check for immediate errors
-	select {
-	case err := <-serverErrChan:
-		if err != nil {
-			log.Error("Failed to start HTTP server", "error", err)
-			os.Exit(1)
-		}
-	case <-time.After(100 * time.Millisecond):
-		// Server started successfully (no immediate error)
-		log.Info("HTTP server started successfully", "address", serverAddr)
-	}
-
-	// Graceful shutdown
+	// 13. Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		log.Info("Shutdown signal received, shutting down gracefully...")
-		cancel()
-	}()
-
-	// Wait for context cancellation
-	<-ctx.Done()
-
-	// Graceful shutdown of jobs system
-	if cfg.Jobs.Enabled && workerPool != nil {
-		log.Info("Stopping worker pool...")
-		workerPool.Stop()
+	select {
+	case <-sigChan:
+		log.Info("Shutting down gracefully...")
+	case <-stop:
+		log.Info("Server stopped unexpectedly")
 	}
 
-	if cfg.Jobs.Enabled && scheduler != nil {
-		log.Info("Stopping scheduler...")
-		scheduler.Stop()
-	}
-
-	// Graceful shutdown of events system
-	if cfg.Events.Enabled && eventBus != nil {
-		log.Info("Stopping event bus...")
-		if err := eventBus.Stop(); err != nil {
-			log.Error("Error stopping event bus", "error", err)
-		}
-	}
-
-	// Graceful shutdown of HTTP server
-	log.Info("Shutting down HTTP server...",
-		"shutdown_timeout", cfg.Server.ShutdownTimeout,
-	)
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)
 	defer shutdownCancel()
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Error("Error shutting down HTTP server", "error", err)
-		if shutdownCtx.Err() == context.DeadlineExceeded {
-			log.Warn("HTTP server shutdown exceeded timeout, forcing shutdown", "timeout", cfg.Server.ShutdownTimeout)
-		}
-	} else {
-		log.Info("HTTP server shut down successfully")
+	if workerPool != nil {
+		workerPool.Stop()
 	}
-
-	// Close Redis connection gracefully
-	log.Info("Closing Redis connection...")
-	if err := rdb.Close(); err != nil {
-		log.Error("Error closing Redis connection", "error", err)
-	} else {
-		log.Info("Redis connection closed successfully")
+	if scheduler != nil {
+		scheduler.Stop()
 	}
-
-	// Close database connection gracefully
-	log.Info("Closing database connection...")
-	if err := db.Close(); err != nil {
-		log.Error("Error closing database connection", "error", err)
-	} else {
-		log.Info("Database connection closed successfully")
+	if eventBus != nil {
+		eventBus.Stop()
 	}
-
-	// Shutdown tracing service gracefully
-	if cfg.Tracing.Enabled && tracingSvc != nil {
-		log.Info("Shutting down tracing service...")
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		if err := tracingSvc.Shutdown(shutdownCtx); err != nil {
-			log.Error("Error shutting down tracing service", "error", err)
-		} else {
-			log.Info("Tracing service shut down successfully")
-		}
+	srv.Shutdown(shutdownCtx)
+	rdb.Close()
+	db.Close()
+	if tracingSvc != nil {
+		tracingSvc.Shutdown(context.Background())
 	}
 
 	log.Info("Server stopped")

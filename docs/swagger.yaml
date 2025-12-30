@@ -692,9 +692,9 @@ definitions:
         example: 0
         type: integer
       state:
-        description: 'Current state (0: new, 1: learning, 2: review, 3: relearning)'
-        example: 0
-        type: integer
+        description: Current state (new, learn, review, relearn)
+        example: new
+        type: string
       suspended:
         description: Whether suspended
         example: false
@@ -886,8 +886,6 @@ definitions:
         type: integer
       storage_path:
         type: string
-      updated_at:
-        type: string
       user_id:
         type: integer
     type: object
@@ -965,11 +963,11 @@ definitions:
       id:
         example: 1
         type: integer
-      last_sync:
-        type: string
       name:
         example: Pessoal
         type: string
+      sync_enabled:
+        type: boolean
       sync_username:
         example: user@ankiweb.net
         type: string

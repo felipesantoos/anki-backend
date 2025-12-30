@@ -4091,9 +4091,9 @@ const docTemplate = `{
                     "example": 0
                 },
                 "state": {
-                    "description": "Current state (0: new, 1: learning, 2: review, 3: relearning)",
-                    "type": "integer",
-                    "example": 0
+                    "description": "Current state (new, learn, review, relearn)",
+                    "type": "string",
+                    "example": "new"
                 },
                 "suspended": {
                     "description": "Whether suspended",
@@ -4351,9 +4351,6 @@ const docTemplate = `{
                 "storage_path": {
                     "type": "string"
                 },
-                "updated_at": {
-                    "type": "string"
-                },
                 "user_id": {
                     "type": "integer"
                 }
@@ -4457,12 +4454,12 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 1
                 },
-                "last_sync": {
-                    "type": "string"
-                },
                 "name": {
                     "type": "string",
                     "example": "Pessoal"
+                },
+                "sync_enabled": {
+                    "type": "boolean"
                 },
                 "sync_username": {
                     "type": "string",
@@ -4880,8 +4877,6 @@ var SwaggerInfo = &swag.Spec{
 	Description:      "REST API for Anki Backend system. This API provides endpoints for managing decks, notes, cards, and study sessions.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
-	LeftDelim:        "{{",
-	RightDelim:       "}}",
 }
 
 func init() {

@@ -9,8 +9,11 @@ import (
 
 // ISessionService defines the interface for session management
 type ISessionService interface {
+	CreateSession(ctx context.Context, userID string, data map[string]interface{}) (string, error)
 	CreateSessionWithMetadata(ctx context.Context, userID int64, metadata session.SessionMetadata) (string, error)
+	GetSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
 	DeleteSession(ctx context.Context, sessionID string) error
+	RefreshSession(ctx context.Context, sessionID string) error
 	GetUserSessions(ctx context.Context, userID int64) ([]map[string]interface{}, error)
 	DeleteUserSession(ctx context.Context, userID int64, sessionID string) error
 	DeleteAllUserSessions(ctx context.Context, userID int64) error

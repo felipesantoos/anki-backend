@@ -17,6 +17,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/core/services/session"
+	"github.com/felipesantos/anki-backend/pkg/database"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 )
@@ -52,6 +53,7 @@ type AuthService struct {
 	cacheRepo          secondary.ICacheRepository
 	emailService       primary.IEmailService
 	sessionService     primary.ISessionService
+	tm                 database.TransactionManager
 }
 
 // NewAuthService creates a new AuthService instance
@@ -65,6 +67,7 @@ func NewAuthService(
 	cacheRepo secondary.ICacheRepository,
 	emailService primary.IEmailService,
 	sessionService primary.ISessionService,
+	tm database.TransactionManager,
 ) primary.IAuthService {
 	return &AuthService{
 		userRepo:            userRepo,
@@ -76,6 +79,7 @@ func NewAuthService(
 		cacheRepo:           cacheRepo,
 		emailService:        emailService,
 		sessionService:      sessionService,
+		tm:                  tm,
 	}
 }
 
@@ -136,70 +140,79 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 		return nil, fmt.Errorf("failed to create user entity: %w", err)
 	}
 
-	// 5. Save user to database
-	err = s.userRepo.Save(ctx, userEntity)
-	if err != nil {
-		return nil, fmt.Errorf("failed to save user: %w", err)
-	}
+	// 5. Perform registration steps inside a transaction
+	err = s.tm.WithTransaction(ctx, func(ctx context.Context) error {
+		// 5.1. Save user to database
+		err = s.userRepo.Save(ctx, userEntity)
+		if err != nil {
+			return fmt.Errorf("failed to save user: %w", err)
+		}
 
-	// 6. Create default deck for the user
-	_, err = s.deckRepo.CreateDefaultDeck(ctx, userEntity.GetID())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create default deck: %w", err)
-	}
+		// 5.2. Create default deck for the user
+		_, err = s.deckRepo.CreateDefaultDeck(ctx, userEntity.GetID())
+		if err != nil {
+			return fmt.Errorf("failed to create default deck: %w", err)
+		}
 
-	// 6.1. Create default profile for the user
-	defaultProfile, err := profile.NewBuilder().
-		WithID(0).
-		WithUserID(userEntity.GetID()).
-		WithName("Default").
-		WithAnkiWebSyncEnabled(false).
-		WithCreatedAt(now).
-		WithUpdatedAt(now).
-		Build()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build default profile: %w", err)
-	}
-	if err := s.profileRepo.Save(ctx, userEntity.GetID(), defaultProfile); err != nil {
-		return nil, fmt.Errorf("failed to save default profile: %w", err)
-	}
+		// 5.3. Create default profile for the user
+		defaultProfile, err := profile.NewBuilder().
+			WithID(0).
+			WithUserID(userEntity.GetID()).
+			WithName("Default").
+			WithAnkiWebSyncEnabled(false).
+			WithCreatedAt(now).
+			WithUpdatedAt(now).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to build default profile: %w", err)
+		}
+		if err := s.profileRepo.Save(ctx, userEntity.GetID(), defaultProfile); err != nil {
+			return fmt.Errorf("failed to save default profile: %w", err)
+		}
 
-	// 6.2. Create default user preferences
-	// Default time for next day starts at 4 AM
-	nextDayStartsAt := time.Date(1970, 1, 1, 4, 0, 0, 0, time.UTC)
-	defaultPrefs, err := userpreferences.NewBuilder().
-		WithID(0).
-		WithUserID(userEntity.GetID()).
-		WithLanguage("en").
-		WithTheme(valueobjects.ThemeTypeAuto).
-		WithAutoSync(true).
-		WithNextDayStartsAt(nextDayStartsAt).
-		WithLearnAheadLimit(20).
-		WithTimeboxTimeLimit(0).
-		WithVideoDriver("auto").
-		WithUISize(1.0).
-		WithMinimalistMode(false).
-		WithReduceMotion(false).
-		WithPasteStripsFormatting(false).
-		WithPasteImagesAsPNG(false).
-		WithDefaultDeckBehavior("current_deck").
-		WithShowPlayButtons(true).
-		WithInterruptAudioOnAnswer(true).
-		WithShowRemainingCount(true).
-		WithShowNextReviewTime(false).
-		WithSpacebarAnswersCard(true).
-		WithIgnoreAccentsInSearch(false).
-		WithSyncAudioAndImages(true).
-		WithPeriodicallySyncMedia(false).
-		WithForceOneWaySync(false).
-		WithCreatedAt(now).
-		WithUpdatedAt(now).
-		Build()
+		// 5.4. Create default user preferences
+		// Default time for next day starts at 4 AM
+		nextDayStartsAt := time.Date(1970, 1, 1, 4, 0, 0, 0, time.UTC)
+		defaultPrefs, err := userpreferences.NewBuilder().
+			WithID(0).
+			WithUserID(userEntity.GetID()).
+			WithLanguage("en").
+			WithTheme(valueobjects.ThemeTypeAuto).
+			WithAutoSync(true).
+			WithNextDayStartsAt(nextDayStartsAt).
+			WithLearnAheadLimit(20).
+			WithTimeboxTimeLimit(0).
+			WithVideoDriver("auto").
+			WithUISize(1.0).
+			WithMinimalistMode(false).
+			WithReduceMotion(false).
+			WithPasteStripsFormatting(false).
+			WithPasteImagesAsPNG(false).
+			WithDefaultDeckBehavior("current_deck").
+			WithShowPlayButtons(true).
+			WithInterruptAudioOnAnswer(true).
+			WithShowRemainingCount(true).
+			WithShowNextReviewTime(false).
+			WithSpacebarAnswersCard(true).
+			WithIgnoreAccentsInSearch(false).
+			WithSyncAudioAndImages(true).
+			WithPeriodicallySyncMedia(false).
+			WithForceOneWaySync(false).
+			WithCreatedAt(now).
+			WithUpdatedAt(now).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to build default preferences: %w", err)
+		}
+		if err := s.userPreferencesRepo.Save(ctx, userEntity.GetID(), defaultPrefs); err != nil {
+			return fmt.Errorf("failed to save default preferences: %w", err)
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to build default preferences: %w", err)
-	}
-	if err := s.userPreferencesRepo.Save(ctx, userEntity.GetID(), defaultPrefs); err != nil {
-		return nil, fmt.Errorf("failed to save default preferences: %w", err)
+		return nil, err
 	}
 
 	// 7. Publish UserRegistered event

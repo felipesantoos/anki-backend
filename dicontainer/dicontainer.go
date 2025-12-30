@@ -191,6 +191,7 @@ func GetAuthService() primary.IAuthService {
 	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
 	profileRepo := repositories.NewProfileRepository(dbRepo.GetDB())
 	userPrefsRepo := repositories.NewUserPreferencesRepository(dbRepo.GetDB())
+	tm := database.NewTransactionManager(dbRepo.GetDB())
 
 	return authService.NewAuthService(
 		userRepo,
@@ -202,6 +203,7 @@ func GetAuthService() primary.IAuthService {
 		rdb,
 		GetEmailService(),
 		GetSessionService(),
+		tm,
 	)
 }
 

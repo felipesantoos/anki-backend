@@ -106,6 +106,8 @@ func SharedDeckToModel(sharedDeckEntity *shareddeck.SharedDeck) *models.SharedDe
 	// Store as placeholder string for now
 	if len(sharedDeckEntity.GetTags()) > 0 {
 		model.Tags = sql.NullString{String: "{}", Valid: true} // Placeholder, will be handled in repository
+	} else {
+		model.Tags = sql.NullString{Valid: false}
 	}
 
 	// Handle nullable deleted_at

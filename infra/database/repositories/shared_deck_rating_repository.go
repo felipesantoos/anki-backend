@@ -257,15 +257,16 @@ func (r *SharedDeckRatingRepository) Exists(ctx context.Context, userID int64, i
 }
 
 // FindBySharedDeckID finds all ratings for a shared deck
-func (r *SharedDeckRatingRepository) FindBySharedDeckID(ctx context.Context, sharedDeckID int64) ([]*shareddeckrating.SharedDeckRating, error) {
+func (r *SharedDeckRatingRepository) FindBySharedDeckID(ctx context.Context, sharedDeckID int64, offset, limit int) ([]*shareddeckrating.SharedDeckRating, error) {
 	query := `
 		SELECT id, user_id, shared_deck_id, rating, comment, created_at, updated_at
 		FROM shared_deck_ratings
 		WHERE shared_deck_id = $1
 		ORDER BY created_at DESC
+		OFFSET $2 LIMIT $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, sharedDeckID)
+	rows, err := r.db.QueryContext(ctx, query, sharedDeckID, offset, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find shared deck ratings by shared deck ID: %w", err)
 	}

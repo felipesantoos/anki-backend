@@ -204,7 +204,7 @@ func (r *UserPreferencesRepository) FindByID(ctx context.Context, userID int64, 
 
 	var model models.UserPreferencesModel
 	var defaultSearchText, selfHostedURL sql.NullString
-	var nextDayTimeStr string
+	var nextDayTime time.Time
 
 	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(
 		&model.ID,
@@ -212,7 +212,7 @@ func (r *UserPreferencesRepository) FindByID(ctx context.Context, userID int64, 
 		&model.Language,
 		&model.Theme,
 		&model.AutoSync,
-		&nextDayTimeStr,
+		&nextDayTime,
 		&model.LearnAheadLimit,
 		&model.TimeboxTimeLimit,
 		&model.VideoDriver,
@@ -244,11 +244,6 @@ func (r *UserPreferencesRepository) FindByID(ctx context.Context, userID int64, 
 		return nil, fmt.Errorf("failed to find user preferences: %w", err)
 	}
 
-	// Parse TIME string to time.Time
-	nextDayTime, err := time.Parse("15:04:05", nextDayTimeStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse next_day_starts_at: %w", err)
-	}
 	model.NextDayStartsAt = time.Date(1970, 1, 1, nextDayTime.Hour(), nextDayTime.Minute(), nextDayTime.Second(), 0, time.UTC)
 
 	model.DefaultSearchText = defaultSearchText
@@ -279,7 +274,7 @@ func (r *UserPreferencesRepository) FindByUserID(ctx context.Context, userID int
 
 	var model models.UserPreferencesModel
 	var defaultSearchText, selfHostedURL sql.NullString
-	var nextDayTimeStr string
+	var nextDayTime time.Time
 
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(
 		&model.ID,
@@ -287,7 +282,7 @@ func (r *UserPreferencesRepository) FindByUserID(ctx context.Context, userID int
 		&model.Language,
 		&model.Theme,
 		&model.AutoSync,
-		&nextDayTimeStr,
+		&nextDayTime,
 		&model.LearnAheadLimit,
 		&model.TimeboxTimeLimit,
 		&model.VideoDriver,
@@ -319,11 +314,6 @@ func (r *UserPreferencesRepository) FindByUserID(ctx context.Context, userID int
 		return nil, fmt.Errorf("failed to find user preferences by user ID: %w", err)
 	}
 
-	// Parse TIME string to time.Time
-	nextDayTime, err := time.Parse("15:04:05", nextDayTimeStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse next_day_starts_at: %w", err)
-	}
 	model.NextDayStartsAt = time.Date(1970, 1, 1, nextDayTime.Hour(), nextDayTime.Minute(), nextDayTime.Second(), 0, time.UTC)
 
 	model.DefaultSearchText = defaultSearchText

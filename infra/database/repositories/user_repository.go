@@ -36,7 +36,7 @@ func (r *UserRepository) Save(ctx context.Context, userEntity *user.User) error 
 			RETURNING id
 		`
 
-		model := mappers.ToModel(userEntity)
+		model := mappers.UserToModel(userEntity)
 		var lastLoginAt, deletedAt sql.NullTime
 
 		if model.LastLoginAt.Valid {
@@ -74,7 +74,7 @@ func (r *UserRepository) Save(ctx context.Context, userEntity *user.User) error 
 		WHERE id = $7
 	`
 
-	model := mappers.ToModel(userEntity)
+	model := mappers.UserToModel(userEntity)
 	var lastLoginAt, deletedAt sql.NullTime
 
 	if model.LastLoginAt.Valid {
@@ -149,7 +149,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*user.U
 	model.LastLoginAt = lastLoginAt
 	model.DeletedAt = deletedAt
 
-	return mappers.ToDomain(&model)
+	return mappers.UserToDomain(&model)
 }
 
 // FindByID finds a user by ID
@@ -185,7 +185,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*user.User, er
 	model.LastLoginAt = lastLoginAt
 	model.DeletedAt = deletedAt
 
-	return mappers.ToDomain(&model)
+	return mappers.UserToDomain(&model)
 }
 
 // ExistsByEmail checks if a user with the given email already exists

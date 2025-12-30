@@ -32,5 +32,11 @@ type IBackupRepository interface {
 
 	// Exists checks if a backup exists and belongs to the user
 	Exists(ctx context.Context, userID int64, id int64) (bool, error)
+
+	// FindByFilename finds a backup by filename, filtering by userID to ensure ownership
+	FindByFilename(ctx context.Context, userID int64, filename string) (*backup.Backup, error)
+
+	// FindByType finds all backups of a specific type for a user
+	FindByType(ctx context.Context, userID int64, backupType string) ([]*backup.Backup, error)
 }
 

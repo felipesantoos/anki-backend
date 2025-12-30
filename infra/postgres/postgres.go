@@ -29,6 +29,10 @@ type PostgresRepository struct {
 
 // NewPostgresRepository creates a new PostgreSQL connection with connection pooling configured
 func NewPostgresRepository(cfg config.DatabaseConfig, logger *slog.Logger) (*PostgresRepository, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	dsn, err := buildDSN(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build DSN: %w", err)

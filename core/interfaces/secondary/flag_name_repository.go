@@ -32,5 +32,8 @@ type IFlagNameRepository interface {
 
 	// Exists checks if a flag name exists and belongs to the user
 	Exists(ctx context.Context, userID int64, id int64) (bool, error)
+
+	// FindByFlagNumber finds a flag name by flag number, filtering by userID to ensure ownership
+	FindByFlagNumber(ctx context.Context, userID int64, flagNumber int) (*flagname.FlagName, error)
 }
 

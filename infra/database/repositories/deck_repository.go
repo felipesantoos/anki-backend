@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/infra/database/mappers"
+	"github.com/felipesantos/anki-backend/infra/database/models"
 	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
@@ -29,8 +32,6 @@ func NewDeckRepository(db *sql.DB) secondary.IDeckRepository {
 }
 
 // CreateDefaultDeck creates a default deck for a user
-// The default deck is created with the name "Default" and standard configuration (empty JSON)
-// Returns the deck ID or an error if creation fails
 func (r *DeckRepository) CreateDefaultDeck(ctx context.Context, userID int64) (int64, error) {
 	query := `
 		INSERT INTO decks (user_id, name, parent_id, options_json, created_at, updated_at)
@@ -40,13 +41,13 @@ func (r *DeckRepository) CreateDefaultDeck(ctx context.Context, userID int64) (i
 
 	now := time.Now()
 	defaultName := "Default"
-	emptyOptions := "{}" // Empty JSON object for default options
+	emptyOptions := "{}"
 
 	var deckID int64
 	err := r.db.QueryRowContext(ctx, query,
 		userID,
 		defaultName,
-		nil, // parent_id is NULL for root decks
+		nil,
 		emptyOptions,
 		now,
 		now,
@@ -60,26 +61,23 @@ func (r *DeckRepository) CreateDefaultDeck(ctx context.Context, userID int64) (i
 }
 
 // FindByID finds a deck by ID, filtering by userID to ensure ownership
-func (r *DeckRepository) FindByID(ctx context.Context, userID int64, deckID int64) (*secondary.DeckData, error) {
+func (r *DeckRepository) FindByID(ctx context.Context, userID int64, deckID int64) (*deck.Deck, error) {
 	query := `
 		SELECT id, user_id, name, parent_id, options_json, created_at, updated_at, deleted_at
 		FROM decks
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 	`
 
-	var deck secondary.DeckData
-	var createdAt, updatedAt, deletedAt sql.NullTime
-	var parentID sql.NullInt64
-
+	var model models.DeckModel
 	err := r.db.QueryRowContext(ctx, query, deckID, userID).Scan(
-		&deck.ID,
-		&deck.UserID,
-		&deck.Name,
-		&parentID,
-		&deck.OptionsJSON,
-		&createdAt,
-		&updatedAt,
-		&deletedAt,
+		&model.ID,
+		&model.UserID,
+		&model.Name,
+		&model.ParentID,
+		&model.OptionsJSON,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+		&model.DeletedAt,
 	)
 
 	if err != nil {
@@ -89,24 +87,16 @@ func (r *DeckRepository) FindByID(ctx context.Context, userID int64, deckID int6
 		return nil, fmt.Errorf("failed to find deck: %w", err)
 	}
 
-	// Convert nullable fields
-	if parentID.Valid {
-		deck.ParentID = &parentID.Int64
-	}
-	deck.CreatedAt = createdAt
-	deck.UpdatedAt = updatedAt
-	deck.DeletedAt = deletedAt
-
 	// Validate ownership (defense in depth)
-	if err := ownership.EnsureOwnership(userID, deck.UserID); err != nil {
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
 		return nil, ownership.ErrResourceNotFound
 	}
 
-	return &deck, nil
+	return mappers.DeckToDomain(&model)
 }
 
 // FindByUserID finds all decks for a user
-func (r *DeckRepository) FindByUserID(ctx context.Context, userID int64) ([]*secondary.DeckData, error) {
+func (r *DeckRepository) FindByUserID(ctx context.Context, userID int64) ([]*deck.Deck, error) {
 	query := `
 		SELECT id, user_id, name, parent_id, options_json, created_at, updated_at, deleted_at
 		FROM decks
@@ -120,34 +110,28 @@ func (r *DeckRepository) FindByUserID(ctx context.Context, userID int64) ([]*sec
 	}
 	defer rows.Close()
 
-	var decks []*secondary.DeckData
+	var decks []*deck.Deck
 	for rows.Next() {
-		var deck secondary.DeckData
-		var createdAt, updatedAt, deletedAt sql.NullTime
-		var parentID sql.NullInt64
-
+		var model models.DeckModel
 		err := rows.Scan(
-			&deck.ID,
-			&deck.UserID,
-			&deck.Name,
-			&parentID,
-			&deck.OptionsJSON,
-			&createdAt,
-			&updatedAt,
-			&deletedAt,
+			&model.ID,
+			&model.UserID,
+			&model.Name,
+			&model.ParentID,
+			&model.OptionsJSON,
+			&model.CreatedAt,
+			&model.UpdatedAt,
+			&model.DeletedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan deck: %w", err)
 		}
 
-		if parentID.Valid {
-			deck.ParentID = &parentID.Int64
+		deckEntity, err := mappers.DeckToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert deck to domain: %w", err)
 		}
-		deck.CreatedAt = createdAt
-		deck.UpdatedAt = updatedAt
-		deck.DeletedAt = deletedAt
-
-		decks = append(decks, &deck)
+		decks = append(decks, deckEntity)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -158,7 +142,7 @@ func (r *DeckRepository) FindByUserID(ctx context.Context, userID int64) ([]*sec
 }
 
 // FindByParentID finds all decks with a specific parent ID, filtering by userID
-func (r *DeckRepository) FindByParentID(ctx context.Context, userID int64, parentID int64) ([]*secondary.DeckData, error) {
+func (r *DeckRepository) FindByParentID(ctx context.Context, userID int64, parentID int64) ([]*deck.Deck, error) {
 	query := `
 		SELECT id, user_id, name, parent_id, options_json, created_at, updated_at, deleted_at
 		FROM decks
@@ -172,34 +156,28 @@ func (r *DeckRepository) FindByParentID(ctx context.Context, userID int64, paren
 	}
 	defer rows.Close()
 
-	var decks []*secondary.DeckData
+	var decks []*deck.Deck
 	for rows.Next() {
-		var deck secondary.DeckData
-		var createdAt, updatedAt, deletedAt sql.NullTime
-		var parentIDVal sql.NullInt64
-
+		var model models.DeckModel
 		err := rows.Scan(
-			&deck.ID,
-			&deck.UserID,
-			&deck.Name,
-			&parentIDVal,
-			&deck.OptionsJSON,
-			&createdAt,
-			&updatedAt,
-			&deletedAt,
+			&model.ID,
+			&model.UserID,
+			&model.Name,
+			&model.ParentID,
+			&model.OptionsJSON,
+			&model.CreatedAt,
+			&model.UpdatedAt,
+			&model.DeletedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan deck: %w", err)
 		}
 
-		if parentIDVal.Valid {
-			deck.ParentID = &parentIDVal.Int64
+		deckEntity, err := mappers.DeckToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert deck to domain: %w", err)
 		}
-		deck.CreatedAt = createdAt
-		deck.UpdatedAt = updatedAt
-		deck.DeletedAt = deletedAt
-
-		decks = append(decks, &deck)
+		decks = append(decks, deckEntity)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -210,8 +188,10 @@ func (r *DeckRepository) FindByParentID(ctx context.Context, userID int64, paren
 }
 
 // Save creates or updates a deck
-func (r *DeckRepository) Save(ctx context.Context, userID int64, deck *secondary.DeckData) error {
-	if deck.ID == 0 {
+func (r *DeckRepository) Save(ctx context.Context, userID int64, deckEntity *deck.Deck) error {
+	model := mappers.DeckToModel(deckEntity)
+
+	if deckEntity.GetID() == 0 {
 		// Create new deck
 		query := `
 			INSERT INTO decks (user_id, name, parent_id, options_json, created_at, updated_at)
@@ -220,33 +200,38 @@ func (r *DeckRepository) Save(ctx context.Context, userID int64, deck *secondary
 		`
 
 		now := time.Now()
+		if model.CreatedAt.IsZero() {
+			model.CreatedAt = now
+		}
+		if model.UpdatedAt.IsZero() {
+			model.UpdatedAt = now
+		}
+
 		var deckID int64
 		err := r.db.QueryRowContext(ctx, query,
 			userID,
-			deck.Name,
-			deck.ParentID,
-			deck.OptionsJSON,
-			now,
-			now,
+			model.Name,
+			model.ParentID,
+			model.OptionsJSON,
+			model.CreatedAt,
+			model.UpdatedAt,
 		).Scan(&deckID)
 
 		if err != nil {
 			return fmt.Errorf("failed to create deck: %w", err)
 		}
 
-		deck.ID = deckID
-		deck.UserID = userID
+		deckEntity.SetID(deckID)
+		deckEntity.SetUserID(userID)
 		return nil
 	}
 
 	// Update existing deck - validate ownership first
-	existingDeck, err := r.FindByID(ctx, userID, deck.ID)
+	existingDeck, err := r.FindByID(ctx, userID, deckEntity.GetID())
 	if err != nil {
 		return err
 	}
-
-	// Ensure ownership (defense in depth)
-	if err := ownership.EnsureOwnership(userID, existingDeck.UserID); err != nil {
+	if existingDeck == nil {
 		return ownership.ErrResourceNotFound
 	}
 
@@ -258,12 +243,14 @@ func (r *DeckRepository) Save(ctx context.Context, userID int64, deck *secondary
 	`
 
 	now := time.Now()
+	model.UpdatedAt = now
+
 	result, err := r.db.ExecContext(ctx, query,
-		deck.Name,
-		deck.ParentID,
-		deck.OptionsJSON,
-		now,
-		deck.ID,
+		model.Name,
+		model.ParentID,
+		model.OptionsJSON,
+		model.UpdatedAt,
+		model.ID,
 		userID,
 	)
 
@@ -284,8 +271,8 @@ func (r *DeckRepository) Save(ctx context.Context, userID int64, deck *secondary
 }
 
 // Update updates an existing deck, validating ownership
-func (r *DeckRepository) Update(ctx context.Context, userID int64, deckID int64, deck *secondary.DeckData) error {
-	return r.Save(ctx, userID, deck)
+func (r *DeckRepository) Update(ctx context.Context, userID int64, deckID int64, deckEntity *deck.Deck) error {
+	return r.Save(ctx, userID, deckEntity)
 }
 
 // Delete deletes a deck, validating ownership
@@ -295,9 +282,7 @@ func (r *DeckRepository) Delete(ctx context.Context, userID int64, deckID int64)
 	if err != nil {
 		return err
 	}
-
-	// Ensure ownership (defense in depth)
-	if err := ownership.EnsureOwnership(userID, existingDeck.UserID); err != nil {
+	if existingDeck == nil {
 		return ownership.ErrResourceNotFound
 	}
 

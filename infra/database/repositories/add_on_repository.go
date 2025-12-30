@@ -249,6 +249,80 @@ func (r *AddOnRepository) Exists(ctx context.Context, userID int64, id int64) (b
 	return exists, nil
 }
 
+// FindByCode finds an add-on by code, filtering by userID to ensure ownership
+func (r *AddOnRepository) FindByCode(ctx context.Context, userID int64, code string) (*addon.AddOn, error) {
+	query := `
+		SELECT id, user_id, code, name, version, enabled, config_json, installed_at, updated_at
+		FROM add_ons
+		WHERE code = $1 AND user_id = $2
+	`
+
+	var model models.AddOnModel
+	err := r.db.QueryRowContext(ctx, query, code, userID).Scan(
+		&model.ID,
+		&model.UserID,
+		&model.Code,
+		&model.Name,
+		&model.Version,
+		&model.Enabled,
+		&model.ConfigJSON,
+		&model.InstalledAt,
+		&model.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find add-on by code: %w", err)
+	}
+
+	return mappers.AddOnToDomain(&model)
+}
+
+// FindEnabled finds all enabled add-ons for a user
+func (r *AddOnRepository) FindEnabled(ctx context.Context, userID int64) ([]*addon.AddOn, error) {
+	query := `
+		SELECT id, user_id, code, name, version, enabled, config_json, installed_at, updated_at
+		FROM add_ons
+		WHERE user_id = $1 AND enabled = true
+		ORDER BY name ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find enabled add-ons: %w", err)
+	}
+	defer rows.Close()
+
+	var addOns []*addon.AddOn
+	for rows.Next() {
+		var model models.AddOnModel
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.Code,
+			&model.Name,
+			&model.Version,
+			&model.Enabled,
+			&model.ConfigJSON,
+			&model.InstalledAt,
+			&model.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan add-on: %w", err)
+		}
+
+		addOnEntity, err := mappers.AddOnToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert add-on to domain: %w", err)
+		}
+		addOns = append(addOns, addOnEntity)
+	}
+
+	return addOns, nil
+}
+
 // Ensure AddOnRepository implements IAddOnRepository
 var _ secondary.IAddOnRepository = (*AddOnRepository)(nil)
 

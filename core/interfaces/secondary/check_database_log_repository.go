@@ -32,5 +32,8 @@ type ICheckDatabaseLogRepository interface {
 
 	// Exists checks if a check database log entry exists and belongs to the user
 	Exists(ctx context.Context, userID int64, id int64) (bool, error)
+
+	// FindLatest finds the latest check logs for a user
+	FindLatest(ctx context.Context, userID int64, limit int) ([]*checkdatabaselog.CheckDatabaseLog, error)
 }
 

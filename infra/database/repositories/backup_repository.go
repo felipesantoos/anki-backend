@@ -235,6 +235,76 @@ func (r *BackupRepository) Exists(ctx context.Context, userID int64, id int64) (
 	return exists, nil
 }
 
+// FindByFilename finds a backup by filename, filtering by userID to ensure ownership
+func (r *BackupRepository) FindByFilename(ctx context.Context, userID int64, filename string) (*backup.Backup, error) {
+	query := `
+		SELECT id, user_id, filename, size, storage_path, backup_type, created_at
+		FROM backups
+		WHERE filename = $1 AND user_id = $2
+	`
+
+	var model models.BackupModel
+	err := r.db.QueryRowContext(ctx, query, filename, userID).Scan(
+		&model.ID,
+		&model.UserID,
+		&model.Filename,
+		&model.Size,
+		&model.StoragePath,
+		&model.BackupType,
+		&model.CreatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find backup by filename: %w", err)
+	}
+
+	return mappers.BackupToDomain(&model)
+}
+
+// FindByType finds all backups of a specific type for a user
+func (r *BackupRepository) FindByType(ctx context.Context, userID int64, backupType string) ([]*backup.Backup, error) {
+	query := `
+		SELECT id, user_id, filename, size, storage_path, backup_type, created_at
+		FROM backups
+		WHERE user_id = $1 AND backup_type = $2
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, backupType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find backups by type: %w", err)
+	}
+	defer rows.Close()
+
+	var backups []*backup.Backup
+	for rows.Next() {
+		var model models.BackupModel
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.Filename,
+			&model.Size,
+			&model.StoragePath,
+			&model.BackupType,
+			&model.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan backup: %w", err)
+		}
+
+		backupEntity, err := mappers.BackupToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert backup to domain: %w", err)
+		}
+		backups = append(backups, backupEntity)
+	}
+
+	return backups, nil
+}
+
 // Ensure BackupRepository implements IBackupRepository
 var _ secondary.IBackupRepository = (*BackupRepository)(nil)
 

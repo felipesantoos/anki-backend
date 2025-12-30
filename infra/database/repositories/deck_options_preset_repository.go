@@ -267,6 +267,35 @@ func (r *DeckOptionsPresetRepository) Exists(ctx context.Context, userID int64, 
 	return exists, nil
 }
 
+// FindByName finds a deck options preset by name, filtering by userID to ensure ownership
+func (r *DeckOptionsPresetRepository) FindByName(ctx context.Context, userID int64, name string) (*deckoptionspreset.DeckOptionsPreset, error) {
+	query := `
+		SELECT id, user_id, name, options_json, created_at, updated_at, deleted_at
+		FROM deck_options_presets
+		WHERE name = $1 AND user_id = $2 AND deleted_at IS NULL
+	`
+
+	var model models.DeckOptionsPresetModel
+	err := r.db.QueryRowContext(ctx, query, name, userID).Scan(
+		&model.ID,
+		&model.UserID,
+		&model.Name,
+		&model.OptionsJSON,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+		&model.DeletedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find deck options preset by name: %w", err)
+	}
+
+	return mappers.DeckOptionsPresetToDomain(&model)
+}
+
 // Ensure DeckOptionsPresetRepository implements IDeckOptionsPresetRepository
 var _ secondary.IDeckOptionsPresetRepository = (*DeckOptionsPresetRepository)(nil)
 

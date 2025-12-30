@@ -267,6 +267,35 @@ func (r *SavedSearchRepository) Exists(ctx context.Context, userID int64, id int
 	return exists, nil
 }
 
+// FindByName finds a saved search by name, filtering by userID to ensure ownership
+func (r *SavedSearchRepository) FindByName(ctx context.Context, userID int64, name string) (*savedsearch.SavedSearch, error) {
+	query := `
+		SELECT id, user_id, name, search_query, created_at, updated_at, deleted_at
+		FROM saved_searches
+		WHERE name = $1 AND user_id = $2 AND deleted_at IS NULL
+	`
+
+	var model models.SavedSearchModel
+	err := r.db.QueryRowContext(ctx, query, name, userID).Scan(
+		&model.ID,
+		&model.UserID,
+		&model.Name,
+		&model.SearchQuery,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+		&model.DeletedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find saved search by name: %w", err)
+	}
+
+	return mappers.SavedSearchToDomain(&model)
+}
+
 // Ensure SavedSearchRepository implements ISavedSearchRepository
 var _ secondary.ISavedSearchRepository = (*SavedSearchRepository)(nil)
 

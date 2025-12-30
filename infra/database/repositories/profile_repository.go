@@ -285,6 +285,36 @@ func (r *ProfileRepository) Exists(ctx context.Context, userID int64, id int64) 
 	return exists, nil
 }
 
+// FindByName finds a profile by name, filtering by userID to ensure ownership
+func (r *ProfileRepository) FindByName(ctx context.Context, userID int64, name string) (*profile.Profile, error) {
+	query := `
+		SELECT id, user_id, name, ankiweb_sync_enabled, ankiweb_username, created_at, updated_at, deleted_at
+		FROM profiles
+		WHERE name = $1 AND user_id = $2 AND deleted_at IS NULL
+	`
+
+	var model models.ProfileModel
+	err := r.db.QueryRowContext(ctx, query, name, userID).Scan(
+		&model.ID,
+		&model.UserID,
+		&model.Name,
+		&model.AnkiWebSyncEnabled,
+		&model.AnkiWebUsername,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+		&model.DeletedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find profile by name: %w", err)
+	}
+
+	return mappers.ProfileToDomain(&model)
+}
+
 // Ensure ProfileRepository implements IProfileRepository
 var _ secondary.IProfileRepository = (*ProfileRepository)(nil)
 

@@ -109,6 +109,10 @@ func NoteToModel(noteEntity *note.Note) *models.NoteModel {
 			String: tagsStr,
 			Valid:  true,
 		}
+	} else {
+		model.Tags = sql.NullString{
+			Valid: false,
+		}
 	}
 
 	// Handle nullable deleted_at

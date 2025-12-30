@@ -8,8 +8,8 @@ import (
 	"github.com/felipesantos/anki-backend/infra/database/models"
 )
 
-// ToDomain converts a UserModel (database representation) to a User entity (domain representation)
-func ToDomain(model *models.UserModel) (*user.User, error) {
+// UserToDomain converts a UserModel (database representation) to a User entity (domain representation)
+func UserToDomain(model *models.UserModel) (*user.User, error) {
 	if model == nil {
 		return nil, nil
 	}
@@ -43,8 +43,8 @@ func ToDomain(model *models.UserModel) (*user.User, error) {
 	return userEntity, nil
 }
 
-// ToModel converts a User entity (domain representation) to a UserModel (database representation)
-func ToModel(userEntity *user.User) *models.UserModel {
+// UserToModel converts a User entity (domain representation) to a UserModel (database representation)
+func UserToModel(userEntity *user.User) *models.UserModel {
 	model := &models.UserModel{
 		ID:            userEntity.GetID(),
 		Email:         userEntity.GetEmail().Value(),

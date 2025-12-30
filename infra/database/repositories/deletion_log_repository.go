@@ -232,6 +232,46 @@ func (r *DeletionLogRepository) Exists(ctx context.Context, userID int64, id int
 	return exists, nil
 }
 
+// FindByObjectType finds all deletion logs of a specific object type for a user
+func (r *DeletionLogRepository) FindByObjectType(ctx context.Context, userID int64, objectType string) ([]*deletionlog.DeletionLog, error) {
+	query := `
+		SELECT id, user_id, object_type, object_id, object_data, deleted_at
+		FROM deletions_log
+		WHERE user_id = $1 AND object_type = $2
+		ORDER BY deleted_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, objectType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find deletion logs by object type: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []*deletionlog.DeletionLog
+	for rows.Next() {
+		var model models.DeletionLogModel
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.ObjectType,
+			&model.ObjectID,
+			&model.ObjectData,
+			&model.DeletedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan deletion log: %w", err)
+		}
+
+		logEntity, err := mappers.DeletionLogToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert deletion log to domain: %w", err)
+		}
+		logs = append(logs, logEntity)
+	}
+
+	return logs, nil
+}
+
 // Ensure DeletionLogRepository implements IDeletionLogRepository
 var _ secondary.IDeletionLogRepository = (*DeletionLogRepository)(nil)
 

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -48,27 +47,6 @@ func (r *NoteRepository) Save(ctx context.Context, userID int64, noteEntity *not
 			model.UpdatedAt = now
 		}
 
-		var tagsArray []string
-		if model.Tags.Valid {
-			// Parse tags from PostgreSQL format string
-			tagsStr := model.Tags.String
-			if len(tagsStr) >= 2 && tagsStr[0] == '{' && tagsStr[len(tagsStr)-1] == '}' {
-				inner := tagsStr[1 : len(tagsStr)-1]
-				if inner != "" {
-					parts := strings.Split(inner, ",")
-					for _, part := range parts {
-						part = strings.TrimSpace(part)
-						if len(part) >= 2 && part[0] == '"' && part[len(part)-1] == '"' {
-							part = part[1 : len(part)-1]
-						}
-						if part != "" {
-							tagsArray = append(tagsArray, part)
-						}
-					}
-				}
-			}
-		}
-
 		var deletedAt sql.NullTime
 		if model.DeletedAt.Valid {
 			deletedAt = model.DeletedAt
@@ -80,7 +58,7 @@ func (r *NoteRepository) Save(ctx context.Context, userID int64, noteEntity *not
 			model.GUID,
 			model.NoteTypeID,
 			model.FieldsJSON,
-			pq.Array(tagsArray), // Use pq.Array for PostgreSQL arrays
+			pq.Array(noteEntity.GetTags()), // Use pq.Array for PostgreSQL arrays directly from entity
 			model.Marked,
 			model.CreatedAt,
 			model.UpdatedAt,
@@ -113,26 +91,6 @@ func (r *NoteRepository) Save(ctx context.Context, userID int64, noteEntity *not
 	now := time.Now()
 	model.UpdatedAt = now
 
-	var tagsArray []string
-	if model.Tags.Valid {
-		tagsStr := model.Tags.String
-		if len(tagsStr) >= 2 && tagsStr[0] == '{' && tagsStr[len(tagsStr)-1] == '}' {
-			inner := tagsStr[1 : len(tagsStr)-1]
-			if inner != "" {
-				parts := strings.Split(inner, ",")
-				for _, part := range parts {
-					part = strings.TrimSpace(part)
-					if len(part) >= 2 && part[0] == '"' && part[len(part)-1] == '"' {
-						part = part[1 : len(part)-1]
-					}
-					if part != "" {
-						tagsArray = append(tagsArray, part)
-					}
-				}
-			}
-		}
-	}
-
 	var deletedAt sql.NullTime
 	if model.DeletedAt.Valid {
 		deletedAt = model.DeletedAt
@@ -142,7 +100,7 @@ func (r *NoteRepository) Save(ctx context.Context, userID int64, noteEntity *not
 		model.GUID,
 		model.NoteTypeID,
 		model.FieldsJSON,
-		pq.Array(tagsArray),
+		pq.Array(noteEntity.GetTags()),
 		model.Marked,
 		model.UpdatedAt,
 		deletedAt,

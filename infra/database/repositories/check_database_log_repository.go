@@ -252,6 +252,48 @@ func (r *CheckDatabaseLogRepository) Exists(ctx context.Context, userID int64, i
 	return exists, nil
 }
 
+// FindLatest finds the latest check logs for a user
+func (r *CheckDatabaseLogRepository) FindLatest(ctx context.Context, userID int64, limit int) ([]*checkdatabaselog.CheckDatabaseLog, error) {
+	query := `
+		SELECT id, user_id, status, issues_found, issues_details, execution_time_ms, created_at
+		FROM check_database_log
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find latest check logs: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []*checkdatabaselog.CheckDatabaseLog
+	for rows.Next() {
+		var model models.CheckDatabaseLogModel
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.Status,
+			&model.IssuesFound,
+			&model.IssuesDetails,
+			&model.ExecutionTimeMs,
+			&model.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan check log: %w", err)
+		}
+
+		logEntity, err := mappers.CheckDatabaseLogToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert check log to domain: %w", err)
+		}
+		logs = append(logs, logEntity)
+	}
+
+	return logs, nil
+}
+
 // Ensure CheckDatabaseLogRepository implements ICheckDatabaseLogRepository
 var _ secondary.ICheckDatabaseLogRepository = (*CheckDatabaseLogRepository)(nil)
 

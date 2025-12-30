@@ -32,5 +32,8 @@ type IProfileRepository interface {
 
 	// Exists checks if a profile exists and belongs to the user
 	Exists(ctx context.Context, userID int64, id int64) (bool, error)
+
+	// FindByName finds a profile by name, filtering by userID to ensure ownership
+	FindByName(ctx context.Context, userID int64, name string) (*profile.Profile, error)
 }
 

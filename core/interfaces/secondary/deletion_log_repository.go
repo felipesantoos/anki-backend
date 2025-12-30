@@ -32,5 +32,8 @@ type IDeletionLogRepository interface {
 
 	// Exists checks if a deletion log exists and belongs to the user
 	Exists(ctx context.Context, userID int64, id int64) (bool, error)
+
+	// FindByObjectType finds all deletion logs of a specific object type for a user
+	FindByObjectType(ctx context.Context, userID int64, objectType string) ([]*deletionlog.DeletionLog, error)
 }
 

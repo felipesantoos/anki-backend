@@ -228,6 +228,46 @@ func (r *UndoHistoryRepository) Exists(ctx context.Context, userID int64, id int
 	return exists, nil
 }
 
+// FindLatest finds the latest undo history entries for a user
+func (r *UndoHistoryRepository) FindLatest(ctx context.Context, userID int64, limit int) ([]*undohistory.UndoHistory, error) {
+	query := `
+		SELECT id, user_id, operation_type, operation_data, created_at
+		FROM undo_history
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find latest undo history: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []*undohistory.UndoHistory
+	for rows.Next() {
+		var model models.UndoHistoryModel
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.OperationType,
+			&model.OperationData,
+			&model.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan undo history: %w", err)
+		}
+
+		logEntity, err := mappers.UndoHistoryToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert undo history to domain: %w", err)
+		}
+		logs = append(logs, logEntity)
+	}
+
+	return logs, nil
+}
+
 // Ensure UndoHistoryRepository implements IUndoHistoryRepository
 var _ secondary.IUndoHistoryRepository = (*UndoHistoryRepository)(nil)
 

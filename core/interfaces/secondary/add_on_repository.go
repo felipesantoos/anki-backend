@@ -32,5 +32,11 @@ type IAddOnRepository interface {
 
 	// Exists checks if an add-on exists and belongs to the user
 	Exists(ctx context.Context, userID int64, id int64) (bool, error)
+
+	// FindByCode finds an add-on by code, filtering by userID to ensure ownership
+	FindByCode(ctx context.Context, userID int64, code string) (*addon.AddOn, error)
+
+	// FindEnabled finds all enabled add-ons for a user
+	FindEnabled(ctx context.Context, userID int64) ([]*addon.AddOn, error)
 }
 

@@ -237,6 +237,34 @@ func (r *FlagNameRepository) Exists(ctx context.Context, userID int64, id int64)
 	return exists, nil
 }
 
+// FindByFlagNumber finds a flag name by flag number, filtering by userID to ensure ownership
+func (r *FlagNameRepository) FindByFlagNumber(ctx context.Context, userID int64, flagNumber int) (*flagname.FlagName, error) {
+	query := `
+		SELECT id, user_id, flag_number, name, created_at, updated_at
+		FROM flag_names
+		WHERE flag_number = $1 AND user_id = $2
+	`
+
+	var model models.FlagNameModel
+	err := r.db.QueryRowContext(ctx, query, flagNumber, userID).Scan(
+		&model.ID,
+		&model.UserID,
+		&model.FlagNumber,
+		&model.Name,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find flag name by number: %w", err)
+	}
+
+	return mappers.FlagNameToDomain(&model)
+}
+
 // Ensure FlagNameRepository implements IFlagNameRepository
 var _ secondary.IFlagNameRepository = (*FlagNameRepository)(nil)
 

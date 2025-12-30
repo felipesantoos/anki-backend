@@ -35,7 +35,7 @@ type ISharedDeckRatingRepository interface {
 
 	// Specific methods
 	// FindBySharedDeckID finds all ratings for a shared deck
-	FindBySharedDeckID(ctx context.Context, sharedDeckID int64) ([]*shareddeckrating.SharedDeckRating, error)
+	FindBySharedDeckID(ctx context.Context, sharedDeckID int64, offset, limit int) ([]*shareddeckrating.SharedDeckRating, error)
 
 	// FindByUserIDAndSharedDeckID finds a rating by user and shared deck (one rating per user per deck)
 	FindByUserIDAndSharedDeckID(ctx context.Context, userID int64, sharedDeckID int64) (*shareddeckrating.SharedDeckRating, error)

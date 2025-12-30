@@ -32,5 +32,8 @@ type IUndoHistoryRepository interface {
 
 	// Exists checks if an undo history entry exists and belongs to the user
 	Exists(ctx context.Context, userID int64, id int64) (bool, error)
+
+	// FindLatest finds the latest undo history entries for a user
+	FindLatest(ctx context.Context, userID int64, limit int) ([]*undohistory.UndoHistory, error)
 }
 

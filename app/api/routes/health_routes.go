@@ -1,16 +1,15 @@
 package routes
 
 import (
-	"github.com/labstack/echo/v4"
-
 	"github.com/felipesantos/anki-backend/app/api/handlers"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
+	"github.com/felipesantos/anki-backend/dicontainer"
 )
 
-// RegisterHealthRoutes registers health check routes
-func RegisterHealthRoutes(e *echo.Echo, healthService primary.IHealthService) {
+// RegisterHealthRoutes registers health check routes on the Router
+func (r *Router) RegisterHealthRoutes() {
+	healthService := dicontainer.GetHealthService()
 	healthHandler := handlers.NewHealthHandler(healthService)
 
 	// Health check endpoint
-	e.GET("/health", healthHandler.HealthCheck)
+	r.echo.GET("/health", healthHandler.HealthCheck)
 }

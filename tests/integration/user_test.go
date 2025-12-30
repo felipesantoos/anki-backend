@@ -16,15 +16,8 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/routes"
-	authService "github.com/felipesantos/anki-backend/core/services/auth"
-	emailService "github.com/felipesantos/anki-backend/core/services/email"
-	profileService "github.com/felipesantos/anki-backend/core/services/profile"
-	sessionService "github.com/felipesantos/anki-backend/core/services/session"
-	userService "github.com/felipesantos/anki-backend/core/services/user"
-	userpreferencesService "github.com/felipesantos/anki-backend/core/services/userpreferences"
+	"github.com/felipesantos/anki-backend/dicontainer"
 	"github.com/felipesantos/anki-backend/config"
-	"github.com/felipesantos/anki-backend/infra/database/repositories"
-	infraEmail "github.com/felipesantos/anki-backend/infra/email"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
@@ -48,35 +41,20 @@ func TestUser_Integration(t *testing.T) {
 	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
 	require.NoError(t, err)
 
-	// Setup Session
-	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
-	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
-	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
-
-	// Setup Repositories
-	userRepo := repositories.NewUserRepository(db.DB)
-	deckRepo := repositories.NewDeckRepository(db.DB)
-	profileRepo := repositories.NewProfileRepository(db.DB)
-	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
-
 	// Setup Services
 	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
 	err = eventBus.Start()
 	require.NoError(t, err)
 	defer eventBus.Stop()
 
-	emailRepo := infraEmail.NewConsoleRepository(log)
-	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
-
-	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
-	userSvc := userService.NewUserService(userRepo)
-	profileSvc := profileService.NewProfileService(profileRepo)
-	userPreferencesSvc := userpreferencesService.NewUserPreferencesService(userPreferencesRepo)
+	// Initialize DI Package
+	dicontainer.Init(db, redisRepo, eventBus, jwtSvc, cfg, log)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
-	routes.RegisterUserRoutes(e, userSvc, profileSvc, userPreferencesSvc, jwtSvc, redisRepo)
+	router := routes.NewRouter(e, cfg, jwtSvc, redisRepo)
+	router.RegisterAuthRoutes()
+	router.RegisterUserRoutes()
 
 	// Register and login
 	loginRes := registerAndLogin(t, e, "user@example.com", "password123")

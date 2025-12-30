@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -16,16 +15,8 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/routes"
-	addonService "github.com/felipesantos/anki-backend/core/services/addon"
-	authService "github.com/felipesantos/anki-backend/core/services/auth"
-	backupService "github.com/felipesantos/anki-backend/core/services/backup"
-	emailService "github.com/felipesantos/anki-backend/core/services/email"
-	mediaService "github.com/felipesantos/anki-backend/core/services/media"
-	sessionService "github.com/felipesantos/anki-backend/core/services/session"
-	syncService "github.com/felipesantos/anki-backend/core/services/sync"
+	"github.com/felipesantos/anki-backend/dicontainer"
 	"github.com/felipesantos/anki-backend/config"
-	"github.com/felipesantos/anki-backend/infra/database/repositories"
-	infraEmail "github.com/felipesantos/anki-backend/infra/email"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
@@ -49,40 +40,20 @@ func TestSystem_Integration(t *testing.T) {
 	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
 	require.NoError(t, err)
 
-	// Setup Session
-	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
-	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
-	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
-
-	// Setup Repositories
-	userRepo := repositories.NewUserRepository(db.DB)
-	deckRepo := repositories.NewDeckRepository(db.DB)
-	profileRepo := repositories.NewProfileRepository(db.DB)
-	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
-	addOnRepo := repositories.NewAddOnRepository(db.DB)
-	backupRepo := repositories.NewBackupRepository(db.DB)
-	mediaRepo := repositories.NewMediaRepository(db.DB)
-	syncMetaRepo := repositories.NewSyncMetaRepository(db.DB)
-
 	// Setup Services
 	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
 	err = eventBus.Start()
 	require.NoError(t, err)
 	defer eventBus.Stop()
 
-	emailRepo := infraEmail.NewConsoleRepository(log)
-	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
-
-	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
-	addOnSvc := addonService.NewAddOnService(addOnRepo)
-	backupSvc := backupService.NewBackupService(backupRepo)
-	mediaSvc := mediaService.NewMediaService(mediaRepo)
-	syncMetaSvc := syncService.NewSyncMetaService(syncMetaRepo)
+	// Initialize DI Package
+	dicontainer.Init(db, redisRepo, eventBus, jwtSvc, cfg, log)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
-	routes.RegisterSystemRoutes(e, addOnSvc, backupSvc, mediaSvc, syncMetaSvc, jwtSvc, redisRepo)
+	router := routes.NewRouter(e, cfg, jwtSvc, redisRepo)
+	router.RegisterAuthRoutes()
+	router.RegisterSystemRoutes()
 
 	// Register and login
 	loginRes := registerAndLogin(t, e, "system@example.com", "password123")

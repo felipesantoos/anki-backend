@@ -1,35 +1,28 @@
 package routes
 
 import (
-	"github.com/labstack/echo/v4"
-
 	"github.com/felipesantos/anki-backend/app/api/handlers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
-	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	"github.com/felipesantos/anki-backend/pkg/jwt"
+	"github.com/felipesantos/anki-backend/dicontainer"
 )
 
 // RegisterStudyRoutes registers study-related routes (decks, cards, reviews)
-func RegisterStudyRoutes(
-	e *echo.Echo,
-	deckService primary.IDeckService,
-	filteredDeckService primary.IFilteredDeckService,
-	cardService primary.ICardService,
-	reviewService primary.IReviewService,
-	jwtService *jwt.JWTService,
-	cacheRepo secondary.ICacheRepository,
-) {
+func (r *Router) RegisterStudyRoutes() {
+	deckService := dicontainer.GetDeckService()
+	filteredDeckService := dicontainer.GetFilteredDeckService()
+	cardService := dicontainer.GetCardService()
+	reviewService := dicontainer.GetReviewService()
+
 	deckHandler := handlers.NewDeckHandler(deckService)
 	filteredDeckHandler := handlers.NewFilteredDeckHandler(filteredDeckService)
 	cardHandler := handlers.NewCardHandler(cardService)
 	reviewHandler := handlers.NewReviewHandler(reviewService)
 
 	// Auth middleware
-	authMiddleware := middlewares.AuthMiddleware(jwtService, cacheRepo)
+	authMiddleware := middlewares.AuthMiddleware(r.jwtSvc, r.rdb)
 
 	// Study group
-	v1 := e.Group("/api/v1", authMiddleware)
+	v1 := r.echo.Group("/api/v1", authMiddleware)
 
 	// Decks
 	decks := v1.Group("/decks")

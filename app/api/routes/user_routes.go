@@ -1,33 +1,26 @@
 package routes
 
 import (
-	"github.com/labstack/echo/v4"
-
 	"github.com/felipesantos/anki-backend/app/api/handlers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
-	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	"github.com/felipesantos/anki-backend/pkg/jwt"
+	"github.com/felipesantos/anki-backend/dicontainer"
 )
 
 // RegisterUserRoutes registers user-related routes (profile, preferences, account)
-func RegisterUserRoutes(
-	e *echo.Echo,
-	userService primary.IUserService,
-	profileService primary.IProfileService,
-	userPreferencesService primary.IUserPreferencesService,
-	jwtService *jwt.JWTService,
-	cacheRepo secondary.ICacheRepository,
-) {
+func (r *Router) RegisterUserRoutes() {
+	userService := dicontainer.GetUserService()
+	profileService := dicontainer.GetProfileService()
+	userPreferencesService := dicontainer.GetUserPreferencesService()
+
 	userHandler := handlers.NewUserHandler(userService)
 	profileHandler := handlers.NewProfileHandler(profileService)
 	preferencesHandler := handlers.NewUserPreferencesHandler(userPreferencesService)
 
 	// Auth middleware
-	authMiddleware := middlewares.AuthMiddleware(jwtService, cacheRepo)
+	authMiddleware := middlewares.AuthMiddleware(r.jwtSvc, r.rdb)
 
 	// User group
-	v1 := e.Group("/api/v1", authMiddleware)
+	v1 := r.echo.Group("/api/v1", authMiddleware)
 
 	// Account management
 	me := v1.Group("/user/me")

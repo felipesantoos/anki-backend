@@ -1,35 +1,28 @@
 package routes
 
 import (
-	"github.com/labstack/echo/v4"
-
 	"github.com/felipesantos/anki-backend/app/api/handlers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
-	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	"github.com/felipesantos/anki-backend/pkg/jwt"
+	"github.com/felipesantos/anki-backend/dicontainer"
 )
 
 // RegisterSystemRoutes registers system-related routes (addons, backups, media, sync)
-func RegisterSystemRoutes(
-	e *echo.Echo,
-	addOnService primary.IAddOnService,
-	backupService primary.IBackupService,
-	mediaService primary.IMediaService,
-	syncMetaService primary.ISyncMetaService,
-	jwtService *jwt.JWTService,
-	cacheRepo secondary.ICacheRepository,
-) {
+func (r *Router) RegisterSystemRoutes() {
+	addOnService := dicontainer.GetAddOnService()
+	backupService := dicontainer.GetBackupService()
+	mediaService := dicontainer.GetMediaService()
+	syncMetaService := dicontainer.GetSyncMetaService()
+
 	addOnHandler := handlers.NewAddOnHandler(addOnService)
 	backupHandler := handlers.NewBackupHandler(backupService)
 	mediaHandler := handlers.NewMediaHandler(mediaService)
 	syncMetaHandler := handlers.NewSyncMetaHandler(syncMetaService)
 
 	// Auth middleware
-	authMiddleware := middlewares.AuthMiddleware(jwtService, cacheRepo)
+	authMiddleware := middlewares.AuthMiddleware(r.jwtSvc, r.rdb)
 
 	// System group
-	v1 := e.Group("/api/v1", authMiddleware)
+	v1 := r.echo.Group("/api/v1", authMiddleware)
 
 	// Add-ons
 	addons := v1.Group("/addons")

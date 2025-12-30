@@ -1,7 +1,6 @@
 package dicontainer
 
 import (
-	"database/sql"
 	"log/slog"
 	"time"
 
@@ -24,6 +23,8 @@ import (
 	syncService "github.com/felipesantos/anki-backend/core/services/sync"
 	userService "github.com/felipesantos/anki-backend/core/services/user"
 	userpreferencesService "github.com/felipesantos/anki-backend/core/services/userpreferences"
+	"github.com/felipesantos/anki-backend/core/services/health"
+	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
@@ -35,7 +36,7 @@ import (
 
 // Package-level infrastructure variables
 var (
-	db       *sql.DB
+	dbRepo   secondary.IDatabaseRepository
 	rdb      *redis.RedisRepository
 	eventBus secondary.IEventBus
 	jwtSvc   *jwt.JWTService
@@ -45,14 +46,14 @@ var (
 
 // Init initializes the package-level infrastructure
 func Init(
-	databaseConn *sql.DB,
+	databaseRepo secondary.IDatabaseRepository,
 	redisRepo *redis.RedisRepository,
 	bus secondary.IEventBus,
 	jwtService *jwt.JWTService,
 	config *config.Config,
 	logger *slog.Logger,
 ) {
-	db = databaseConn
+	dbRepo = databaseRepo
 	rdb = redisRepo
 	eventBus = bus
 	jwtSvc = jwtService
@@ -62,108 +63,108 @@ func Init(
 
 // GetDeckService returns a fresh instance of DeckService
 func GetDeckService() primary.IDeckService {
-	deckRepo := repositories.NewDeckRepository(db)
+	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
 	return deckService.NewDeckService(deckRepo)
 }
 
 // GetFilteredDeckService returns a fresh instance of FilteredDeckService
 func GetFilteredDeckService() primary.IFilteredDeckService {
-	filteredDeckRepo := repositories.NewFilteredDeckRepository(db)
+	filteredDeckRepo := repositories.NewFilteredDeckRepository(dbRepo.GetDB())
 	return deckService.NewFilteredDeckService(filteredDeckRepo)
 }
 
 // GetCardService returns a fresh instance of CardService
 func GetCardService() primary.ICardService {
-	cardRepo := repositories.NewCardRepository(db)
+	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
 	return cardService.NewCardService(cardRepo)
 }
 
 // GetReviewService returns a fresh instance of ReviewService
 func GetReviewService() primary.IReviewService {
-	reviewRepo := repositories.NewReviewRepository(db)
-	cardRepo := repositories.NewCardRepository(db)
-	tm := database.NewTransactionManager(db)
+	reviewRepo := repositories.NewReviewRepository(dbRepo.GetDB())
+	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
+	tm := database.NewTransactionManager(dbRepo.GetDB())
 	return reviewService.NewReviewService(reviewRepo, cardRepo, tm)
 }
 
 // GetNoteTypeService returns a fresh instance of NoteTypeService
 func GetNoteTypeService() primary.INoteTypeService {
-	noteTypeRepo := repositories.NewNoteTypeRepository(db)
+	noteTypeRepo := repositories.NewNoteTypeRepository(dbRepo.GetDB())
 	return notetypeService.NewNoteTypeService(noteTypeRepo)
 }
 
 // GetNoteService returns a fresh instance of NoteService
 func GetNoteService() primary.INoteService {
-	noteRepo := repositories.NewNoteRepository(db)
-	cardRepo := repositories.NewCardRepository(db)
-	noteTypeRepo := repositories.NewNoteTypeRepository(db)
-	tm := database.NewTransactionManager(db)
+	noteRepo := repositories.NewNoteRepository(dbRepo.GetDB())
+	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
+	noteTypeRepo := repositories.NewNoteTypeRepository(dbRepo.GetDB())
+	tm := database.NewTransactionManager(dbRepo.GetDB())
 	return noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, tm)
 }
 
 // GetUserService returns a fresh instance of UserService
 func GetUserService() primary.IUserService {
-	userRepo := repositories.NewUserRepository(db)
+	userRepo := repositories.NewUserRepository(dbRepo.GetDB())
 	return userService.NewUserService(userRepo)
 }
 
 // GetProfileService returns a fresh instance of ProfileService
 func GetProfileService() primary.IProfileService {
-	profileRepo := repositories.NewProfileRepository(db)
+	profileRepo := repositories.NewProfileRepository(dbRepo.GetDB())
 	return profileService.NewProfileService(profileRepo)
 }
 
 // GetUserPreferencesService returns a fresh instance of UserPreferencesService
 func GetUserPreferencesService() primary.IUserPreferencesService {
-	userPreferencesRepo := repositories.NewUserPreferencesRepository(db)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(dbRepo.GetDB())
 	return userpreferencesService.NewUserPreferencesService(userPreferencesRepo)
 }
 
 // GetAddOnService returns a fresh instance of AddOnService
 func GetAddOnService() primary.IAddOnService {
-	addOnRepo := repositories.NewAddOnRepository(db)
+	addOnRepo := repositories.NewAddOnRepository(dbRepo.GetDB())
 	return addonService.NewAddOnService(addOnRepo)
 }
 
 // GetBackupService returns a fresh instance of BackupService
 func GetBackupService() primary.IBackupService {
-	backupRepo := repositories.NewBackupRepository(db)
+	backupRepo := repositories.NewBackupRepository(dbRepo.GetDB())
 	return backupService.NewBackupService(backupRepo)
 }
 
 // GetMediaService returns a fresh instance of MediaService
 func GetMediaService() primary.IMediaService {
-	mediaRepo := repositories.NewMediaRepository(db)
+	mediaRepo := repositories.NewMediaRepository(dbRepo.GetDB())
 	return mediaService.NewMediaService(mediaRepo)
 }
 
 // GetSyncMetaService returns a fresh instance of SyncMetaService
 func GetSyncMetaService() primary.ISyncMetaService {
-	syncMetaRepo := repositories.NewSyncMetaRepository(db)
+	syncMetaRepo := repositories.NewSyncMetaRepository(dbRepo.GetDB())
 	return syncService.NewSyncMetaService(syncMetaRepo)
 }
 
 // GetSharedDeckService returns a fresh instance of SharedDeckService
 func GetSharedDeckService() primary.ISharedDeckService {
-	sharedDeckRepo := repositories.NewSharedDeckRepository(db)
+	sharedDeckRepo := repositories.NewSharedDeckRepository(dbRepo.GetDB())
 	return shareddeckService.NewSharedDeckService(sharedDeckRepo)
 }
 
 // GetSharedDeckRatingService returns a fresh instance of SharedDeckRatingService
 func GetSharedDeckRatingService() primary.ISharedDeckRatingService {
-	sharedDeckRatingRepo := repositories.NewSharedDeckRatingRepository(db)
+	sharedDeckRatingRepo := repositories.NewSharedDeckRatingRepository(dbRepo.GetDB())
 	return shareddeckratingService.NewSharedDeckRatingService(sharedDeckRatingRepo)
 }
 
 // GetDeletionLogService returns a fresh instance of DeletionLogService
 func GetDeletionLogService() primary.IDeletionLogService {
-	deletionLogRepo := repositories.NewDeletionLogRepository(db)
+	deletionLogRepo := repositories.NewDeletionLogRepository(dbRepo.GetDB())
 	return auditService.NewDeletionLogService(deletionLogRepo)
 }
 
 // GetUndoHistoryService returns a fresh instance of UndoHistoryService
 func GetUndoHistoryService() primary.IUndoHistoryService {
-	undoHistoryRepo := repositories.NewUndoHistoryRepository(db)
+	undoHistoryRepo := repositories.NewUndoHistoryRepository(dbRepo.GetDB())
 	return auditService.NewUndoHistoryService(undoHistoryRepo)
 }
 
@@ -173,9 +174,9 @@ func GetEmailService() primary.IEmailService {
 		emailRepo, _ := infraEmail.NewSMTPRepository(cfg.Email)
 		return emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
 	}
-	emailRepo := infraEmail.NewConsoleRepository(log)
+		emailRepo := infraEmail.NewConsoleRepository(log)
 	return emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
-}
+	}
 
 // GetSessionService returns a fresh instance of SessionService
 func GetSessionService() primary.ISessionService {
@@ -186,10 +187,10 @@ func GetSessionService() primary.ISessionService {
 
 // GetAuthService returns a fresh instance of AuthService
 func GetAuthService() primary.IAuthService {
-	userRepo := repositories.NewUserRepository(db)
-	deckRepo := repositories.NewDeckRepository(db)
-	profileRepo := repositories.NewProfileRepository(db)
-	userPrefsRepo := repositories.NewUserPreferencesRepository(db)
+	userRepo := repositories.NewUserRepository(dbRepo.GetDB())
+	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
+	profileRepo := repositories.NewProfileRepository(dbRepo.GetDB())
+	userPrefsRepo := repositories.NewUserPreferencesRepository(dbRepo.GetDB())
 
 	return authService.NewAuthService(
 		userRepo,
@@ -202,4 +203,34 @@ func GetAuthService() primary.IAuthService {
 		GetEmailService(),
 		GetSessionService(),
 	)
+}
+
+// GetHealthService returns a fresh instance of HealthService
+func GetHealthService() primary.IHealthService {
+	return health.NewHealthService(dbRepo, rdb)
+}
+
+// GetMetricsService returns a fresh instance of MetricsService
+func GetMetricsService() primary.IMetricsService {
+	if !cfg.Metrics.Enabled {
+		return nil
+	}
+	metricsSvc := metricsService.NewMetricsService()
+	if cfg.Metrics.EnableHTTPMetrics {
+		metricsSvc.RegisterHTTPMetrics()
+	}
+	if cfg.Metrics.EnableSystemMetrics {
+		metricsSvc.RegisterSystemMetrics()
+		metricsSvc.RegisterDatabaseCollector(dbRepo.GetDB())
+		metricsSvc.RegisterRedisCollector(rdb.Client)
+	}
+		if cfg.Metrics.EnableBusinessMetrics {
+		metricsSvc.RegisterBusinessMetrics()
+	}
+	return metricsSvc
+}
+
+// GetConfig returns the application configuration
+func GetConfig() *config.Config {
+	return cfg
 }

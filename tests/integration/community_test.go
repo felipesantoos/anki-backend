@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -16,15 +15,8 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/routes"
-	auditService "github.com/felipesantos/anki-backend/core/services/audit"
-	authService "github.com/felipesantos/anki-backend/core/services/auth"
-	emailService "github.com/felipesantos/anki-backend/core/services/email"
-	sessionService "github.com/felipesantos/anki-backend/core/services/session"
-	shareddeckService "github.com/felipesantos/anki-backend/core/services/shareddeck"
-	shareddeckratingService "github.com/felipesantos/anki-backend/core/services/shareddeckrating"
+	"github.com/felipesantos/anki-backend/dicontainer"
 	"github.com/felipesantos/anki-backend/config"
-	"github.com/felipesantos/anki-backend/infra/database/repositories"
-	infraEmail "github.com/felipesantos/anki-backend/infra/email"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
@@ -52,40 +44,20 @@ func TestCommunity_Integration(t *testing.T) {
 	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
 	require.NoError(t, err)
 
-	// Setup Session
-	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
-	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
-	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
-
-	// Setup Repositories
-	userRepo := repositories.NewUserRepository(db.DB)
-	deckRepo := repositories.NewDeckRepository(db.DB)
-	profileRepo := repositories.NewProfileRepository(db.DB)
-	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
-	sharedDeckRepo := repositories.NewSharedDeckRepository(db.DB)
-	sharedDeckRatingRepo := repositories.NewSharedDeckRatingRepository(db.DB)
-	deletionLogRepo := repositories.NewDeletionLogRepository(db.DB)
-	undoHistoryRepo := repositories.NewUndoHistoryRepository(db.DB)
-
 	// Setup Services
 	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
 	err = eventBus.Start()
 	require.NoError(t, err)
 	defer eventBus.Stop()
 
-	emailRepo := infraEmail.NewConsoleRepository(log)
-	emailSvc := emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
-
-	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
-	sharedDeckSvc := shareddeckService.NewSharedDeckService(sharedDeckRepo)
-	sharedDeckRatingSvc := shareddeckratingService.NewSharedDeckRatingService(sharedDeckRatingRepo)
-	deletionLogSvc := auditService.NewDeletionLogService(deletionLogRepo)
-	undoHistorySvc := auditService.NewUndoHistoryService(undoHistoryRepo)
+	// Initialize DI Package
+	dicontainer.Init(db, redisRepo, eventBus, jwtSvc, cfg, log)
 
 	// Setup Echo
 	e := echo.New()
-	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, redisRepo, sessionSvc)
-	routes.RegisterCommunityRoutes(e, sharedDeckSvc, sharedDeckRatingSvc, deletionLogSvc, undoHistorySvc, jwtSvc, redisRepo)
+	router := routes.NewRouter(e, cfg, jwtSvc, redisRepo)
+	router.RegisterAuthRoutes()
+	router.RegisterCommunityRoutes()
 
 	// Register and login
 	loginRes := registerAndLogin(t, e, "community@example.com", "password123")

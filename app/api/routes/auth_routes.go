@@ -1,25 +1,24 @@
 package routes
 
 import (
-	"github.com/labstack/echo/v4"
-
 	"github.com/felipesantos/anki-backend/app/api/handlers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
-	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	"github.com/felipesantos/anki-backend/pkg/jwt"
+	"github.com/felipesantos/anki-backend/dicontainer"
 )
 
-// RegisterAuthRoutes registers authentication routes on the Echo router
-func RegisterAuthRoutes(e *echo.Echo, authService primary.IAuthService, jwtService *jwt.JWTService, cacheRepo secondary.ICacheRepository, sessionService primary.ISessionService) {
+// RegisterAuthRoutes registers authentication routes on the Router
+func (r *Router) RegisterAuthRoutes() {
+	authService := dicontainer.GetAuthService()
+	sessionService := dicontainer.GetSessionService()
+	
 	authHandler := handlers.NewAuthHandler(authService)
 	sessionHandler := handlers.NewSessionHandler(sessionService)
 
 	// Create auth group
-	authGroup := e.Group("/api/v1/auth")
+	authGroup := r.echo.Group("/api/v1/auth")
 
 	// Create authenticated auth group (requires JWT)
-	authMiddleware := middlewares.AuthMiddleware(jwtService, cacheRepo)
+	authMiddleware := middlewares.AuthMiddleware(r.jwtSvc, r.rdb)
 	authenticatedAuthGroup := authGroup.Group("", authMiddleware)
 
 	// Register public routes

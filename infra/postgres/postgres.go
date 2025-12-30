@@ -101,6 +101,11 @@ func (p *PostgresRepository) Ping(ctx context.Context) error {
 	return nil
 }
 
+// GetDB returns the underlying sql.DB connection
+func (p *PostgresRepository) GetDB() *sql.DB {
+	return p.DB
+}
+
 // Close closes the database connection gracefully
 func (p *PostgresRepository) Close() error {
 	return p.DB.Close()

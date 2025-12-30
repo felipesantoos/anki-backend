@@ -1,31 +1,24 @@
 package routes
 
 import (
-	"github.com/labstack/echo/v4"
-
 	"github.com/felipesantos/anki-backend/app/api/handlers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
-	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	"github.com/felipesantos/anki-backend/pkg/jwt"
+	"github.com/felipesantos/anki-backend/dicontainer"
 )
 
 // RegisterContentRoutes registers content-related routes (notes, note types)
-func RegisterContentRoutes(
-	e *echo.Echo,
-	noteService primary.INoteService,
-	noteTypeService primary.INoteTypeService,
-	jwtService *jwt.JWTService,
-	cacheRepo secondary.ICacheRepository,
-) {
+func (r *Router) RegisterContentRoutes() {
+	noteService := dicontainer.GetNoteService()
+	noteTypeService := dicontainer.GetNoteTypeService()
+
 	noteHandler := handlers.NewNoteHandler(noteService)
 	noteTypeHandler := handlers.NewNoteTypeHandler(noteTypeService)
 
 	// Auth middleware
-	authMiddleware := middlewares.AuthMiddleware(jwtService, cacheRepo)
+	authMiddleware := middlewares.AuthMiddleware(r.jwtSvc, r.rdb)
 
 	// Content group
-	v1 := e.Group("/api/v1", authMiddleware)
+	v1 := r.echo.Group("/api/v1", authMiddleware)
 
 	// Note Types
 	noteTypes := v1.Group("/note-types")

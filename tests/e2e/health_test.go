@@ -10,7 +10,7 @@ import (
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/routes"
-	"github.com/felipesantos/anki-backend/core/services/health"
+	"github.com/felipesantos/anki-backend/dicontainer"
 	"github.com/felipesantos/anki-backend/infra/postgres"
 	"github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/config"
@@ -44,11 +44,12 @@ func setupHealthTestServer(t *testing.T) (*echo.Echo, *httptest.Server) {
 		return nil, nil
 	}
 
-	// Create health service
-	healthService := health.NewHealthService(db, rdb)
+	// Initialize DI Package
+	dicontainer.Init(db, rdb, nil, nil, cfg, logger)
 
-	// Register routes
-	routes.RegisterHealthRoutes(e, healthService)
+	// Register routes using Router
+	router := routes.NewRouter(e, cfg, nil, rdb)
+	router.RegisterHealthRoutes()
 
 	// Create test server
 	server := httptest.NewServer(e)

@@ -79,6 +79,7 @@ func (s *NoteService) Create(ctx context.Context, userID int64, noteTypeID int64
 				WithCardTypeID(i).
 				WithDeckID(deckID).
 				WithDue(now.Unix() * 1000). // New cards due now
+				WithEase(2500).             // Default ease 250%
 				WithState(valueobjects.CardStateNew).
 				WithCreatedAt(now).
 				WithUpdatedAt(now).

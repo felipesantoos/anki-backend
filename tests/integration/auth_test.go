@@ -4,23 +4,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
 
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,97 +27,14 @@ import (
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	infraEmail "github.com/felipesantos/anki-backend/infra/email"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
-	postgresInfra "github.com/felipesantos/anki-backend/infra/postgres"
 	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/config"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 )
 
-func setupAuthTestDB(t *testing.T) (*postgresInfra.PostgresRepository, func()) {
-	if os.Getenv("SKIP_DB_TESTS") == "true" {
-		t.Skip("Skipping database integration tests")
-	}
-
-	cfg, err := config.Load()
-	require.NoError(t, err, "Failed to load config")
-
-	log := logger.GetLogger()
-	
-	// Create database connection for migrations
-	dsn := buildDSN(cfg.Database)
-	db, err := sql.Open("postgres", dsn)
-	require.NoError(t, err, "Failed to open database connection")
-	
-	// Ensure schema_migrations table exists
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version bigint NOT NULL PRIMARY KEY,
-			dirty boolean NOT NULL
-		);
-	`)
-	require.NoError(t, err, "Failed to ensure schema_migrations table exists")
-	
-	// Create postgres driver instance
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
-	require.NoError(t, err, "Failed to create postgres driver")
-	
-	// Get the absolute path to migrations directory relative to this test file
-	// tests/integration/auth_test.go -> ../../migrations
-	_, testFile, _, _ := runtime.Caller(0)
-	testDir := filepath.Dir(testFile)
-	migrationsDir := filepath.Join(testDir, "..", "..", "migrations")
-	migrationsDir, err = filepath.Abs(migrationsDir)
-	require.NoError(t, err, "Failed to get migrations directory path")
-	
-	migrationURL := fmt.Sprintf("file://%s", migrationsDir)
-	m, err := migrate.NewWithDatabaseInstance(migrationURL, "postgres", driver)
-	require.NoError(t, err, "Failed to create migrator")
-	
-	// Run migrations
-	err = m.Up()
-	if err != nil && err != migrate.ErrNoChange {
-		require.NoError(t, err, "Failed to run migrations")
-	}
-	
-	// Close migrator
-	sourceErr, dbErr := m.Close()
-	if sourceErr != nil {
-		t.Logf("Error closing migration source: %v", sourceErr)
-	}
-	if dbErr != nil {
-		t.Logf("Error closing migration database: %v", dbErr)
-	}
-	
-	// Close the temporary DB connection
-	db.Close()
-	
-	// Create PostgresRepository for the test
-	repoDB, err := postgresInfra.NewPostgresRepository(cfg.Database, log)
-	if err != nil {
-		t.Skipf("Database not available: %v", err)
-	}
-
-	cleanup := func() {
-		// Clean up test data using TRUNCATE CASCADE to handle dependencies and reset sequences
-		_, err := repoDB.DB.Exec(`
-			TRUNCATE TABLE users, decks, note_types, notes, cards, reviews, media, note_media, 
-			sync_meta, user_preferences, backups, filtered_decks, deck_options_presets, 
-			deletions_log, saved_searches, flag_names, browser_config, undo_history, 
-			shared_decks, shared_deck_ratings, add_ons, check_database_log, profiles RESTART IDENTITY CASCADE;
-		`)
-		if err != nil {
-			t.Logf("Failed to clean up database: %v", err)
-		}
-		
-		repoDB.Close()
-	}
-
-	return repoDB, cleanup
-}
-
 func TestAuth_Register_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -152,13 +62,15 @@ func TestAuth_Register_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -274,7 +186,7 @@ func TestAuth_Register_Integration(t *testing.T) {
 }
 
 func TestAuth_Login_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -302,13 +214,15 @@ func TestAuth_Login_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -405,7 +319,7 @@ func TestAuth_Login_Integration(t *testing.T) {
 }
 
 func TestAuth_RefreshToken_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -433,13 +347,15 @@ func TestAuth_RefreshToken_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -578,7 +494,7 @@ func TestAuth_RefreshToken_Integration(t *testing.T) {
 }
 
 func TestAuth_Logout_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -606,13 +522,15 @@ func TestAuth_Logout_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -747,7 +665,7 @@ func TestAuth_Logout_Integration(t *testing.T) {
 
 
 func TestAuth_VerifyEmail_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -775,13 +693,15 @@ func TestAuth_VerifyEmail_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -847,7 +767,7 @@ func TestAuth_VerifyEmail_Integration(t *testing.T) {
 }
 
 func TestAuth_ResendVerificationEmail_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -875,13 +795,15 @@ func TestAuth_ResendVerificationEmail_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -969,7 +891,7 @@ func TestAuth_ResendVerificationEmail_Integration(t *testing.T) {
 }
 
 func TestAuth_RequestPasswordReset_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -997,13 +919,15 @@ func TestAuth_RequestPasswordReset_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -1077,7 +1001,7 @@ func TestAuth_RequestPasswordReset_Integration(t *testing.T) {
 }
 
 func TestAuth_ResetPassword_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -1105,13 +1029,15 @@ func TestAuth_ResetPassword_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()
@@ -1313,7 +1239,7 @@ func TestAuth_ResetPassword_Integration(t *testing.T) {
 }
 
 func TestAuth_ChangePassword_Integration(t *testing.T) {
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup event bus
@@ -1341,13 +1267,15 @@ func TestAuth_ChangePassword_Integration(t *testing.T) {
 	// Setup repositories and service
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
 	
 	// Setup session service
 	sessionRepo := redisInfra.NewSessionRepository(redisRepo.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
 	
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, redisRepo, emailSvc, sessionSvc)
 
 	// Setup Echo
 	e := echo.New()

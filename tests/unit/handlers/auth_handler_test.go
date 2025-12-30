@@ -111,7 +111,7 @@ func createTestUser() *userEntity.User {
 func TestAuthHandler_Register_Success(t *testing.T) {
 	testUser := createTestUser()
 	mockService := &mockAuthService{
-		registerFunc: func(ctx context.Context, email string, password string) (*entities.User, error) {
+		registerFunc: func(ctx context.Context, email string, password string) (*userEntity.User, error) {
 			return testUser, nil
 		},
 	}
@@ -146,12 +146,12 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 		t.Fatalf("Register() failed to unmarshal response: %v", err)
 	}
 
-	if result.User.ID != testUser.ID {
-		t.Errorf("Register() user.ID = %d, want %d", result.User.ID, testUser.ID)
+	if result.User.ID != testUser.GetID() {
+		t.Errorf("Register() user.ID = %d, want %d", result.User.ID, testUser.GetID())
 	}
 
-	if result.User.Email != testUser.Email.Value() {
-		t.Errorf("Register() user.Email = %v, want %v", result.User.Email, testUser.Email.Value())
+	if result.User.Email != testUser.GetEmail().Value() {
+		t.Errorf("Register() user.Email = %v, want %v", result.User.Email, testUser.GetEmail().Value())
 	}
 }
 
@@ -308,7 +308,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 	}
 
 	mockService := &mockAuthService{
-		loginFunc: func(ctx context.Context, email string, password string) (*response.LoginResponse, error) {
+		loginFunc: func(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error) {
 			return loginResp, nil
 		},
 	}
@@ -357,7 +357,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 
 func TestAuthHandler_Login_InvalidCredentials(t *testing.T) {
 	mockService := &mockAuthService{
-		loginFunc: func(ctx context.Context, email string, password string) (*response.LoginResponse, error) {
+		loginFunc: func(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error) {
 			return nil, authService.ErrInvalidCredentials
 		},
 	}

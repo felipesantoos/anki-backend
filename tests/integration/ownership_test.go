@@ -21,7 +21,7 @@ func TestOwnership_DeckRepository_Isolation(t *testing.T) {
 		t.Skip("Skipping database integration tests")
 	}
 
-	db, cleanup := setupAuthTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	userRepo := repositories.NewUserRepository(db.DB)

@@ -9,6 +9,8 @@ import (
 
 	userEntity "github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
+	"github.com/felipesantos/anki-backend/core/domain/entities/profile"
+	userpreferences "github.com/felipesantos/anki-backend/core/domain/entities/user_preferences"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
@@ -64,6 +66,74 @@ func (m *mockUserRepository) Update(ctx context.Context, u *userEntity.User) err
 
 func (m *mockUserRepository) Delete(ctx context.Context, id int64) error {
 	return nil
+}
+
+// mockProfileRepository is a mock implementation of IProfileRepository
+type mockProfileRepository struct {
+	saveFunc func(ctx context.Context, userID int64, profile *profile.Profile) error
+}
+
+func (m *mockProfileRepository) Save(ctx context.Context, userID int64, p *profile.Profile) error {
+	if m.saveFunc != nil {
+		return m.saveFunc(ctx, userID, p)
+	}
+	return nil
+}
+
+func (m *mockProfileRepository) FindByID(ctx context.Context, userID int64, id int64) (*profile.Profile, error) {
+	return nil, nil
+}
+
+func (m *mockProfileRepository) FindByUserID(ctx context.Context, userID int64) ([]*profile.Profile, error) {
+	return nil, nil
+}
+
+func (m *mockProfileRepository) FindByName(ctx context.Context, userID int64, name string) (*profile.Profile, error) {
+	return nil, nil
+}
+
+func (m *mockProfileRepository) Update(ctx context.Context, userID int64, id int64, profile *profile.Profile) error {
+	return nil
+}
+
+func (m *mockProfileRepository) Delete(ctx context.Context, userID int64, id int64) error {
+	return nil
+}
+
+func (m *mockProfileRepository) Exists(ctx context.Context, userID int64, id int64) (bool, error) {
+	return false, nil
+}
+
+// mockUserPreferencesRepository is a mock implementation of IUserPreferencesRepository
+type mockUserPreferencesRepository struct {
+	saveFunc func(ctx context.Context, userID int64, prefs *userpreferences.UserPreferences) error
+}
+
+func (m *mockUserPreferencesRepository) Save(ctx context.Context, userID int64, p *userpreferences.UserPreferences) error {
+	if m.saveFunc != nil {
+		return m.saveFunc(ctx, userID, p)
+	}
+	return nil
+}
+
+func (m *mockUserPreferencesRepository) FindByUserID(ctx context.Context, userID int64) (*userpreferences.UserPreferences, error) {
+	return nil, nil
+}
+
+func (m *mockUserPreferencesRepository) FindByID(ctx context.Context, userID int64, id int64) (*userpreferences.UserPreferences, error) {
+	return nil, nil
+}
+
+func (m *mockUserPreferencesRepository) Update(ctx context.Context, userID int64, id int64, prefs *userpreferences.UserPreferences) error {
+	return nil
+}
+
+func (m *mockUserPreferencesRepository) Delete(ctx context.Context, userID int64, id int64) error {
+	return nil
+}
+
+func (m *mockUserPreferencesRepository) Exists(ctx context.Context, userID int64) (bool, error) {
+	return false, nil
 }
 
 // mockDeckRepository is a mock implementation of IDeckRepository
@@ -311,7 +381,7 @@ func TestAuthService_Register_Success(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	user, err := service.Register(ctx, "user@example.com", "password123")
@@ -351,7 +421,7 @@ func TestAuthService_Register_EmailAlreadyExists(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "existing@example.com", "password123")
@@ -374,7 +444,7 @@ func TestAuthService_Register_InvalidEmail(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "invalid-email", "password123")
@@ -401,7 +471,7 @@ func TestAuthService_Register_InvalidPassword(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 
@@ -459,7 +529,7 @@ func TestAuthService_Register_CreatesDefaultDeck(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "user@example.com", "password123")
@@ -500,7 +570,7 @@ func TestAuthService_Register_PublishesEvent(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Register(ctx, "user@example.com", "password123")
@@ -553,7 +623,7 @@ func TestAuthService_Login_Success(t *testing.T) {
 
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	resp, err := service.Login(ctx, "user@example.com", "password123", "192.168.1.1", "Mozilla/5.0")
@@ -633,7 +703,7 @@ func TestAuthService_Login_InvalidCredentials(t *testing.T) {
 
 			emailSvc := &mockEmailService{}
 			sessionSvc := &mockSessionService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 			ctx := context.Background()
 			_, err := service.Login(ctx, tt.email, tt.password, "192.168.1.1", "Mozilla/5.0")
@@ -658,7 +728,7 @@ func TestAuthService_Login_InvalidEmail(t *testing.T) {
 
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.Login(ctx, "invalid-email", "password123", "192.168.1.1", "Mozilla/5.0")
@@ -726,7 +796,7 @@ func TestAuthService_RefreshToken_Success(t *testing.T) {
 
 			emailSvc := &mockEmailService{}
 			sessionSvc := &mockSessionService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	resp, err := service.RefreshToken(ctx, refreshToken)
@@ -779,7 +849,7 @@ func TestAuthService_RefreshToken_InvalidToken(t *testing.T) {
 
 			emailSvc := &mockEmailService{}
 			sessionSvc := &mockSessionService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err := service.RefreshToken(ctx, "invalid-token")
@@ -821,7 +891,7 @@ func TestAuthService_RefreshToken_TokenNotInCache(t *testing.T) {
 
 			emailSvc := &mockEmailService{}
 			sessionSvc := &mockSessionService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err = service.RefreshToken(ctx, refreshToken)
@@ -863,7 +933,7 @@ func TestAuthService_RefreshToken_WrongTokenType(t *testing.T) {
 
 			emailSvc := &mockEmailService{}
 			sessionSvc := &mockSessionService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	_, err = service.RefreshToken(ctx, accessToken)
@@ -911,7 +981,7 @@ func TestAuthService_Logout_Success(t *testing.T) {
 
 			emailSvc := &mockEmailService{}
 			sessionSvc := &mockSessionService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.Logout(ctx, accessToken, refreshToken)
@@ -945,7 +1015,7 @@ func TestAuthService_Logout_InvalidToken(t *testing.T) {
 
 			emailSvc := &mockEmailService{}
 			sessionSvc := &mockSessionService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	// Logout should still succeed even with invalid tokens (idempotent operation)
@@ -980,7 +1050,7 @@ func TestAuthService_Logout_AccessTokenOnly(t *testing.T) {
 
 			emailSvc := &mockEmailService{}
 			sessionSvc := &mockSessionService{}
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.Logout(ctx, accessToken, "")
@@ -1054,7 +1124,7 @@ func TestAuthService_VerifyEmail_Success(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.VerifyEmail(ctx, token)
@@ -1077,7 +1147,7 @@ func TestAuthService_VerifyEmail_InvalidToken(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.VerifyEmail(ctx, "invalid-token")
@@ -1124,7 +1194,7 @@ func TestAuthService_VerifyEmail_AlreadyVerified(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	emailSvc := &mockEmailService{}
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.VerifyEmail(ctx, token)
@@ -1175,7 +1245,7 @@ func TestAuthService_ResendVerificationEmail_Success(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ResendVerificationEmail(ctx, "test@example.com")
@@ -1216,7 +1286,7 @@ func TestAuthService_ResendVerificationEmail_AlreadyVerified(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ResendVerificationEmail(ctx, "test@example.com")
@@ -1245,7 +1315,7 @@ func TestAuthService_ResendVerificationEmail_UserNotFound(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ResendVerificationEmail(ctx, "nonexistent@example.com")
@@ -1302,7 +1372,7 @@ func TestAuthService_RequestPasswordReset_Success(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.RequestPasswordReset(ctx, "test@example.com")
@@ -1338,7 +1408,7 @@ func TestAuthService_RequestPasswordReset_EmailNotFound(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.RequestPasswordReset(ctx, "nonexistent@example.com")
@@ -1371,7 +1441,7 @@ func TestAuthService_RequestPasswordReset_InvalidEmail(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.RequestPasswordReset(ctx, "invalid-email")
@@ -1428,7 +1498,7 @@ func TestAuthService_ResetPassword_Success(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.ResetPassword(ctx, token, "newpassword123")
@@ -1452,7 +1522,7 @@ func TestAuthService_ResetPassword_InvalidToken(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ResetPassword(ctx, "invalid-token", "newpassword123")
@@ -1482,7 +1552,7 @@ func TestAuthService_ResetPassword_WrongTokenType(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.ResetPassword(ctx, token, "newpassword123")
@@ -1517,7 +1587,7 @@ func TestAuthService_ResetPassword_UserNotFound(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.ResetPassword(ctx, token, "newpassword123")
@@ -1564,7 +1634,7 @@ func TestAuthService_ResetPassword_InvalidPassword(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err = service.ResetPassword(ctx, token, "short") // Password too short
@@ -1614,7 +1684,7 @@ func TestAuthService_ChangePassword_Success(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ChangePassword(ctx, 1, "oldpassword123", "newpassword123")
@@ -1655,7 +1725,7 @@ func TestAuthService_ChangePassword_InvalidCurrentPassword(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ChangePassword(ctx, 1, "wrongpassword123", "newpassword123")
@@ -1684,7 +1754,7 @@ func TestAuthService_ChangePassword_UserNotFound(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ChangePassword(ctx, 999, "oldpassword123", "newpassword123")
@@ -1725,7 +1795,7 @@ func TestAuthService_ChangePassword_InvalidNewPassword(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 
 	sessionSvc := createTestSessionService()
-	service := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
+	service := authService.NewAuthService(userRepo, deckRepo, &mockProfileRepository{}, &mockUserPreferencesRepository{}, eventBus, jwtSvc, cacheRepo, emailSvc, sessionSvc)
 
 	ctx := context.Background()
 	err := service.ChangePassword(ctx, 1, "oldpassword123", "short") // Password too short

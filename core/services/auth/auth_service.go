@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
+	"github.com/felipesantos/anki-backend/core/domain/entities/profile"
 	"github.com/felipesantos/anki-backend/core/domain/entities/user"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user_preferences"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
@@ -41,19 +43,23 @@ const (
 
 // AuthService implements IAuthService
 type AuthService struct {
-	userRepo      secondary.IUserRepository
-	deckRepo      secondary.IDeckRepository
-	eventBus      secondary.IEventBus
-	jwtService    *jwt.JWTService
-	cacheRepo     secondary.ICacheRepository
-	emailService  primary.IEmailService
-	sessionService primary.ISessionService
+	userRepo           secondary.IUserRepository
+	deckRepo           secondary.IDeckRepository
+	profileRepo        secondary.IProfileRepository
+	userPreferencesRepo secondary.IUserPreferencesRepository
+	eventBus           secondary.IEventBus
+	jwtService         *jwt.JWTService
+	cacheRepo          secondary.ICacheRepository
+	emailService       primary.IEmailService
+	sessionService     primary.ISessionService
 }
 
 // NewAuthService creates a new AuthService instance
 func NewAuthService(
 	userRepo secondary.IUserRepository,
 	deckRepo secondary.IDeckRepository,
+	profileRepo secondary.IProfileRepository,
+	userPreferencesRepo secondary.IUserPreferencesRepository,
 	eventBus secondary.IEventBus,
 	jwtService *jwt.JWTService,
 	cacheRepo secondary.ICacheRepository,
@@ -61,13 +67,15 @@ func NewAuthService(
 	sessionService primary.ISessionService,
 ) primary.IAuthService {
 	return &AuthService{
-		userRepo:       userRepo,
-		deckRepo:       deckRepo,
-		eventBus:       eventBus,
-		jwtService:     jwtService,
-		cacheRepo:      cacheRepo,
-		emailService:   emailService,
-		sessionService: sessionService,
+		userRepo:            userRepo,
+		deckRepo:            deckRepo,
+		profileRepo:         profileRepo,
+		userPreferencesRepo: userPreferencesRepo,
+		eventBus:            eventBus,
+		jwtService:          jwtService,
+		cacheRepo:           cacheRepo,
+		emailService:        emailService,
+		sessionService:      sessionService,
 	}
 }
 
@@ -137,10 +145,61 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 	// 6. Create default deck for the user
 	_, err = s.deckRepo.CreateDefaultDeck(ctx, userEntity.GetID())
 	if err != nil {
-		// If deck creation fails, we should log the error but not fail the registration
-		// The user was already created, so we return success but log the deck creation failure
-		// In a production system, we might want to use a transaction or a compensating action
 		return nil, fmt.Errorf("failed to create default deck: %w", err)
+	}
+
+	// 6.1. Create default profile for the user
+	defaultProfile, err := profile.NewBuilder().
+		WithID(0).
+		WithUserID(userEntity.GetID()).
+		WithName("Default").
+		WithAnkiWebSyncEnabled(false).
+		WithCreatedAt(now).
+		WithUpdatedAt(now).
+		Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build default profile: %w", err)
+	}
+	if err := s.profileRepo.Save(ctx, userEntity.GetID(), defaultProfile); err != nil {
+		return nil, fmt.Errorf("failed to save default profile: %w", err)
+	}
+
+	// 6.2. Create default user preferences
+	// Default time for next day starts at 4 AM
+	nextDayStartsAt := time.Date(1970, 1, 1, 4, 0, 0, 0, time.UTC)
+	defaultPrefs, err := userpreferences.NewBuilder().
+		WithID(0).
+		WithUserID(userEntity.GetID()).
+		WithLanguage("en").
+		WithTheme(valueobjects.ThemeTypeAuto).
+		WithAutoSync(true).
+		WithNextDayStartsAt(nextDayStartsAt).
+		WithLearnAheadLimit(20).
+		WithTimeboxTimeLimit(0).
+		WithVideoDriver("auto").
+		WithUISize(1.0).
+		WithMinimalistMode(false).
+		WithReduceMotion(false).
+		WithPasteStripsFormatting(false).
+		WithPasteImagesAsPNG(false).
+		WithDefaultDeckBehavior("current_deck").
+		WithShowPlayButtons(true).
+		WithInterruptAudioOnAnswer(true).
+		WithShowRemainingCount(true).
+		WithShowNextReviewTime(false).
+		WithSpacebarAnswersCard(true).
+		WithIgnoreAccentsInSearch(false).
+		WithSyncAudioAndImages(true).
+		WithPeriodicallySyncMedia(false).
+		WithForceOneWaySync(false).
+		WithCreatedAt(now).
+		WithUpdatedAt(now).
+		Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build default preferences: %w", err)
+	}
+	if err := s.userPreferencesRepo.Save(ctx, userEntity.GetID(), defaultPrefs); err != nil {
+		return nil, fmt.Errorf("failed to save default preferences: %w", err)
 	}
 
 	// 7. Publish UserRegistered event

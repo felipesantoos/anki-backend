@@ -17,6 +17,349 @@
     "host": "localhost:8080",
     "basePath": "/",
     "paths": {
+        "/api/v1/addons": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "addons"
+                ],
+                "summary": "List installed add-ons",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.AddOnResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "addons"
+                ],
+                "summary": "Install an add-on",
+                "parameters": [
+                    {
+                        "description": "Install request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.InstallAddOnRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.AddOnResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/addons/{code}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "addons"
+                ],
+                "summary": "Uninstall an add-on",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Add-on code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/addons/{code}/config": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "addons"
+                ],
+                "summary": "Update add-on configuration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Add-on code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Config request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateAddOnConfigRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.AddOnResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/addons/{code}/toggle": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "addons"
+                ],
+                "summary": "Enable or disable an add-on",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Add-on code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Toggle request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.ToggleAddOnRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.AddOnResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/audit/deletions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "audit"
+                ],
+                "summary": "List deletion logs for current user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.DeletionLogResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/audit/undo": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "audit"
+                ],
+                "summary": "List undo history for current user",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Number of records to return",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.UndoHistoryResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/audit/undo/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "audit"
+                ],
+                "summary": "Remove an undo history record",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Undo history record ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/change-password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes user password. Requires authentication via JWT Bearer token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Change password",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer JWT token (access token)",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Change password request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.ChangePasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Password changed successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request (e.g., invalid password, password mismatch)",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated or current password is incorrect",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/login": {
             "post": {
                 "description": "Authenticates a user with email and password and returns access and refresh tokens",
@@ -238,6 +581,2557 @@
                 }
             }
         },
+        "/api/v1/auth/request-password-reset": {
+            "post": {
+                "description": "Sends a password reset email to the user. Always returns success to avoid revealing if email exists.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request password reset",
+                "parameters": [
+                    {
+                        "description": "Password reset request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.RequestPasswordResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Password reset email sent successfully (if email exists)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/resend-verification": {
+            "post": {
+                "description": "Resends the email verification email to the user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Resend verification email",
+                "parameters": [
+                    {
+                        "description": "Resend verification request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.ResendVerificationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Verification email sent successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already verified",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/reset-password": {
+            "post": {
+                "description": "Resets user password using a reset token received via email",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Reset password",
+                "parameters": [
+                    {
+                        "description": "Reset password request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.ResetPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Password reset successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request (e.g., invalid password, password mismatch)",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or expired token",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/sessions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a list of all active sessions for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "List user sessions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer JWT token (access token)",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of sessions",
+                        "schema": {
+                            "$ref": "#/definitions/response.SessionListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Invalidates all sessions for the authenticated user (logout from all devices)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Delete all sessions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer JWT token (access token)",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "All sessions deleted successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/sessions/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns details of a specific session",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get session details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer JWT token (access token)",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Session details",
+                        "schema": {
+                            "$ref": "#/definitions/response.SessionResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Session does not belong to user",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Invalidates a specific session (logout from specific device)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Delete a session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer JWT token (access token)",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Session deleted successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Session does not belong to user",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/verify-email": {
+            "get": {
+                "description": "Verifies a user's email address using a verification token sent via email",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify user email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Email verification token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Email verified successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request - token is required",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or expired token",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/backups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backups"
+                ],
+                "summary": "List backups",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.BackupResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "backups"
+                ],
+                "summary": "Record a backup",
+                "parameters": [
+                    {
+                        "description": "Backup creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateBackupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.BackupResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/backups/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "backups"
+                ],
+                "summary": "Delete backup record",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Backup ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/cards/{cardID}/reviews": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reviews"
+                ],
+                "summary": "List reviews for a card",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Card ID",
+                        "name": "cardID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.ReviewResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/cards/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "Get card by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Card ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.CardResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "Delete card",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Card ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/cards/{id}/bury": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "Bury card",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Card ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/cards/{id}/flag": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "Set card flag",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Card ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Flag request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.SetCardFlagRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/cards/{id}/suspend": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "Suspend card",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Card ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/cards/{id}/unbury": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "Unbury card",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Card ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/cards/{id}/unsuspend": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "Unsuspend card",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Card ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/decks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all decks belonging to the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "decks"
+                ],
+                "summary": "List all decks",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.DeckResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new deck for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "decks"
+                ],
+                "summary": "Create a new deck",
+                "parameters": [
+                    {
+                        "description": "Deck creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateDeckRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.DeckResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/decks/{deckID}/cards": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "List cards in a deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Deck ID",
+                        "name": "deckID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.CardResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/decks/{deckID}/cards/due": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cards"
+                ],
+                "summary": "List due cards in a deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Deck ID",
+                        "name": "deckID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.CardResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/decks/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a deck by its ID for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "decks"
+                ],
+                "summary": "Get deck by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.DeckResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates an existing deck's name, parent or options",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "decks"
+                ],
+                "summary": "Update deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Deck update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateDeckRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.DeckResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft deletes a deck and its sub-decks",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "decks"
+                ],
+                "summary": "Delete deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/filtered-decks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "filtered-decks"
+                ],
+                "summary": "List filtered decks",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.FilteredDeckResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "filtered-decks"
+                ],
+                "summary": "Create a filtered deck",
+                "parameters": [
+                    {
+                        "description": "Filtered deck creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateFilteredDeckRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.FilteredDeckResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/filtered-decks/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "filtered-decks"
+                ],
+                "summary": "Update filtered deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Filtered Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateFilteredDeckRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.FilteredDeckResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "filtered-decks"
+                ],
+                "summary": "Delete filtered deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Filtered Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/marketplace/decks": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "List public shared decks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Category filter",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Tags filter",
+                        "name": "tags",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.SharedDeckResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "Publish a deck to marketplace",
+                "parameters": [
+                    {
+                        "description": "Share request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateSharedDeckRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.SharedDeckResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/marketplace/decks/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "Get shared deck by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Shared Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SharedDeckResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "Update shared deck info",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Shared Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateSharedDeckRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SharedDeckResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "Remove deck from marketplace",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Shared Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/marketplace/decks/{id}/download": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "Record a deck download",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Shared Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/marketplace/decks/{id}/ratings": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "List ratings for a shared deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Shared Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.SharedDeckRatingResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "Update rating for a shared deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Shared Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateSharedDeckRatingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SharedDeckRatingResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "Remove rating from a shared deck",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Shared Deck ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/marketplace/ratings": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "marketplace"
+                ],
+                "summary": "Rate a shared deck",
+                "parameters": [
+                    {
+                        "description": "Rating request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateSharedDeckRatingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.SharedDeckRatingResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/media": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "List media records",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.MediaResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "Record a media file",
+                "parameters": [
+                    {
+                        "description": "Media creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateMediaRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.MediaResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/media/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "Get media record by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Media ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.MediaResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "Delete media record",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Media ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/note-types": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "note-types"
+                ],
+                "summary": "List note types",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.NoteTypeResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "note-types"
+                ],
+                "summary": "Create a note type",
+                "parameters": [
+                    {
+                        "description": "Note type creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateNoteTypeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.NoteTypeResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/note-types/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "note-types"
+                ],
+                "summary": "Get note type by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Note Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.NoteTypeResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "note-types"
+                ],
+                "summary": "Update note type",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Note Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateNoteTypeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.NoteTypeResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "note-types"
+                ],
+                "summary": "Delete note type",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Note Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/notes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notes"
+                ],
+                "summary": "List notes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.NoteResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notes"
+                ],
+                "summary": "Create a note",
+                "parameters": [
+                    {
+                        "description": "Note creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateNoteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.NoteResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/notes/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notes"
+                ],
+                "summary": "Get note by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Note ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.NoteResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notes"
+                ],
+                "summary": "Update note",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Note ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateNoteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.NoteResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "notes"
+                ],
+                "summary": "Delete note",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Note ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/notes/{id}/tags": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notes"
+                ],
+                "summary": "Add tag to note",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Note ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tag request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.AddTagRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/notes/{id}/tags/{tag}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "notes"
+                ],
+                "summary": "Remove tag from note",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Note ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tag name",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/profiles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profiles"
+                ],
+                "summary": "List profiles",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/response.ProfileResponse"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profiles"
+                ],
+                "summary": "Create a profile",
+                "parameters": [
+                    {
+                        "description": "Profile creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.ProfileResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/profiles/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profiles"
+                ],
+                "summary": "Get profile by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Profile ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.ProfileResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profiles"
+                ],
+                "summary": "Update profile",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Profile ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.ProfileResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "profiles"
+                ],
+                "summary": "Delete profile",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Profile ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/profiles/{id}/sync/disable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "profiles"
+                ],
+                "summary": "Disable AnkiWeb sync for profile",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Profile ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/profiles/{id}/sync/enable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profiles"
+                ],
+                "summary": "Enable AnkiWeb sync for profile",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Profile ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Sync request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.EnableSyncRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/reviews": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reviews"
+                ],
+                "summary": "Record a card review",
+                "parameters": [
+                    {
+                        "description": "Review request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.CreateReviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.ReviewResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sync/meta": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sync"
+                ],
+                "summary": "Get sync metadata for current user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SyncMetaResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sync"
+                ],
+                "summary": "Update sync metadata after synchronization",
+                "parameters": [
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateSyncMetaRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.SyncMetaResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/user/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "user"
+                ],
+                "summary": "Get current user information",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.UserResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "user"
+                ],
+                "summary": "Update user account information",
+                "parameters": [
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.UserResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft deletes the user account. Irreversible from the API.",
+                "tags": [
+                    "user"
+                ],
+                "summary": "Delete user account",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/user/preferences": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preferences"
+                ],
+                "summary": "Get user preferences",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.UserPreferencesResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preferences"
+                ],
+                "summary": "Update user preferences",
+                "parameters": [
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.UpdateUserPreferencesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.UserPreferencesResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/user/preferences/reset": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "preferences"
+                ],
+                "summary": "Reset user preferences to defaults",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.UserPreferencesResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns the health status of the application and its dependencies (database, cache). The endpoint follows hexagonal architecture: Handler -\u003e Service (IHealthService) -\u003e Repositories (IDatabaseRepository, ICacheRepository)",
@@ -278,6 +3172,374 @@
         }
     },
     "definitions": {
+        "request.AddTagRequest": {
+            "type": "object",
+            "required": [
+                "tag"
+            ],
+            "properties": {
+                "tag": {
+                    "description": "Tag name to add",
+                    "type": "string",
+                    "example": "importante"
+                }
+            }
+        },
+        "request.ChangePasswordRequest": {
+            "description": "Request payload for changing password (requires authentication)",
+            "type": "object",
+            "required": [
+                "current_password",
+                "new_password",
+                "password_confirm"
+            ],
+            "properties": {
+                "current_password": {
+                    "description": "Current password (required for security)\n@Example currentPassword123",
+                    "type": "string",
+                    "example": "currentPassword123"
+                },
+                "new_password": {
+                    "description": "New password (minimum 8 characters, must contain at least one letter and one number)\n@Example newSecurePassword123",
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "newSecurePassword123"
+                },
+                "password_confirm": {
+                    "description": "Password confirmation (must match new_password)\n@Example newSecurePassword123",
+                    "type": "string",
+                    "example": "newSecurePassword123"
+                }
+            }
+        },
+        "request.CreateBackupRequest": {
+            "type": "object",
+            "required": [
+                "backup_type",
+                "filename",
+                "size",
+                "storage_path"
+            ],
+            "properties": {
+                "backup_type": {
+                    "type": "string",
+                    "example": "daily"
+                },
+                "filename": {
+                    "type": "string",
+                    "example": "backup-2024.colpkg"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 1048576
+                },
+                "storage_path": {
+                    "type": "string",
+                    "example": "/backups/1.colpkg"
+                }
+            }
+        },
+        "request.CreateDeckRequest": {
+            "description": "Request payload for creating a new deck",
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "description": "Name of the deck",
+                    "type": "string",
+                    "example": "Idiomas::Inglês"
+                },
+                "options_json": {
+                    "description": "Configuration options for the deck (JSON string)",
+                    "type": "string",
+                    "example": "{}"
+                },
+                "parent_id": {
+                    "description": "ID of the parent deck (optional)",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "request.CreateFilteredDeckRequest": {
+            "description": "Request payload for creating a new filtered deck",
+            "type": "object",
+            "required": [
+                "limit",
+                "name",
+                "order_by",
+                "search_filter"
+            ],
+            "properties": {
+                "limit": {
+                    "description": "Maximum number of cards to include",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 100
+                },
+                "name": {
+                    "description": "Name of the filtered deck",
+                    "type": "string",
+                    "example": "Revisão de Hoje"
+                },
+                "order_by": {
+                    "description": "Order by criteria (e.g., \"random\", \"added_desc\")",
+                    "type": "string",
+                    "example": "random"
+                },
+                "reschedule": {
+                    "description": "Whether to reschedule cards based on reviews in this deck",
+                    "type": "boolean",
+                    "example": true
+                },
+                "search_filter": {
+                    "description": "Search filter string (e.g., \"tag:marked\" or \"is:due\")",
+                    "type": "string",
+                    "example": "is:due"
+                }
+            }
+        },
+        "request.CreateMediaRequest": {
+            "type": "object",
+            "required": [
+                "filename",
+                "hash",
+                "mime_type",
+                "size",
+                "storage_path"
+            ],
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "example": "image.png"
+                },
+                "hash": {
+                    "type": "string",
+                    "example": "d41d8cd98f00b204e9800998ecf8427e"
+                },
+                "mime_type": {
+                    "type": "string",
+                    "example": "image/png"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 51200
+                },
+                "storage_path": {
+                    "type": "string",
+                    "example": "/media/1/image.png"
+                }
+            }
+        },
+        "request.CreateNoteRequest": {
+            "type": "object",
+            "required": [
+                "deck_id",
+                "fields_json",
+                "note_type_id"
+            ],
+            "properties": {
+                "deck_id": {
+                    "description": "ID of the deck where cards will be created",
+                    "type": "integer",
+                    "example": 1
+                },
+                "fields_json": {
+                    "description": "Fields data as a JSON string (e.g., '{\"Front\": \"Hello\", \"Back\": \"Olá\"}')",
+                    "type": "string",
+                    "example": "{\"Front\": \"cat\", \"Back\": \"gato\"}"
+                },
+                "note_type_id": {
+                    "description": "ID of the note type (template)",
+                    "type": "integer",
+                    "example": 1
+                },
+                "tags": {
+                    "description": "List of tags for the note",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"idiomas\"",
+                        " \"animal\"]"
+                    ]
+                }
+            }
+        },
+        "request.CreateNoteTypeRequest": {
+            "type": "object",
+            "required": [
+                "card_types_json",
+                "fields_json",
+                "name",
+                "templates_json"
+            ],
+            "properties": {
+                "card_types_json": {
+                    "description": "Card type definitions as a JSON string",
+                    "type": "string",
+                    "example": "[{\"name\": \"Cartão 1\"}]"
+                },
+                "fields_json": {
+                    "description": "Field definitions as a JSON string",
+                    "type": "string",
+                    "example": "[{\"name\": \"Front\"}, {\"name\": \"Back\"}]"
+                },
+                "name": {
+                    "description": "Name of the note type",
+                    "type": "string",
+                    "example": "Básico"
+                },
+                "templates_json": {
+                    "description": "Templates definitions as a JSON string",
+                    "type": "string",
+                    "example": "{\"qfmt\": \"{{Front}}\", \"afmt\": \"{{FrontSide}}\u003chr id=answer\u003e{{Back}}\"}"
+                }
+            }
+        },
+        "request.CreateProfileRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "description": "Name of the profile",
+                    "type": "string",
+                    "example": "Pessoal"
+                }
+            }
+        },
+        "request.CreateReviewRequest": {
+            "description": "Request payload for recording a card review",
+            "type": "object",
+            "required": [
+                "card_id",
+                "rating",
+                "time_ms"
+            ],
+            "properties": {
+                "card_id": {
+                    "description": "ID of the card being reviewed",
+                    "type": "integer",
+                    "example": 1
+                },
+                "rating": {
+                    "description": "Rating given to the card (1: Again, 2: Hard, 3: Good, 4: Easy)",
+                    "type": "integer",
+                    "maximum": 4,
+                    "minimum": 1,
+                    "example": 3
+                },
+                "time_ms": {
+                    "description": "Time taken to answer in milliseconds",
+                    "type": "integer",
+                    "minimum": 0,
+                    "example": 5000
+                }
+            }
+        },
+        "request.CreateSharedDeckRatingRequest": {
+            "type": "object",
+            "required": [
+                "rating",
+                "shared_deck_id"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "example": "Excelente deck!"
+                },
+                "rating": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1,
+                    "example": 5
+                },
+                "shared_deck_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "request.CreateSharedDeckRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "package_path",
+                "package_size"
+            ],
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "example": "Educação"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Deck com fórmulas básicas"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Física Básica"
+                },
+                "package_path": {
+                    "type": "string"
+                },
+                "package_size": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"física\"",
+                        " \"enem\"]"
+                    ]
+                }
+            }
+        },
+        "request.EnableSyncRequest": {
+            "type": "object",
+            "required": [
+                "username"
+            ],
+            "properties": {
+                "username": {
+                    "description": "AnkiWeb username/email",
+                    "type": "string",
+                    "example": "usuario@ankiweb.net"
+                }
+            }
+        },
+        "request.InstallAddOnRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "name"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "12345678"
+                },
+                "config_json": {
+                    "type": "string",
+                    "example": "{}"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "AnkiConnect"
+                },
+                "version": {
+                    "type": "string",
+                    "example": "1.0.0"
+                }
+            }
+        },
         "request.LoginRequest": {
             "description": "Request payload for user login endpoint",
             "type": "object",
@@ -340,6 +3602,505 @@
                 }
             }
         },
+        "request.RequestPasswordResetRequest": {
+            "description": "Request payload for requesting a password reset email",
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "description": "Email address to send password reset link to\n@Example user@example.com",
+                    "type": "string",
+                    "example": "user@example.com"
+                }
+            }
+        },
+        "request.ResendVerificationRequest": {
+            "description": "Request payload for resending email verification",
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "description": "Email address to resend verification email to",
+                    "type": "string",
+                    "example": "user@example.com"
+                }
+            }
+        },
+        "request.ResetPasswordRequest": {
+            "description": "Request payload for resetting password using a reset token",
+            "type": "object",
+            "required": [
+                "new_password",
+                "password_confirm",
+                "token"
+            ],
+            "properties": {
+                "new_password": {
+                    "description": "New password (minimum 8 characters, must contain at least one letter and one number)\n@Example newSecurePassword123",
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "newSecurePassword123"
+                },
+                "password_confirm": {
+                    "description": "Password confirmation (must match new_password)\n@Example newSecurePassword123",
+                    "type": "string",
+                    "example": "newSecurePassword123"
+                },
+                "token": {
+                    "description": "Password reset token received via email\n@Example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
+        "request.SetCardFlagRequest": {
+            "type": "object",
+            "properties": {
+                "flag": {
+                    "description": "Flag number (0: none, 1-7: colored flags)",
+                    "type": "integer",
+                    "maximum": 7,
+                    "minimum": 0,
+                    "example": 1
+                }
+            }
+        },
+        "request.ToggleAddOnRequest": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "request.UpdateAddOnConfigRequest": {
+            "type": "object",
+            "required": [
+                "config_json"
+            ],
+            "properties": {
+                "config_json": {
+                    "type": "string",
+                    "example": "{\"port\": 8765}"
+                }
+            }
+        },
+        "request.UpdateDeckRequest": {
+            "description": "Request payload for updating an existing deck",
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "description": "New name of the deck",
+                    "type": "string",
+                    "example": "Idiomas::Inglês::Avançado"
+                },
+                "options_json": {
+                    "description": "New configuration options for the deck (JSON string)",
+                    "type": "string",
+                    "example": "{}"
+                },
+                "parent_id": {
+                    "description": "New parent deck ID (optional)",
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "request.UpdateFilteredDeckRequest": {
+            "description": "Request payload for updating an existing filtered deck",
+            "type": "object",
+            "required": [
+                "limit",
+                "name",
+                "order_by",
+                "search_filter"
+            ],
+            "properties": {
+                "limit": {
+                    "description": "New maximum number of cards",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 50
+                },
+                "name": {
+                    "description": "New name of the filtered deck",
+                    "type": "string",
+                    "example": "Revisão de Hoje Atualizada"
+                },
+                "order_by": {
+                    "description": "New order by criteria",
+                    "type": "string",
+                    "example": "added_desc"
+                },
+                "reschedule": {
+                    "description": "New reschedule setting",
+                    "type": "boolean",
+                    "example": false
+                },
+                "search_filter": {
+                    "description": "New search filter string",
+                    "type": "string",
+                    "example": "is:due tag:importante"
+                }
+            }
+        },
+        "request.UpdateNoteRequest": {
+            "type": "object",
+            "required": [
+                "fields_json"
+            ],
+            "properties": {
+                "fields_json": {
+                    "description": "Updated fields data as a JSON string",
+                    "type": "string",
+                    "example": "{\"Front\": \"cat\", \"Back\": \"gato (felino)\"}"
+                },
+                "tags": {
+                    "description": "Updated list of tags",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"idiomas\"",
+                        " \"mamífero\"]"
+                    ]
+                }
+            }
+        },
+        "request.UpdateNoteTypeRequest": {
+            "type": "object",
+            "required": [
+                "card_types_json",
+                "fields_json",
+                "name",
+                "templates_json"
+            ],
+            "properties": {
+                "card_types_json": {
+                    "description": "Updated card type definitions",
+                    "type": "string"
+                },
+                "fields_json": {
+                    "description": "Updated field definitions",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "New name of the note type",
+                    "type": "string",
+                    "example": "Básico com Reverso"
+                },
+                "templates_json": {
+                    "description": "Updated templates definitions",
+                    "type": "string"
+                }
+            }
+        },
+        "request.UpdateProfileRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "description": "New name of the profile",
+                    "type": "string",
+                    "example": "Estudos Avançados"
+                }
+            }
+        },
+        "request.UpdateSharedDeckRatingRequest": {
+            "type": "object",
+            "required": [
+                "rating"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "rating": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1
+                }
+            }
+        },
+        "request.UpdateSharedDeckRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "is_public": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "request.UpdateSyncMetaRequest": {
+            "type": "object",
+            "required": [
+                "client_id",
+                "last_sync_usn"
+            ],
+            "properties": {
+                "client_id": {
+                    "type": "string",
+                    "example": "mobile-app-1"
+                },
+                "last_sync_usn": {
+                    "type": "integer",
+                    "example": 100
+                }
+            }
+        },
+        "request.UpdateUserPreferencesRequest": {
+            "type": "object",
+            "properties": {
+                "auto_sync": {
+                    "type": "boolean"
+                },
+                "default_deck_behavior": {
+                    "type": "string"
+                },
+                "default_search_text": {
+                    "type": "string"
+                },
+                "force_one_way_sync": {
+                    "type": "boolean"
+                },
+                "ignore_accents_in_search": {
+                    "type": "boolean"
+                },
+                "interrupt_audio_on_answer": {
+                    "type": "boolean"
+                },
+                "language": {
+                    "type": "string",
+                    "example": "pt-BR"
+                },
+                "learn_ahead_limit": {
+                    "type": "integer"
+                },
+                "minimalist_mode": {
+                    "type": "boolean"
+                },
+                "next_day_starts_at": {
+                    "type": "string"
+                },
+                "paste_images_as_png": {
+                    "type": "boolean"
+                },
+                "paste_strips_formatting": {
+                    "type": "boolean"
+                },
+                "periodically_sync_media": {
+                    "type": "boolean"
+                },
+                "reduce_motion": {
+                    "type": "boolean"
+                },
+                "self_hosted_sync_server_url": {
+                    "type": "string"
+                },
+                "show_next_review_time": {
+                    "type": "boolean"
+                },
+                "show_play_buttons": {
+                    "type": "boolean"
+                },
+                "show_remaining_count": {
+                    "type": "boolean"
+                },
+                "spacebar_answers_card": {
+                    "type": "boolean"
+                },
+                "sync_audio_and_images": {
+                    "type": "boolean"
+                },
+                "theme": {
+                    "type": "string",
+                    "example": "dark"
+                },
+                "timebox_time_limit": {
+                    "type": "integer"
+                },
+                "ui_size": {
+                    "type": "number"
+                },
+                "video_driver": {
+                    "type": "string"
+                }
+            }
+        },
+        "request.UpdateUserRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "description": "New email address",
+                    "type": "string",
+                    "example": "novo@email.com"
+                }
+            }
+        },
+        "response.AddOnResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "config_json": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.BackupResponse": {
+            "type": "object",
+            "properties": {
+                "backup_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "storage_path": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "response.CardResponse": {
+            "description": "Response payload containing card information",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "Timestamp when created",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "deck_id": {
+                    "description": "ID of the deck this card belongs to",
+                    "type": "integer",
+                    "example": 1
+                },
+                "due": {
+                    "description": "Next review date (Unix timestamp)",
+                    "type": "integer",
+                    "example": 1705324200
+                },
+                "ease": {
+                    "description": "Ease factor (in per mille)",
+                    "type": "integer",
+                    "example": 2500
+                },
+                "flags": {
+                    "description": "Colored flag (0: none)",
+                    "type": "integer",
+                    "example": 0
+                },
+                "id": {
+                    "description": "Unique identifier for the card",
+                    "type": "integer",
+                    "example": 1
+                },
+                "interval": {
+                    "description": "Interval until next review (in days)",
+                    "type": "integer",
+                    "example": 1
+                },
+                "lapses": {
+                    "description": "Number of lapses",
+                    "type": "integer",
+                    "example": 0
+                },
+                "note_id": {
+                    "description": "ID of the note this card belongs to",
+                    "type": "integer",
+                    "example": 1
+                },
+                "ord": {
+                    "description": "Ordinal position",
+                    "type": "integer",
+                    "example": 0
+                },
+                "reviews": {
+                    "description": "Number of reviews",
+                    "type": "integer",
+                    "example": 0
+                },
+                "state": {
+                    "description": "Current state (0: new, 1: learning, 2: review, 3: relearning)",
+                    "type": "integer",
+                    "example": 0
+                },
+                "suspended": {
+                    "description": "Whether suspended",
+                    "type": "boolean",
+                    "example": false
+                },
+                "updated_at": {
+                    "description": "Timestamp when last updated",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                }
+            }
+        },
         "response.ComponentHealth": {
             "description": "Health status of a single component (database, redis, etc.)",
             "type": "object",
@@ -353,6 +4114,66 @@
                     "description": "\"healthy\" or \"unhealthy\"",
                     "type": "string",
                     "example": "healthy"
+                }
+            }
+        },
+        "response.DeckResponse": {
+            "description": "Response payload containing deck information",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "Timestamp when the deck was created",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "id": {
+                    "description": "Unique identifier for the deck",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name of the deck",
+                    "type": "string",
+                    "example": "Idiomas::Inglês"
+                },
+                "options_json": {
+                    "description": "Configuration options as a JSON string",
+                    "type": "string",
+                    "example": "{}"
+                },
+                "parent_id": {
+                    "description": "ID of the parent deck (null if it's a root deck)",
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "description": "Timestamp when the deck was last updated",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "user_id": {
+                    "description": "ID of the user who owns the deck",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "response.DeletionLogResponse": {
+            "type": "object",
+            "properties": {
+                "deleted_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "object_id": {
+                    "type": "integer"
+                },
+                "object_type": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -389,6 +4210,57 @@
                     "description": "ISO 8601 timestamp",
                     "type": "string",
                     "example": "2024-01-15T10:30:00Z"
+                }
+            }
+        },
+        "response.FilteredDeckResponse": {
+            "description": "Response payload containing filtered deck information",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "Timestamp when created",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "id": {
+                    "description": "Unique identifier for the filtered deck",
+                    "type": "integer",
+                    "example": 1
+                },
+                "limit": {
+                    "description": "Maximum number of cards",
+                    "type": "integer",
+                    "example": 100
+                },
+                "name": {
+                    "description": "Name of the filtered deck",
+                    "type": "string",
+                    "example": "Revisão de Hoje"
+                },
+                "order_by": {
+                    "description": "Order by criteria",
+                    "type": "string",
+                    "example": "random"
+                },
+                "reschedule": {
+                    "description": "Whether rescheduling is enabled",
+                    "type": "boolean",
+                    "example": true
+                },
+                "search_filter": {
+                    "description": "Search filter criteria",
+                    "type": "string",
+                    "example": "is:due"
+                },
+                "updated_at": {
+                    "description": "Timestamp when last updated",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "user_id": {
+                    "description": "ID of the user who owns the deck",
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },
@@ -449,6 +4321,157 @@
                 }
             }
         },
+        "response.MediaResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "hash": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mime_type": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "storage_path": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "response.NoteResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "Timestamp when created",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "fields_json": {
+                    "description": "Fields data as a JSON string",
+                    "type": "string",
+                    "example": "{\"Front\": \"cat\", \"Back\": \"gato\"}"
+                },
+                "guid": {
+                    "description": "GUID for synchronization",
+                    "type": "string",
+                    "example": "abc-123"
+                },
+                "id": {
+                    "description": "Unique identifier for the note",
+                    "type": "integer",
+                    "example": 1
+                },
+                "note_type_id": {
+                    "description": "ID of the note type",
+                    "type": "integer",
+                    "example": 1
+                },
+                "tags": {
+                    "description": "List of tags",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"idiomas\"]"
+                    ]
+                },
+                "updated_at": {
+                    "description": "Timestamp when last updated",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                }
+            }
+        },
+        "response.NoteTypeResponse": {
+            "type": "object",
+            "properties": {
+                "card_types_json": {
+                    "description": "Card type definitions",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "Timestamp when created",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "fields_json": {
+                    "description": "Field definitions",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "Unique identifier for the note type",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name of the note type",
+                    "type": "string",
+                    "example": "Básico"
+                },
+                "templates_json": {
+                    "description": "Templates definitions",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "Timestamp when last updated",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "user_id": {
+                    "description": "ID of the user who owns the note type",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "response.ProfileResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "last_sync": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Pessoal"
+                },
+                "sync_username": {
+                    "type": "string",
+                    "example": "user@ankiweb.net"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
         "response.RegisterResponse": {
             "description": "Response payload for user registration endpoint",
             "type": "object",
@@ -460,6 +4483,197 @@
                             "$ref": "#/definitions/response.UserData"
                         }
                     ]
+                }
+            }
+        },
+        "response.ReviewResponse": {
+            "description": "Response payload containing review information",
+            "type": "object",
+            "properties": {
+                "card_id": {
+                    "description": "ID of the card reviewed",
+                    "type": "integer",
+                    "example": 1
+                },
+                "created_at": {
+                    "description": "Timestamp when review was performed",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "id": {
+                    "description": "Unique identifier for the review",
+                    "type": "integer",
+                    "example": 1
+                },
+                "rating": {
+                    "description": "Rating given (1-4)",
+                    "type": "integer",
+                    "example": 3
+                },
+                "time_ms": {
+                    "description": "Time taken in milliseconds",
+                    "type": "integer",
+                    "example": 5000
+                }
+            }
+        },
+        "response.SessionListResponse": {
+            "description": "Response payload for list of sessions",
+            "type": "object",
+            "properties": {
+                "sessions": {
+                    "description": "List of sessions",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/response.SessionResponse"
+                    }
+                },
+                "total": {
+                    "description": "Total number of sessions",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "response.SessionResponse": {
+            "description": "Response payload for session information",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "Session creation timestamp",
+                    "type": "string",
+                    "example": "2024-01-15T10:00:00Z"
+                },
+                "device_info": {
+                    "description": "Device information (optional)",
+                    "type": "string",
+                    "example": "Chrome on Windows"
+                },
+                "id": {
+                    "description": "Session ID",
+                    "type": "string",
+                    "example": "a1b2c3d4e5f6..."
+                },
+                "ip_address": {
+                    "description": "IP address from which the session was created",
+                    "type": "string",
+                    "example": "192.168.1.1"
+                },
+                "is_current": {
+                    "description": "Whether this is the current session",
+                    "type": "boolean",
+                    "example": true
+                },
+                "last_activity": {
+                    "description": "Last activity timestamp",
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "user_agent": {
+                    "description": "User agent string",
+                    "type": "string",
+                    "example": "Mozilla/5.0..."
+                },
+                "user_id": {
+                    "description": "User ID",
+                    "type": "integer",
+                    "example": 123
+                }
+            }
+        },
+        "response.SharedDeckRatingResponse": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "rating": {
+                    "type": "integer"
+                },
+                "shared_deck_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "response.SharedDeckResponse": {
+            "type": "object",
+            "properties": {
+                "author_id": {
+                    "type": "integer"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "download_count": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_public": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "package_path": {
+                    "type": "string"
+                },
+                "package_size": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.SyncMetaResponse": {
+            "type": "object",
+            "properties": {
+                "client_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_sync": {
+                    "type": "string"
+                },
+                "last_sync_usn": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -489,6 +4703,26 @@
                 }
             }
         },
+        "response.UndoHistoryResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "operation_data": {
+                    "type": "string"
+                },
+                "operation_type": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "response.UserData": {
             "type": "object",
             "properties": {
@@ -511,6 +4745,111 @@
                     "description": "User ID",
                     "type": "integer",
                     "example": 1
+                }
+            }
+        },
+        "response.UserPreferencesResponse": {
+            "type": "object",
+            "properties": {
+                "auto_sync": {
+                    "type": "boolean"
+                },
+                "default_deck_behavior": {
+                    "type": "string"
+                },
+                "default_search_text": {
+                    "type": "string"
+                },
+                "force_one_way_sync": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ignore_accents_in_search": {
+                    "type": "boolean"
+                },
+                "interrupt_audio_on_answer": {
+                    "type": "boolean"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "learn_ahead_limit": {
+                    "type": "integer"
+                },
+                "minimalist_mode": {
+                    "type": "boolean"
+                },
+                "next_day_starts_at": {
+                    "type": "string"
+                },
+                "paste_images_as_png": {
+                    "type": "boolean"
+                },
+                "paste_strips_formatting": {
+                    "type": "boolean"
+                },
+                "periodically_sync_media": {
+                    "type": "boolean"
+                },
+                "reduce_motion": {
+                    "type": "boolean"
+                },
+                "self_hosted_sync_server_url": {
+                    "type": "string"
+                },
+                "show_next_review_time": {
+                    "type": "boolean"
+                },
+                "show_play_buttons": {
+                    "type": "boolean"
+                },
+                "show_remaining_count": {
+                    "type": "boolean"
+                },
+                "spacebar_answers_card": {
+                    "type": "boolean"
+                },
+                "sync_audio_and_images": {
+                    "type": "boolean"
+                },
+                "theme": {
+                    "type": "string"
+                },
+                "timebox_time_limit": {
+                    "type": "integer"
+                },
+                "ui_size": {
+                    "type": "number"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "video_driver": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.UserResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         }

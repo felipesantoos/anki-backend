@@ -1,0 +1,70 @@
+package routes
+
+import (
+	"github.com/labstack/echo/v4"
+
+	"github.com/felipesantos/anki-backend/app/api/handlers"
+	"github.com/felipesantos/anki-backend/app/api/middlewares"
+	"github.com/felipesantos/anki-backend/core/interfaces/primary"
+	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/pkg/jwt"
+)
+
+// RegisterStudyRoutes registers study-related routes (decks, cards, reviews)
+func RegisterStudyRoutes(
+	e *echo.Echo,
+	deckService primary.IDeckService,
+	filteredDeckService primary.IFilteredDeckService,
+	cardService primary.ICardService,
+	reviewService primary.IReviewService,
+	jwtService *jwt.JWTService,
+	cacheRepo secondary.ICacheRepository,
+) {
+	deckHandler := handlers.NewDeckHandler(deckService)
+	filteredDeckHandler := handlers.NewFilteredDeckHandler(filteredDeckService)
+	cardHandler := handlers.NewCardHandler(cardService)
+	reviewHandler := handlers.NewReviewHandler(reviewService)
+
+	// Auth middleware
+	authMiddleware := middlewares.AuthMiddleware(jwtService, cacheRepo)
+
+	// Study group
+	v1 := e.Group("/api/v1", authMiddleware)
+
+	// Decks
+	decks := v1.Group("/decks")
+	decks.POST("", deckHandler.Create)
+	decks.GET("", deckHandler.FindAll)
+	decks.GET("/:id", deckHandler.FindByID)
+	decks.PUT("/:id", deckHandler.Update)
+	decks.DELETE("/:id", deckHandler.Delete)
+
+	// Filtered Decks
+	filteredDecks := v1.Group("/filtered-decks")
+	filteredDecks.POST("", filteredDeckHandler.Create)
+	filteredDecks.GET("", filteredDeckHandler.FindAll)
+	filteredDecks.PUT("/:id", filteredDeckHandler.Update)
+	filteredDecks.DELETE("/:id", filteredDeckHandler.Delete)
+
+	// Cards (via Decks)
+	decks.GET("/:deckID/cards", cardHandler.FindByDeckID)
+	decks.GET("/:deckID/cards/due", cardHandler.FindDueCards)
+
+	// Cards (Direct)
+	cards := v1.Group("/cards")
+	cards.GET("/:id", cardHandler.FindByID)
+	cards.POST("/:id/suspend", cardHandler.Suspend)
+	cards.POST("/:id/unsuspend", cardHandler.Unsuspend)
+	cards.POST("/:id/bury", cardHandler.Bury)
+	cards.POST("/:id/unbury", cardHandler.Unbury)
+	cards.POST("/:id/flag", cardHandler.SetFlag)
+	cards.DELETE("/:id", cardHandler.Delete)
+
+	// Reviews
+	reviews := v1.Group("/reviews")
+	reviews.POST("", reviewHandler.Create)
+	
+	// Card Reviews
+	cards.GET("/:cardID/reviews", reviewHandler.FindByCardID)
+}
+

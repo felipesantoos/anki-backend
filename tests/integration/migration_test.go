@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -17,8 +15,6 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/felipesantos/anki-backend/config"
 )
 
 // Expected tables in the initial schema (24 tables)
@@ -76,50 +72,6 @@ var expectedViews = []string{
 	"card_info_extended",
 	"empty_cards",
 	"leeches",
-}
-
-// buildDSN builds a PostgreSQL connection string (DSN) from DatabaseConfig
-func buildDSN(cfg config.DatabaseConfig) string {
-	password := url.QueryEscape(cfg.Password)
-	return fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		cfg.User,
-		password,
-		cfg.Host,
-		cfg.Port,
-		cfg.DBName,
-		cfg.SSLMode,
-	)
-}
-
-// setupTestDB creates a test database connection
-func setupTestDB(t *testing.T) (*sql.DB, func()) {
-	if os.Getenv("SKIP_DB_TESTS") == "true" {
-		t.Skip("Skipping database integration tests")
-	}
-
-	cfg, err := config.Load()
-	require.NoError(t, err, "Failed to load config")
-
-	dsn := buildDSN(cfg.Database)
-	db, err := sql.Open("postgres", dsn)
-	require.NoError(t, err, "Failed to open database connection")
-
-	// Verify connection
-	ctx := context.Background()
-	err = db.PingContext(ctx)
-	require.NoError(t, err, "Failed to ping database")
-
-	// Clean the database IMMEDIATELY to ensure a fresh state for each test
-	// This prevents issues with golang-migrate trying to access schema_migrations
-	// that may have been left in an inconsistent state by previous tests
-	cleanDatabase(t, db)
-
-	cleanup := func() {
-		db.Close()
-	}
-
-	return db, cleanup
 }
 
 // getMigrator creates a migrate instance for testing
@@ -247,7 +199,7 @@ func TestMigration_Up(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure we start fresh - go down one step if at version 1
@@ -276,11 +228,11 @@ func TestMigration_TablesCreated(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	ctx := context.Background()
 
@@ -292,7 +244,7 @@ func TestMigration_TablesCreated(t *testing.T) {
 		ORDER BY tablename
 	`
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.DB.QueryContext(ctx, query)
 	require.NoError(t, err, "Failed to query tables")
 	defer rows.Close()
 
@@ -311,7 +263,7 @@ func TestMigration_TablesCreated(t *testing.T) {
 
 	// Verify schema_migrations table has initial data
 	var count int
-	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = 1").Scan(&count)
+	err = db.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = 1").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count, "schema_migrations should have version 1 entry")
 }
@@ -320,11 +272,11 @@ func TestMigration_EnumTypesCreated(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	ctx := context.Background()
 
@@ -337,7 +289,7 @@ func TestMigration_EnumTypesCreated(t *testing.T) {
 		ORDER BY typname
 	`
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.DB.QueryContext(ctx, query)
 	require.NoError(t, err, "Failed to query enum types")
 	defer rows.Close()
 
@@ -359,11 +311,11 @@ func TestMigration_FunctionsCreated(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	ctx := context.Background()
 
@@ -376,7 +328,7 @@ func TestMigration_FunctionsCreated(t *testing.T) {
 		ORDER BY proname
 	`
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.DB.QueryContext(ctx, query)
 	require.NoError(t, err, "Failed to query functions")
 	defer rows.Close()
 
@@ -398,11 +350,11 @@ func TestMigration_ViewsCreated(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	ctx := context.Background()
 
@@ -414,7 +366,7 @@ func TestMigration_ViewsCreated(t *testing.T) {
 		ORDER BY viewname
 	`
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.DB.QueryContext(ctx, query)
 	require.NoError(t, err, "Failed to query views")
 	defer rows.Close()
 
@@ -436,11 +388,11 @@ func TestMigration_TriggersCreated(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	ctx := context.Background()
 
@@ -452,7 +404,7 @@ func TestMigration_TriggersCreated(t *testing.T) {
 		ORDER BY trigger_name
 	`
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.DB.QueryContext(ctx, query)
 	require.NoError(t, err, "Failed to query triggers")
 	defer rows.Close()
 
@@ -486,11 +438,11 @@ func TestMigration_IndexesCreated(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	ctx := context.Background()
 
@@ -503,7 +455,7 @@ func TestMigration_IndexesCreated(t *testing.T) {
 		ORDER BY indexname
 	`
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.DB.QueryContext(ctx, query)
 	require.NoError(t, err, "Failed to query indexes")
 	defer rows.Close()
 
@@ -537,16 +489,16 @@ func TestMigration_Down(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up first
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	// Verify tables exist before down
 	ctx := context.Background()
 	var tableCount int
-	err := db.QueryRowContext(ctx, `
+	err := db.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*) 
 		FROM pg_tables 
 		WHERE schemaname = 'public'
@@ -570,7 +522,7 @@ func TestMigration_Down(t *testing.T) {
 
 	// Verify tables are dropped (except schema_migrations which may persist)
 	var remainingTables int
-	err = db.QueryRowContext(ctx, `
+	err = db.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*) 
 		FROM pg_tables 
 		WHERE schemaname = 'public'
@@ -584,7 +536,7 @@ func TestMigration_UpDownUp(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Start fresh - ensure we're at version 0
@@ -598,7 +550,7 @@ func TestMigration_UpDownUp(t *testing.T) {
 	}
 
 	// First up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	version1, dirty1, err := m.Version()
 	require.NoError(t, err)
@@ -610,7 +562,7 @@ func TestMigration_UpDownUp(t *testing.T) {
 	require.NoError(t, err, "Migration down one step should succeed")
 
 	// Second up (should work fine)
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	version2, dirty2, err := m.Version()
 	require.NoError(t, err)
@@ -620,7 +572,7 @@ func TestMigration_UpDownUp(t *testing.T) {
 	// Verify tables exist after second up
 	ctx := context.Background()
 	var tableCount int
-	err = db.QueryRowContext(ctx, `
+	err = db.DB.QueryRowContext(ctx, `
 		SELECT COUNT(*) 
 		FROM pg_tables 
 		WHERE schemaname = 'public'
@@ -633,23 +585,23 @@ func TestMigration_Constraints(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	ctx := context.Background()
 
 	// Test that GUID constraint works
-	_, err := db.ExecContext(ctx, `
+	_, err := db.DB.ExecContext(ctx, `
 		INSERT INTO notes (user_id, guid, note_type_id, fields_json)
 		VALUES (1, 'invalid-guid', 1, '{}'::jsonb)
 	`)
 	assert.Error(t, err, "Should fail with invalid GUID format")
 
 	// Test that valid GUID works
-	_, err = db.ExecContext(ctx, `
+	_, err = db.DB.ExecContext(ctx, `
 		INSERT INTO notes (user_id, guid, note_type_id, fields_json)
 		VALUES (1, '123e4567-e89b-12d3-a456-426614174000', 1, '{}'::jsonb)
 	`)
@@ -661,17 +613,17 @@ func TestMigration_ProfileSyncConstraint(t *testing.T) {
 	db, dbCleanup := setupTestDB(t)
 	defer dbCleanup()
 
-	m, mCleanup := getMigrator(t, db)
+	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
 	// Ensure migrations are up
-	ensureMigrationsUp(t, m, db)
+	ensureMigrationsUp(t, m, db.DB)
 
 	ctx := context.Background()
 
 	// Create a test user
 	var userID int64
-	err := db.QueryRowContext(ctx, `
+	err := db.DB.QueryRowContext(ctx, `
 		INSERT INTO users (email, password_hash)
 		VALUES ('test@example.com', 'hash')
 		RETURNING id
@@ -680,7 +632,7 @@ func TestMigration_ProfileSyncConstraint(t *testing.T) {
 
 	// Create first profile with sync enabled
 	var profile1ID int64
-	err = db.QueryRowContext(ctx, `
+	err = db.DB.QueryRowContext(ctx, `
 		INSERT INTO profiles (user_id, name, ankiweb_sync_enabled)
 		VALUES ($1, 'Profile 1', true)
 		RETURNING id
@@ -688,7 +640,7 @@ func TestMigration_ProfileSyncConstraint(t *testing.T) {
 	require.NoError(t, err, "Should create first profile with sync")
 
 	// Try to create second profile with sync enabled (should fail)
-	_, err = db.ExecContext(ctx, `
+	_, err = db.DB.ExecContext(ctx, `
 		INSERT INTO profiles (user_id, name, ankiweb_sync_enabled)
 		VALUES ($1, 'Profile 2', true)
 	`, userID)
@@ -696,7 +648,7 @@ func TestMigration_ProfileSyncConstraint(t *testing.T) {
 
 	// Create second profile without sync (should succeed)
 	var profile2ID int64
-	err = db.QueryRowContext(ctx, `
+	err = db.DB.QueryRowContext(ctx, `
 		INSERT INTO profiles (user_id, name, ankiweb_sync_enabled)
 		VALUES ($1, 'Profile 2', false)
 		RETURNING id
@@ -704,7 +656,7 @@ func TestMigration_ProfileSyncConstraint(t *testing.T) {
 	require.NoError(t, err, "Should create second profile without sync")
 
 	// Try to enable sync on second profile (should fail)
-	_, err = db.ExecContext(ctx, `
+	_, err = db.DB.ExecContext(ctx, `
 		UPDATE profiles 
 		SET ankiweb_sync_enabled = true 
 		WHERE id = $1
@@ -712,7 +664,7 @@ func TestMigration_ProfileSyncConstraint(t *testing.T) {
 	assert.Error(t, err, "Should fail to enable sync on second profile")
 
 	// Disable sync on first profile
-	_, err = db.ExecContext(ctx, `
+	_, err = db.DB.ExecContext(ctx, `
 		UPDATE profiles 
 		SET ankiweb_sync_enabled = false 
 		WHERE id = $1
@@ -720,7 +672,7 @@ func TestMigration_ProfileSyncConstraint(t *testing.T) {
 	require.NoError(t, err, "Should disable sync on first profile")
 
 	// Now enable sync on second profile (should succeed)
-	_, err = db.ExecContext(ctx, `
+	_, err = db.DB.ExecContext(ctx, `
 		UPDATE profiles 
 		SET ankiweb_sync_enabled = true 
 		WHERE id = $1

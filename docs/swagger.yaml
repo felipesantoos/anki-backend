@@ -1,5 +1,287 @@
 basePath: /
 definitions:
+  request.AddTagRequest:
+    properties:
+      tag:
+        description: Tag name to add
+        example: importante
+        type: string
+    required:
+    - tag
+    type: object
+  request.ChangePasswordRequest:
+    description: Request payload for changing password (requires authentication)
+    properties:
+      current_password:
+        description: |-
+          Current password (required for security)
+          @Example currentPassword123
+        example: currentPassword123
+        type: string
+      new_password:
+        description: |-
+          New password (minimum 8 characters, must contain at least one letter and one number)
+          @Example newSecurePassword123
+        example: newSecurePassword123
+        minLength: 8
+        type: string
+      password_confirm:
+        description: |-
+          Password confirmation (must match new_password)
+          @Example newSecurePassword123
+        example: newSecurePassword123
+        type: string
+    required:
+    - current_password
+    - new_password
+    - password_confirm
+    type: object
+  request.CreateBackupRequest:
+    properties:
+      backup_type:
+        example: daily
+        type: string
+      filename:
+        example: backup-2024.colpkg
+        type: string
+      size:
+        example: 1048576
+        type: integer
+      storage_path:
+        example: /backups/1.colpkg
+        type: string
+    required:
+    - backup_type
+    - filename
+    - size
+    - storage_path
+    type: object
+  request.CreateDeckRequest:
+    description: Request payload for creating a new deck
+    properties:
+      name:
+        description: Name of the deck
+        example: Idiomas::Inglês
+        type: string
+      options_json:
+        description: Configuration options for the deck (JSON string)
+        example: '{}'
+        type: string
+      parent_id:
+        description: ID of the parent deck (optional)
+        example: 1
+        type: integer
+    required:
+    - name
+    type: object
+  request.CreateFilteredDeckRequest:
+    description: Request payload for creating a new filtered deck
+    properties:
+      limit:
+        description: Maximum number of cards to include
+        example: 100
+        minimum: 1
+        type: integer
+      name:
+        description: Name of the filtered deck
+        example: Revisão de Hoje
+        type: string
+      order_by:
+        description: Order by criteria (e.g., "random", "added_desc")
+        example: random
+        type: string
+      reschedule:
+        description: Whether to reschedule cards based on reviews in this deck
+        example: true
+        type: boolean
+      search_filter:
+        description: Search filter string (e.g., "tag:marked" or "is:due")
+        example: is:due
+        type: string
+    required:
+    - limit
+    - name
+    - order_by
+    - search_filter
+    type: object
+  request.CreateMediaRequest:
+    properties:
+      filename:
+        example: image.png
+        type: string
+      hash:
+        example: d41d8cd98f00b204e9800998ecf8427e
+        type: string
+      mime_type:
+        example: image/png
+        type: string
+      size:
+        example: 51200
+        type: integer
+      storage_path:
+        example: /media/1/image.png
+        type: string
+    required:
+    - filename
+    - hash
+    - mime_type
+    - size
+    - storage_path
+    type: object
+  request.CreateNoteRequest:
+    properties:
+      deck_id:
+        description: ID of the deck where cards will be created
+        example: 1
+        type: integer
+      fields_json:
+        description: 'Fields data as a JSON string (e.g., ''{"Front": "Hello", "Back":
+          "Olá"}'')'
+        example: '{"Front": "cat", "Back": "gato"}'
+        type: string
+      note_type_id:
+        description: ID of the note type (template)
+        example: 1
+        type: integer
+      tags:
+        description: List of tags for the note
+        example:
+        - '["idiomas"'
+        - ' "animal"]'
+        items:
+          type: string
+        type: array
+    required:
+    - deck_id
+    - fields_json
+    - note_type_id
+    type: object
+  request.CreateNoteTypeRequest:
+    properties:
+      card_types_json:
+        description: Card type definitions as a JSON string
+        example: '[{"name": "Cartão 1"}]'
+        type: string
+      fields_json:
+        description: Field definitions as a JSON string
+        example: '[{"name": "Front"}, {"name": "Back"}]'
+        type: string
+      name:
+        description: Name of the note type
+        example: Básico
+        type: string
+      templates_json:
+        description: Templates definitions as a JSON string
+        example: '{"qfmt": "{{Front}}", "afmt": "{{FrontSide}}<hr id=answer>{{Back}}"}'
+        type: string
+    required:
+    - card_types_json
+    - fields_json
+    - name
+    - templates_json
+    type: object
+  request.CreateProfileRequest:
+    properties:
+      name:
+        description: Name of the profile
+        example: Pessoal
+        type: string
+    required:
+    - name
+    type: object
+  request.CreateReviewRequest:
+    description: Request payload for recording a card review
+    properties:
+      card_id:
+        description: ID of the card being reviewed
+        example: 1
+        type: integer
+      rating:
+        description: 'Rating given to the card (1: Again, 2: Hard, 3: Good, 4: Easy)'
+        example: 3
+        maximum: 4
+        minimum: 1
+        type: integer
+      time_ms:
+        description: Time taken to answer in milliseconds
+        example: 5000
+        minimum: 0
+        type: integer
+    required:
+    - card_id
+    - rating
+    - time_ms
+    type: object
+  request.CreateSharedDeckRatingRequest:
+    properties:
+      comment:
+        example: Excelente deck!
+        type: string
+      rating:
+        example: 5
+        maximum: 5
+        minimum: 1
+        type: integer
+      shared_deck_id:
+        type: integer
+    required:
+    - rating
+    - shared_deck_id
+    type: object
+  request.CreateSharedDeckRequest:
+    properties:
+      category:
+        example: Educação
+        type: string
+      description:
+        example: Deck com fórmulas básicas
+        type: string
+      name:
+        example: Física Básica
+        type: string
+      package_path:
+        type: string
+      package_size:
+        type: integer
+      tags:
+        example:
+        - '["física"'
+        - ' "enem"]'
+        items:
+          type: string
+        type: array
+    required:
+    - name
+    - package_path
+    - package_size
+    type: object
+  request.EnableSyncRequest:
+    properties:
+      username:
+        description: AnkiWeb username/email
+        example: usuario@ankiweb.net
+        type: string
+    required:
+    - username
+    type: object
+  request.InstallAddOnRequest:
+    properties:
+      code:
+        example: "12345678"
+        type: string
+      config_json:
+        example: '{}'
+        type: string
+      name:
+        example: AnkiConnect
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    required:
+    - code
+    - name
+    type: object
   request.LoginRequest:
     description: Request payload for user login endpoint
     properties:
@@ -56,6 +338,372 @@ definitions:
     - password
     - password_confirm
     type: object
+  request.RequestPasswordResetRequest:
+    description: Request payload for requesting a password reset email
+    properties:
+      email:
+        description: |-
+          Email address to send password reset link to
+          @Example user@example.com
+        example: user@example.com
+        type: string
+    required:
+    - email
+    type: object
+  request.ResendVerificationRequest:
+    description: Request payload for resending email verification
+    properties:
+      email:
+        description: Email address to resend verification email to
+        example: user@example.com
+        type: string
+    required:
+    - email
+    type: object
+  request.ResetPasswordRequest:
+    description: Request payload for resetting password using a reset token
+    properties:
+      new_password:
+        description: |-
+          New password (minimum 8 characters, must contain at least one letter and one number)
+          @Example newSecurePassword123
+        example: newSecurePassword123
+        minLength: 8
+        type: string
+      password_confirm:
+        description: |-
+          Password confirmation (must match new_password)
+          @Example newSecurePassword123
+        example: newSecurePassword123
+        type: string
+      token:
+        description: |-
+          Password reset token received via email
+          @Example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    required:
+    - new_password
+    - password_confirm
+    - token
+    type: object
+  request.SetCardFlagRequest:
+    properties:
+      flag:
+        description: 'Flag number (0: none, 1-7: colored flags)'
+        example: 1
+        maximum: 7
+        minimum: 0
+        type: integer
+    type: object
+  request.ToggleAddOnRequest:
+    properties:
+      enabled:
+        type: boolean
+    type: object
+  request.UpdateAddOnConfigRequest:
+    properties:
+      config_json:
+        example: '{"port": 8765}'
+        type: string
+    required:
+    - config_json
+    type: object
+  request.UpdateDeckRequest:
+    description: Request payload for updating an existing deck
+    properties:
+      name:
+        description: New name of the deck
+        example: Idiomas::Inglês::Avançado
+        type: string
+      options_json:
+        description: New configuration options for the deck (JSON string)
+        example: '{}'
+        type: string
+      parent_id:
+        description: New parent deck ID (optional)
+        example: 2
+        type: integer
+    required:
+    - name
+    type: object
+  request.UpdateFilteredDeckRequest:
+    description: Request payload for updating an existing filtered deck
+    properties:
+      limit:
+        description: New maximum number of cards
+        example: 50
+        minimum: 1
+        type: integer
+      name:
+        description: New name of the filtered deck
+        example: Revisão de Hoje Atualizada
+        type: string
+      order_by:
+        description: New order by criteria
+        example: added_desc
+        type: string
+      reschedule:
+        description: New reschedule setting
+        example: false
+        type: boolean
+      search_filter:
+        description: New search filter string
+        example: is:due tag:importante
+        type: string
+    required:
+    - limit
+    - name
+    - order_by
+    - search_filter
+    type: object
+  request.UpdateNoteRequest:
+    properties:
+      fields_json:
+        description: Updated fields data as a JSON string
+        example: '{"Front": "cat", "Back": "gato (felino)"}'
+        type: string
+      tags:
+        description: Updated list of tags
+        example:
+        - '["idiomas"'
+        - ' "mamífero"]'
+        items:
+          type: string
+        type: array
+    required:
+    - fields_json
+    type: object
+  request.UpdateNoteTypeRequest:
+    properties:
+      card_types_json:
+        description: Updated card type definitions
+        type: string
+      fields_json:
+        description: Updated field definitions
+        type: string
+      name:
+        description: New name of the note type
+        example: Básico com Reverso
+        type: string
+      templates_json:
+        description: Updated templates definitions
+        type: string
+    required:
+    - card_types_json
+    - fields_json
+    - name
+    - templates_json
+    type: object
+  request.UpdateProfileRequest:
+    properties:
+      name:
+        description: New name of the profile
+        example: Estudos Avançados
+        type: string
+    required:
+    - name
+    type: object
+  request.UpdateSharedDeckRatingRequest:
+    properties:
+      comment:
+        type: string
+      rating:
+        maximum: 5
+        minimum: 1
+        type: integer
+    required:
+    - rating
+    type: object
+  request.UpdateSharedDeckRequest:
+    properties:
+      category:
+        type: string
+      description:
+        type: string
+      is_public:
+        type: boolean
+      name:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    required:
+    - name
+    type: object
+  request.UpdateSyncMetaRequest:
+    properties:
+      client_id:
+        example: mobile-app-1
+        type: string
+      last_sync_usn:
+        example: 100
+        type: integer
+    required:
+    - client_id
+    - last_sync_usn
+    type: object
+  request.UpdateUserPreferencesRequest:
+    properties:
+      auto_sync:
+        type: boolean
+      default_deck_behavior:
+        type: string
+      default_search_text:
+        type: string
+      force_one_way_sync:
+        type: boolean
+      ignore_accents_in_search:
+        type: boolean
+      interrupt_audio_on_answer:
+        type: boolean
+      language:
+        example: pt-BR
+        type: string
+      learn_ahead_limit:
+        type: integer
+      minimalist_mode:
+        type: boolean
+      next_day_starts_at:
+        type: string
+      paste_images_as_png:
+        type: boolean
+      paste_strips_formatting:
+        type: boolean
+      periodically_sync_media:
+        type: boolean
+      reduce_motion:
+        type: boolean
+      self_hosted_sync_server_url:
+        type: string
+      show_next_review_time:
+        type: boolean
+      show_play_buttons:
+        type: boolean
+      show_remaining_count:
+        type: boolean
+      spacebar_answers_card:
+        type: boolean
+      sync_audio_and_images:
+        type: boolean
+      theme:
+        example: dark
+        type: string
+      timebox_time_limit:
+        type: integer
+      ui_size:
+        type: number
+      video_driver:
+        type: string
+    type: object
+  request.UpdateUserRequest:
+    properties:
+      email:
+        description: New email address
+        example: novo@email.com
+        type: string
+    required:
+    - email
+    type: object
+  response.AddOnResponse:
+    properties:
+      code:
+        type: string
+      config_json:
+        type: string
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+      version:
+        type: string
+    type: object
+  response.BackupResponse:
+    properties:
+      backup_type:
+        type: string
+      created_at:
+        type: string
+      filename:
+        type: string
+      id:
+        type: integer
+      size:
+        type: integer
+      storage_path:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  response.CardResponse:
+    description: Response payload containing card information
+    properties:
+      created_at:
+        description: Timestamp when created
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      deck_id:
+        description: ID of the deck this card belongs to
+        example: 1
+        type: integer
+      due:
+        description: Next review date (Unix timestamp)
+        example: 1705324200
+        type: integer
+      ease:
+        description: Ease factor (in per mille)
+        example: 2500
+        type: integer
+      flags:
+        description: 'Colored flag (0: none)'
+        example: 0
+        type: integer
+      id:
+        description: Unique identifier for the card
+        example: 1
+        type: integer
+      interval:
+        description: Interval until next review (in days)
+        example: 1
+        type: integer
+      lapses:
+        description: Number of lapses
+        example: 0
+        type: integer
+      note_id:
+        description: ID of the note this card belongs to
+        example: 1
+        type: integer
+      ord:
+        description: Ordinal position
+        example: 0
+        type: integer
+      reviews:
+        description: Number of reviews
+        example: 0
+        type: integer
+      state:
+        description: 'Current state (0: new, 1: learning, 2: review, 3: relearning)'
+        example: 0
+        type: integer
+      suspended:
+        description: Whether suspended
+        example: false
+        type: boolean
+      updated_at:
+        description: Timestamp when last updated
+        example: "2024-01-15T10:30:00Z"
+        type: string
+    type: object
   response.ComponentHealth:
     description: Health status of a single component (database, redis, etc.)
     properties:
@@ -67,6 +715,50 @@ definitions:
         description: '"healthy" or "unhealthy"'
         example: healthy
         type: string
+    type: object
+  response.DeckResponse:
+    description: Response payload containing deck information
+    properties:
+      created_at:
+        description: Timestamp when the deck was created
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      id:
+        description: Unique identifier for the deck
+        example: 1
+        type: integer
+      name:
+        description: Name of the deck
+        example: Idiomas::Inglês
+        type: string
+      options_json:
+        description: Configuration options as a JSON string
+        example: '{}'
+        type: string
+      parent_id:
+        description: ID of the parent deck (null if it's a root deck)
+        type: integer
+      updated_at:
+        description: Timestamp when the deck was last updated
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      user_id:
+        description: ID of the user who owns the deck
+        example: 1
+        type: integer
+    type: object
+  response.DeletionLogResponse:
+    properties:
+      deleted_at:
+        type: string
+      id:
+        type: integer
+      object_id:
+        type: integer
+      object_type:
+        type: string
+      user_id:
+        type: integer
     type: object
   response.ErrorResponse:
     description: Standardized error response format returned by the API
@@ -95,6 +787,46 @@ definitions:
         description: ISO 8601 timestamp
         example: "2024-01-15T10:30:00Z"
         type: string
+    type: object
+  response.FilteredDeckResponse:
+    description: Response payload containing filtered deck information
+    properties:
+      created_at:
+        description: Timestamp when created
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      id:
+        description: Unique identifier for the filtered deck
+        example: 1
+        type: integer
+      limit:
+        description: Maximum number of cards
+        example: 100
+        type: integer
+      name:
+        description: Name of the filtered deck
+        example: Revisão de Hoje
+        type: string
+      order_by:
+        description: Order by criteria
+        example: random
+        type: string
+      reschedule:
+        description: Whether rescheduling is enabled
+        example: true
+        type: boolean
+      search_filter:
+        description: Search filter criteria
+        example: is:due
+        type: string
+      updated_at:
+        description: Timestamp when last updated
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      user_id:
+        description: ID of the user who owns the deck
+        example: 1
+        type: integer
     type: object
   response.HealthResponse:
     description: Health check response containing overall status, timestamp, and component
@@ -138,6 +870,116 @@ definitions:
         - $ref: '#/definitions/response.UserData'
         description: User information
     type: object
+  response.MediaResponse:
+    properties:
+      created_at:
+        type: string
+      filename:
+        type: string
+      hash:
+        type: string
+      id:
+        type: integer
+      mime_type:
+        type: string
+      size:
+        type: integer
+      storage_path:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  response.NoteResponse:
+    properties:
+      created_at:
+        description: Timestamp when created
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      fields_json:
+        description: Fields data as a JSON string
+        example: '{"Front": "cat", "Back": "gato"}'
+        type: string
+      guid:
+        description: GUID for synchronization
+        example: abc-123
+        type: string
+      id:
+        description: Unique identifier for the note
+        example: 1
+        type: integer
+      note_type_id:
+        description: ID of the note type
+        example: 1
+        type: integer
+      tags:
+        description: List of tags
+        example:
+        - '["idiomas"]'
+        items:
+          type: string
+        type: array
+      updated_at:
+        description: Timestamp when last updated
+        example: "2024-01-15T10:30:00Z"
+        type: string
+    type: object
+  response.NoteTypeResponse:
+    properties:
+      card_types_json:
+        description: Card type definitions
+        type: string
+      created_at:
+        description: Timestamp when created
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      fields_json:
+        description: Field definitions
+        type: string
+      id:
+        description: Unique identifier for the note type
+        example: 1
+        type: integer
+      name:
+        description: Name of the note type
+        example: Básico
+        type: string
+      templates_json:
+        description: Templates definitions
+        type: string
+      updated_at:
+        description: Timestamp when last updated
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      user_id:
+        description: ID of the user who owns the note type
+        example: 1
+        type: integer
+    type: object
+  response.ProfileResponse:
+    properties:
+      created_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      id:
+        example: 1
+        type: integer
+      last_sync:
+        type: string
+      name:
+        example: Pessoal
+        type: string
+      sync_username:
+        example: user@ankiweb.net
+        type: string
+      updated_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      user_id:
+        example: 1
+        type: integer
+    type: object
   response.RegisterResponse:
     description: Response payload for user registration endpoint
     properties:
@@ -145,6 +987,142 @@ definitions:
         allOf:
         - $ref: '#/definitions/response.UserData'
         description: User information
+    type: object
+  response.ReviewResponse:
+    description: Response payload containing review information
+    properties:
+      card_id:
+        description: ID of the card reviewed
+        example: 1
+        type: integer
+      created_at:
+        description: Timestamp when review was performed
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      id:
+        description: Unique identifier for the review
+        example: 1
+        type: integer
+      rating:
+        description: Rating given (1-4)
+        example: 3
+        type: integer
+      time_ms:
+        description: Time taken in milliseconds
+        example: 5000
+        type: integer
+    type: object
+  response.SessionListResponse:
+    description: Response payload for list of sessions
+    properties:
+      sessions:
+        description: List of sessions
+        items:
+          $ref: '#/definitions/response.SessionResponse'
+        type: array
+      total:
+        description: Total number of sessions
+        example: 3
+        type: integer
+    type: object
+  response.SessionResponse:
+    description: Response payload for session information
+    properties:
+      created_at:
+        description: Session creation timestamp
+        example: "2024-01-15T10:00:00Z"
+        type: string
+      device_info:
+        description: Device information (optional)
+        example: Chrome on Windows
+        type: string
+      id:
+        description: Session ID
+        example: a1b2c3d4e5f6...
+        type: string
+      ip_address:
+        description: IP address from which the session was created
+        example: 192.168.1.1
+        type: string
+      is_current:
+        description: Whether this is the current session
+        example: true
+        type: boolean
+      last_activity:
+        description: Last activity timestamp
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      user_agent:
+        description: User agent string
+        example: Mozilla/5.0...
+        type: string
+      user_id:
+        description: User ID
+        example: 123
+        type: integer
+    type: object
+  response.SharedDeckRatingResponse:
+    properties:
+      comment:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      rating:
+        type: integer
+      shared_deck_id:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  response.SharedDeckResponse:
+    properties:
+      author_id:
+        type: integer
+      category:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      download_count:
+        type: integer
+      id:
+        type: integer
+      is_public:
+        type: boolean
+      name:
+        type: string
+      package_path:
+        type: string
+      package_size:
+        type: integer
+      tags:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
+  response.SyncMetaResponse:
+    properties:
+      client_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      last_sync:
+        type: string
+      last_sync_usn:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: integer
     type: object
   response.TokenResponse:
     description: Response payload for refresh token endpoint
@@ -166,6 +1144,19 @@ definitions:
         example: Bearer
         type: string
     type: object
+  response.UndoHistoryResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      operation_data:
+        type: string
+      operation_type:
+        type: string
+      user_id:
+        type: integer
+    type: object
   response.UserData:
     properties:
       created_at:
@@ -185,6 +1176,76 @@ definitions:
         example: 1
         type: integer
     type: object
+  response.UserPreferencesResponse:
+    properties:
+      auto_sync:
+        type: boolean
+      default_deck_behavior:
+        type: string
+      default_search_text:
+        type: string
+      force_one_way_sync:
+        type: boolean
+      id:
+        type: integer
+      ignore_accents_in_search:
+        type: boolean
+      interrupt_audio_on_answer:
+        type: boolean
+      language:
+        type: string
+      learn_ahead_limit:
+        type: integer
+      minimalist_mode:
+        type: boolean
+      next_day_starts_at:
+        type: string
+      paste_images_as_png:
+        type: boolean
+      paste_strips_formatting:
+        type: boolean
+      periodically_sync_media:
+        type: boolean
+      reduce_motion:
+        type: boolean
+      self_hosted_sync_server_url:
+        type: string
+      show_next_review_time:
+        type: boolean
+      show_play_buttons:
+        type: boolean
+      show_remaining_count:
+        type: boolean
+      spacebar_answers_card:
+        type: boolean
+      sync_audio_and_images:
+        type: boolean
+      theme:
+        type: string
+      timebox_time_limit:
+        type: integer
+      ui_size:
+        type: number
+      user_id:
+        type: integer
+      video_driver:
+        type: string
+    type: object
+  response.UserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        example: user@example.com
+        type: string
+      email_verified:
+        type: boolean
+      id:
+        example: 1
+        type: integer
+      updated_at:
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -199,6 +1260,217 @@ info:
   title: Anki Backend API
   version: "1.0"
 paths:
+  /api/v1/addons:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.AddOnResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List installed add-ons
+      tags:
+      - addons
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Install request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.InstallAddOnRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.AddOnResponse'
+      security:
+      - BearerAuth: []
+      summary: Install an add-on
+      tags:
+      - addons
+  /api/v1/addons/{code}:
+    delete:
+      parameters:
+      - description: Add-on code
+        in: path
+        name: code
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Uninstall an add-on
+      tags:
+      - addons
+  /api/v1/addons/{code}/config:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Add-on code
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: Config request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateAddOnConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.AddOnResponse'
+      security:
+      - BearerAuth: []
+      summary: Update add-on configuration
+      tags:
+      - addons
+  /api/v1/addons/{code}/toggle:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Add-on code
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: Toggle request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.ToggleAddOnRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.AddOnResponse'
+      security:
+      - BearerAuth: []
+      summary: Enable or disable an add-on
+      tags:
+      - addons
+  /api/v1/audit/deletions:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.DeletionLogResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List deletion logs for current user
+      tags:
+      - audit
+  /api/v1/audit/undo:
+    get:
+      parameters:
+      - default: 10
+        description: Number of records to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.UndoHistoryResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List undo history for current user
+      tags:
+      - audit
+  /api/v1/audit/undo/{id}:
+    delete:
+      parameters:
+      - description: Undo history record ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Remove an undo history record
+      tags:
+      - audit
+  /api/v1/auth/change-password:
+    post:
+      consumes:
+      - application/json
+      description: Changes user password. Requires authentication via JWT Bearer token.
+      parameters:
+      - description: Bearer JWT token (access token)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Change password request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password changed successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request (e.g., invalid password, password mismatch)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Not authenticated or current password is incorrect
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - auth
   /api/v1/auth/login:
     post:
       consumes:
@@ -348,6 +1620,1585 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /api/v1/auth/request-password-reset:
+    post:
+      consumes:
+      - application/json
+      description: Sends a password reset email to the user. Always returns success
+        to avoid revealing if email exists.
+      parameters:
+      - description: Password reset request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.RequestPasswordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset email sent successfully (if email exists)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Request password reset
+      tags:
+      - auth
+  /api/v1/auth/resend-verification:
+    post:
+      consumes:
+      - application/json
+      description: Resends the email verification email to the user
+      parameters:
+      - description: Resend verification request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.ResendVerificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verification email sent successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Email already verified
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Resend verification email
+      tags:
+      - auth
+  /api/v1/auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Resets user password using a reset token received via email
+      parameters:
+      - description: Reset password request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request (e.g., invalid password, password mismatch)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or expired token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Reset password
+      tags:
+      - auth
+  /api/v1/auth/sessions:
+    delete:
+      consumes:
+      - application/json
+      description: Invalidates all sessions for the authenticated user (logout from
+        all devices)
+      parameters:
+      - description: Bearer JWT token (access token)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: All sessions deleted successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Not authenticated
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete all sessions
+      tags:
+      - auth
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all active sessions for the authenticated user
+      parameters:
+      - description: Bearer JWT token (access token)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of sessions
+          schema:
+            $ref: '#/definitions/response.SessionListResponse'
+        "401":
+          description: Not authenticated
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List user sessions
+      tags:
+      - auth
+  /api/v1/auth/sessions/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Invalidates a specific session (logout from specific device)
+      parameters:
+      - description: Bearer JWT token (access token)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Session deleted successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Not authenticated
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Session does not belong to user
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a session
+      tags:
+      - auth
+    get:
+      consumes:
+      - application/json
+      description: Returns details of a specific session
+      parameters:
+      - description: Bearer JWT token (access token)
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Session details
+          schema:
+            $ref: '#/definitions/response.SessionResponse'
+        "401":
+          description: Not authenticated
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Session does not belong to user
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get session details
+      tags:
+      - auth
+  /api/v1/auth/verify-email:
+    get:
+      consumes:
+      - application/json
+      description: Verifies a user's email address using a verification token sent
+        via email
+      parameters:
+      - description: Email verification token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email verified successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request - token is required
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or expired token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Verify user email
+      tags:
+      - auth
+  /api/v1/backups:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.BackupResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List backups
+      tags:
+      - backups
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Backup creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateBackupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.BackupResponse'
+      security:
+      - BearerAuth: []
+      summary: Record a backup
+      tags:
+      - backups
+  /api/v1/backups/{id}:
+    delete:
+      parameters:
+      - description: Backup ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete backup record
+      tags:
+      - backups
+  /api/v1/cards/{cardID}/reviews:
+    get:
+      parameters:
+      - description: Card ID
+        in: path
+        name: cardID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.ReviewResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List reviews for a card
+      tags:
+      - reviews
+  /api/v1/cards/{id}:
+    delete:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete card
+      tags:
+      - cards
+    get:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.CardResponse'
+      security:
+      - BearerAuth: []
+      summary: Get card by ID
+      tags:
+      - cards
+  /api/v1/cards/{id}/bury:
+    post:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Bury card
+      tags:
+      - cards
+  /api/v1/cards/{id}/flag:
+    post:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Flag request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.SetCardFlagRequest'
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Set card flag
+      tags:
+      - cards
+  /api/v1/cards/{id}/suspend:
+    post:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Suspend card
+      tags:
+      - cards
+  /api/v1/cards/{id}/unbury:
+    post:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Unbury card
+      tags:
+      - cards
+  /api/v1/cards/{id}/unsuspend:
+    post:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Unsuspend card
+      tags:
+      - cards
+  /api/v1/decks:
+    get:
+      consumes:
+      - application/json
+      description: Returns all decks belonging to the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.DeckResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List all decks
+      tags:
+      - decks
+    post:
+      consumes:
+      - application/json
+      description: Creates a new deck for the authenticated user
+      parameters:
+      - description: Deck creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateDeckRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.DeckResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new deck
+      tags:
+      - decks
+  /api/v1/decks/{deckID}/cards:
+    get:
+      parameters:
+      - description: Deck ID
+        in: path
+        name: deckID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.CardResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List cards in a deck
+      tags:
+      - cards
+  /api/v1/decks/{deckID}/cards/due:
+    get:
+      parameters:
+      - description: Deck ID
+        in: path
+        name: deckID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.CardResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List due cards in a deck
+      tags:
+      - cards
+  /api/v1/decks/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes a deck and its sub-decks
+      parameters:
+      - description: Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete deck
+      tags:
+      - decks
+    get:
+      consumes:
+      - application/json
+      description: Returns a deck by its ID for the authenticated user
+      parameters:
+      - description: Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.DeckResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get deck by ID
+      tags:
+      - decks
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing deck's name, parent or options
+      parameters:
+      - description: Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Deck update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateDeckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.DeckResponse'
+      security:
+      - BearerAuth: []
+      summary: Update deck
+      tags:
+      - decks
+  /api/v1/filtered-decks:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.FilteredDeckResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List filtered decks
+      tags:
+      - filtered-decks
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Filtered deck creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateFilteredDeckRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.FilteredDeckResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a filtered deck
+      tags:
+      - filtered-decks
+  /api/v1/filtered-decks/{id}:
+    delete:
+      parameters:
+      - description: Filtered Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete filtered deck
+      tags:
+      - filtered-decks
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Filtered Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateFilteredDeckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.FilteredDeckResponse'
+      security:
+      - BearerAuth: []
+      summary: Update filtered deck
+      tags:
+      - filtered-decks
+  /api/v1/marketplace/decks:
+    get:
+      parameters:
+      - description: Category filter
+        in: query
+        name: category
+        type: string
+      - collectionFormat: csv
+        description: Tags filter
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.SharedDeckResponse'
+            type: array
+      summary: List public shared decks
+      tags:
+      - marketplace
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Share request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateSharedDeckRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.SharedDeckResponse'
+      security:
+      - BearerAuth: []
+      summary: Publish a deck to marketplace
+      tags:
+      - marketplace
+  /api/v1/marketplace/decks/{id}:
+    delete:
+      parameters:
+      - description: Shared Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Remove deck from marketplace
+      tags:
+      - marketplace
+    get:
+      parameters:
+      - description: Shared Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SharedDeckResponse'
+      summary: Get shared deck by ID
+      tags:
+      - marketplace
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Shared Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateSharedDeckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SharedDeckResponse'
+      security:
+      - BearerAuth: []
+      summary: Update shared deck info
+      tags:
+      - marketplace
+  /api/v1/marketplace/decks/{id}/download:
+    post:
+      parameters:
+      - description: Shared Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Record a deck download
+      tags:
+      - marketplace
+  /api/v1/marketplace/decks/{id}/ratings:
+    delete:
+      parameters:
+      - description: Shared Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Remove rating from a shared deck
+      tags:
+      - marketplace
+    get:
+      parameters:
+      - description: Shared Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.SharedDeckRatingResponse'
+            type: array
+      summary: List ratings for a shared deck
+      tags:
+      - marketplace
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Shared Deck ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateSharedDeckRatingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SharedDeckRatingResponse'
+      security:
+      - BearerAuth: []
+      summary: Update rating for a shared deck
+      tags:
+      - marketplace
+  /api/v1/marketplace/ratings:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Rating request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateSharedDeckRatingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.SharedDeckRatingResponse'
+      security:
+      - BearerAuth: []
+      summary: Rate a shared deck
+      tags:
+      - marketplace
+  /api/v1/media:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.MediaResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List media records
+      tags:
+      - media
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Media creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateMediaRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.MediaResponse'
+      security:
+      - BearerAuth: []
+      summary: Record a media file
+      tags:
+      - media
+  /api/v1/media/{id}:
+    delete:
+      parameters:
+      - description: Media ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete media record
+      tags:
+      - media
+    get:
+      parameters:
+      - description: Media ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.MediaResponse'
+      security:
+      - BearerAuth: []
+      summary: Get media record by ID
+      tags:
+      - media
+  /api/v1/note-types:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.NoteTypeResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List note types
+      tags:
+      - note-types
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Note type creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateNoteTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.NoteTypeResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a note type
+      tags:
+      - note-types
+  /api/v1/note-types/{id}:
+    delete:
+      parameters:
+      - description: Note Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete note type
+      tags:
+      - note-types
+    get:
+      parameters:
+      - description: Note Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.NoteTypeResponse'
+      security:
+      - BearerAuth: []
+      summary: Get note type by ID
+      tags:
+      - note-types
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Note Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateNoteTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.NoteTypeResponse'
+      security:
+      - BearerAuth: []
+      summary: Update note type
+      tags:
+      - note-types
+  /api/v1/notes:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.NoteResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List notes
+      tags:
+      - notes
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Note creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateNoteRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.NoteResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a note
+      tags:
+      - notes
+  /api/v1/notes/{id}:
+    delete:
+      parameters:
+      - description: Note ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete note
+      tags:
+      - notes
+    get:
+      parameters:
+      - description: Note ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.NoteResponse'
+      security:
+      - BearerAuth: []
+      summary: Get note by ID
+      tags:
+      - notes
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Note ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateNoteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.NoteResponse'
+      security:
+      - BearerAuth: []
+      summary: Update note
+      tags:
+      - notes
+  /api/v1/notes/{id}/tags:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Note ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Tag request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.AddTagRequest'
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Add tag to note
+      tags:
+      - notes
+  /api/v1/notes/{id}/tags/{tag}:
+    delete:
+      parameters:
+      - description: Note ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Tag name
+        in: path
+        name: tag
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Remove tag from note
+      tags:
+      - notes
+  /api/v1/profiles:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.ProfileResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List profiles
+      tags:
+      - profiles
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Profile creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.ProfileResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a profile
+      tags:
+      - profiles
+  /api/v1/profiles/{id}:
+    delete:
+      parameters:
+      - description: Profile ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete profile
+      tags:
+      - profiles
+    get:
+      parameters:
+      - description: Profile ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.ProfileResponse'
+      security:
+      - BearerAuth: []
+      summary: Get profile by ID
+      tags:
+      - profiles
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Profile ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.ProfileResponse'
+      security:
+      - BearerAuth: []
+      summary: Update profile
+      tags:
+      - profiles
+  /api/v1/profiles/{id}/sync/disable:
+    post:
+      parameters:
+      - description: Profile ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Disable AnkiWeb sync for profile
+      tags:
+      - profiles
+  /api/v1/profiles/{id}/sync/enable:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Profile ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Sync request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.EnableSyncRequest'
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Enable AnkiWeb sync for profile
+      tags:
+      - profiles
+  /api/v1/reviews:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Review request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CreateReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.ReviewResponse'
+      security:
+      - BearerAuth: []
+      summary: Record a card review
+      tags:
+      - reviews
+  /api/v1/sync/meta:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SyncMetaResponse'
+      security:
+      - BearerAuth: []
+      summary: Get sync metadata for current user
+      tags:
+      - sync
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateSyncMetaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.SyncMetaResponse'
+      security:
+      - BearerAuth: []
+      summary: Update sync metadata after synchronization
+      tags:
+      - sync
+  /api/v1/user/me:
+    delete:
+      description: Soft deletes the user account. Irreversible from the API.
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete user account
+      tags:
+      - user
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.UserResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user information
+      tags:
+      - user
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.UserResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user account information
+      tags:
+      - user
+  /api/v1/user/preferences:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.UserPreferencesResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user preferences
+      tags:
+      - preferences
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateUserPreferencesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.UserPreferencesResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user preferences
+      tags:
+      - preferences
+  /api/v1/user/preferences/reset:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.UserPreferencesResponse'
+      security:
+      - BearerAuth: []
+      summary: Reset user preferences to defaults
+      tags:
+      - preferences
   /health:
     get:
       consumes:

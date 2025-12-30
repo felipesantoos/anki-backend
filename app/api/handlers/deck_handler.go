@@ -1,0 +1,153 @@
+package handlers
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/labstack/echo/v4"
+
+	"github.com/felipesantos/anki-backend/app/api/dtos/request"
+	"github.com/felipesantos/anki-backend/app/api/mappers"
+	"github.com/felipesantos/anki-backend/app/api/middlewares"
+	"github.com/felipesantos/anki-backend/core/interfaces/primary"
+)
+
+// DeckHandler handles deck-related HTTP requests
+type DeckHandler struct {
+	deckService primary.IDeckService
+}
+
+// NewDeckHandler creates a new DeckHandler instance
+func NewDeckHandler(deckService primary.IDeckService) *DeckHandler {
+	return &DeckHandler{
+		deckService: deckService,
+	}
+}
+
+// Create handles POST /api/v1/decks
+// @Summary Create a new deck
+// @Description Creates a new deck for the authenticated user
+// @Tags decks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body request.CreateDeckRequest true "Deck creation request"
+// @Success 201 {object} response.DeckResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /api/v1/decks [post]
+func (h *DeckHandler) Create(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	var req request.CreateDeckRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	d, err := h.deckService.Create(ctx, userID, req.Name, req.ParentID, req.OptionsJSON)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusCreated, mappers.ToDeckResponse(d))
+}
+
+// FindByID handles GET /api/v1/decks/:id
+// @Summary Get deck by ID
+// @Description Returns a deck by its ID for the authenticated user
+// @Tags decks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Deck ID"
+// @Success 200 {object} response.DeckResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/decks/{id} [get]
+func (h *DeckHandler) FindByID(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	d, err := h.deckService.FindByID(ctx, userID, id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Deck not found")
+	}
+
+	return c.JSON(http.StatusOK, mappers.ToDeckResponse(d))
+}
+
+// FindAll handles GET /api/v1/decks
+// @Summary List all decks
+// @Description Returns all decks belonging to the authenticated user
+// @Tags decks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} response.DeckResponse
+// @Router /api/v1/decks [get]
+func (h *DeckHandler) FindAll(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	decks, err := h.deckService.FindByUserID(ctx, userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, mappers.ToDeckResponseList(decks))
+}
+
+// Update handles PUT /api/v1/decks/:id
+// @Summary Update deck
+// @Description Updates an existing deck's name, parent or options
+// @Tags decks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Deck ID"
+// @Param request body request.UpdateDeckRequest true "Deck update request"
+// @Success 200 {object} response.DeckResponse
+// @Router /api/v1/decks/{id} [put]
+func (h *DeckHandler) Update(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	var req request.UpdateDeckRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	d, err := h.deckService.Update(ctx, userID, id, req.Name, req.ParentID, req.OptionsJSON)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, mappers.ToDeckResponse(d))
+}
+
+// Delete handles DELETE /api/v1/decks/:id
+// @Summary Delete deck
+// @Description Soft deletes a deck and its sub-decks
+// @Tags decks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Deck ID"
+// @Success 204 "No Content"
+// @Router /api/v1/decks/{id} [delete]
+func (h *DeckHandler) Delete(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	if err := h.deckService.Delete(ctx, userID, id); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+

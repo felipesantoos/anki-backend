@@ -38,25 +38,41 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/routes"
 	"github.com/felipesantos/anki-backend/config"
 	domainEvents "github.com/felipesantos/anki-backend/core/domain/events"
+	addonService "github.com/felipesantos/anki-backend/core/services/addon"
+	auditService "github.com/felipesantos/anki-backend/core/services/audit"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
+	backupService "github.com/felipesantos/anki-backend/core/services/backup"
+	cardService "github.com/felipesantos/anki-backend/core/services/card"
+	deckService "github.com/felipesantos/anki-backend/core/services/deck"
 	"github.com/felipesantos/anki-backend/core/services/events"
 	"github.com/felipesantos/anki-backend/core/services/health"
 	"github.com/felipesantos/anki-backend/core/services/jobs"
+	mediaService "github.com/felipesantos/anki-backend/core/services/media"
 	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
+	noteService "github.com/felipesantos/anki-backend/core/services/note"
+	notetypeService "github.com/felipesantos/anki-backend/core/services/notetype"
+	profileService "github.com/felipesantos/anki-backend/core/services/profile"
+	reviewService "github.com/felipesantos/anki-backend/core/services/review"
 	sessionService "github.com/felipesantos/anki-backend/core/services/session"
+	shareddeckService "github.com/felipesantos/anki-backend/core/services/shareddeck"
+	shareddeckratingService "github.com/felipesantos/anki-backend/core/services/shareddeckrating"
 	storageService "github.com/felipesantos/anki-backend/core/services/storage"
+	syncService "github.com/felipesantos/anki-backend/core/services/sync"
 	tracingService "github.com/felipesantos/anki-backend/core/services/tracing"
+	userService "github.com/felipesantos/anki-backend/core/services/user"
+	userpreferencesService "github.com/felipesantos/anki-backend/core/services/userpreferences"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	emailService "github.com/felipesantos/anki-backend/core/services/email"
-	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
-	infraEvents "github.com/felipesantos/anki-backend/infra/events"
+	"github.com/felipesantos/anki-backend/infra/database/repositories"
 	infraEmail "github.com/felipesantos/anki-backend/infra/email"
+	infraEvents "github.com/felipesantos/anki-backend/infra/events"
+	eventHandlers "github.com/felipesantos/anki-backend/infra/events/handlers"
 	"github.com/felipesantos/anki-backend/infra/jobs/handlers"
 	infraJobs "github.com/felipesantos/anki-backend/infra/jobs"
 	"github.com/felipesantos/anki-backend/infra/postgres"
 	"github.com/felipesantos/anki-backend/infra/redis"
-	"github.com/felipesantos/anki-backend/infra/database/repositories"
+	"github.com/felipesantos/anki-backend/pkg/database"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 	// Uncomment to enable automatic migrations on startup
@@ -387,29 +403,55 @@ func main() {
 		})
 	})
 
-	// Register routes
-	routes.RegisterHealthRoutes(e, healthService)
-
-	// Register metrics routes (if enabled)
-	if cfg.Metrics.Enabled {
-		routes.RegisterMetricsRoutes(e, metricsSvc, cfg.Metrics.Path)
-	}
-
-	// Initialize Auth Service and register routes
-	// Create JWT service
-	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
-	if err != nil {
-		log.Error("Failed to initialize JWT service", "error", err)
-		os.Exit(1)
-	}
-	log.Info("JWT service initialized successfully")
-
-	// Initialize repositories
+	// 8. Initialize repositories
+	tm := database.NewTransactionManager(db.DB)
 	userRepo := repositories.NewUserRepository(db.DB)
 	deckRepo := repositories.NewDeckRepository(db.DB)
-	
-	// Create Auth Service with JWT service and cache repository
-	// Initialize Email Service
+	cardRepo := repositories.NewCardRepository(db.DB)
+	reviewRepo := repositories.NewReviewRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+	profileRepo := repositories.NewProfileRepository(db.DB)
+	userPreferencesRepo := repositories.NewUserPreferencesRepository(db.DB)
+	addOnRepo := repositories.NewAddOnRepository(db.DB)
+	backupRepo := repositories.NewBackupRepository(db.DB)
+	mediaRepo := repositories.NewMediaRepository(db.DB)
+	syncMetaRepo := repositories.NewSyncMetaRepository(db.DB)
+	sharedDeckRepo := repositories.NewSharedDeckRepository(db.DB)
+	sharedDeckRatingRepo := repositories.NewSharedDeckRatingRepository(db.DB)
+	deletionLogRepo := repositories.NewDeletionLogRepository(db.DB)
+	undoHistoryRepo := repositories.NewUndoHistoryRepository(db.DB)
+	filteredDeckRepo := repositories.NewFilteredDeckRepository(db.DB)
+
+	// 9. Initialize services
+	// Core Study
+	deckSvc := deckService.NewDeckService(deckRepo)
+	filteredDeckSvc := deckService.NewFilteredDeckService(filteredDeckRepo)
+	cardSvc := cardService.NewCardService(cardRepo)
+	reviewSvc := reviewService.NewReviewService(reviewRepo, cardRepo, tm)
+
+	// Content Management
+	noteTypeSvc := notetypeService.NewNoteTypeService(noteTypeRepo)
+	noteSvc := noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, tm)
+
+	// User Management
+	userSvc := userService.NewUserService(userRepo)
+	profileSvc := profileService.NewProfileService(profileRepo)
+	userPreferencesSvc := userpreferencesService.NewUserPreferencesService(userPreferencesRepo)
+
+	// System & Sync
+	addOnSvc := addonService.NewAddOnService(addOnRepo)
+	backupSvc := backupService.NewBackupService(backupRepo)
+	mediaSvc := mediaService.NewMediaService(mediaRepo)
+	syncMetaSvc := syncService.NewSyncMetaService(syncMetaRepo)
+
+	// Community & Audit
+	sharedDeckSvc := shareddeckService.NewSharedDeckService(sharedDeckRepo)
+	sharedDeckRatingSvc := shareddeckratingService.NewSharedDeckRatingService(sharedDeckRatingRepo)
+	deletionLogSvc := auditService.NewDeletionLogService(deletionLogRepo)
+	undoHistorySvc := auditService.NewUndoHistoryService(undoHistoryRepo)
+
+	// Email Service
 	var emailSvc primary.IEmailService
 	if cfg.Email.Enabled {
 		log.Info("Initializing email service (SMTP)")
@@ -426,7 +468,7 @@ func main() {
 		emailSvc = emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
 	}
 
-	// Initialize Session Service
+	// Session Service
 	sessionRepo := redis.NewSessionRepository(rdb.Client, cfg.Session.KeyPrefix)
 	sessionTTL := time.Duration(cfg.Session.TTLMinutes) * time.Minute
 	sessionSvc := sessionService.NewSessionService(sessionRepo, sessionTTL)
@@ -435,9 +477,20 @@ func main() {
 		"key_prefix", cfg.Session.KeyPrefix,
 	)
 
-	// Initialize Auth Service (with email service and session service)
-	authSvc := authService.NewAuthService(userRepo, deckRepo, eventBus, jwtSvc, rdb, emailSvc, sessionSvc)
+	// Auth Service
+	authSvc := authService.NewAuthService(userRepo, deckRepo, profileRepo, userPreferencesRepo, eventBus, jwtSvc, rdb, emailSvc, sessionSvc)
+
+	// 10. Register routes
+	routes.RegisterHealthRoutes(e, healthService)
+	if cfg.Metrics.Enabled {
+		routes.RegisterMetricsRoutes(e, metricsSvc, cfg.Metrics.Path)
+	}
 	routes.RegisterAuthRoutes(e, authSvc, jwtSvc, rdb, sessionSvc)
+	routes.RegisterStudyRoutes(e, deckSvc, filteredDeckSvc, cardSvc, reviewSvc, jwtSvc, rdb)
+	routes.RegisterContentRoutes(e, noteSvc, noteTypeSvc, jwtSvc, rdb)
+	routes.RegisterUserRoutes(e, userSvc, profileSvc, userPreferencesSvc, jwtSvc, rdb)
+	routes.RegisterSystemRoutes(e, addOnSvc, backupSvc, mediaSvc, syncMetaSvc, jwtSvc, rdb)
+	routes.RegisterCommunityRoutes(e, sharedDeckSvc, sharedDeckRatingSvc, deletionLogSvc, undoHistorySvc, jwtSvc, rdb)
 
 	// Register Email Verification Handler if events are enabled
 	if cfg.Events.Enabled {

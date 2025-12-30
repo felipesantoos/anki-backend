@@ -312,6 +312,11 @@ func (r *ProfileRepository) FindByName(ctx context.Context, userID int64, name s
 		return nil, fmt.Errorf("failed to find profile by name: %w", err)
 	}
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.ProfileToDomain(&model)
 }
 

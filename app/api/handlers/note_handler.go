@@ -44,7 +44,7 @@ func (h *NoteHandler) Create(c echo.Context) error {
 
 	n, err := h.service.Create(ctx, userID, req.NoteTypeID, req.DeckID, req.FieldsJSON, req.Tags)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusCreated, mappers.ToNoteResponse(n))
@@ -65,7 +65,7 @@ func (h *NoteHandler) FindByID(c echo.Context) error {
 
 	n, err := h.service.FindByID(ctx, userID, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Note not found")
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToNoteResponse(n))
@@ -84,7 +84,7 @@ func (h *NoteHandler) FindAll(c echo.Context) error {
 
 	notes, err := h.service.FindByUserID(ctx, userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToNoteResponseList(notes))
@@ -112,7 +112,7 @@ func (h *NoteHandler) Update(c echo.Context) error {
 
 	n, err := h.service.Update(ctx, userID, id, req.FieldsJSON, req.Tags)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToNoteResponse(n))
@@ -131,7 +131,7 @@ func (h *NoteHandler) Delete(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Delete(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -157,7 +157,7 @@ func (h *NoteHandler) AddTag(c echo.Context) error {
 	}
 
 	if err := h.service.AddTag(ctx, userID, id, req.Tag); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -178,7 +178,7 @@ func (h *NoteHandler) RemoveTag(c echo.Context) error {
 	tag := c.Param("tag")
 
 	if err := h.service.RemoveTag(ctx, userID, id, tag); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)

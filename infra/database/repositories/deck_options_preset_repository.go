@@ -293,6 +293,11 @@ func (r *DeckOptionsPresetRepository) FindByName(ctx context.Context, userID int
 		return nil, fmt.Errorf("failed to find deck options preset by name: %w", err)
 	}
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.DeckOptionsPresetToDomain(&model)
 }
 

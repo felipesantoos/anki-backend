@@ -267,6 +267,11 @@ func (r *SyncMetaRepository) FindByClientID(ctx context.Context, userID int64, c
 		return nil, fmt.Errorf("failed to find sync meta by client ID: %w", err)
 	}
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.SyncMetaToDomain(&model)
 }
 

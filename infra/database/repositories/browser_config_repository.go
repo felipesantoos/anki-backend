@@ -204,6 +204,11 @@ func (r *BrowserConfigRepository) FindByUserID(ctx context.Context, userID int64
 	visibleColumnsStr += "}"
 	model.VisibleColumns = visibleColumnsStr
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.BrowserConfigToDomain(&model)
 }
 

@@ -261,6 +261,11 @@ func (r *BackupRepository) FindByFilename(ctx context.Context, userID int64, fil
 		return nil, fmt.Errorf("failed to find backup by filename: %w", err)
 	}
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.BackupToDomain(&model)
 }
 

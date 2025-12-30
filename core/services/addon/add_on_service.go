@@ -2,12 +2,12 @@ package addon
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/add_on"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
 // AddOnService implements IAddOnService
@@ -76,7 +76,7 @@ func (s *AddOnService) UpdateConfig(ctx context.Context, userID int64, code stri
 		return nil, err
 	}
 	if existing == nil {
-		return nil, fmt.Errorf("add-on not found")
+		return nil, ownership.ErrResourceNotFound
 	}
 
 	existing.SetConfigJSON(configJSON)
@@ -96,7 +96,7 @@ func (s *AddOnService) ToggleEnabled(ctx context.Context, userID int64, code str
 		return nil, err
 	}
 	if existing == nil {
-		return nil, fmt.Errorf("add-on not found")
+		return nil, ownership.ErrResourceNotFound
 	}
 
 	existing.SetEnabled(enabled)
@@ -116,7 +116,7 @@ func (s *AddOnService) Uninstall(ctx context.Context, userID int64, code string)
 		return err
 	}
 	if existing == nil {
-		return fmt.Errorf("add-on not found")
+		return ownership.ErrResourceNotFound
 	}
 
 	return s.repo.Delete(ctx, userID, existing.GetID())

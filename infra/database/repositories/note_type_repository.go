@@ -309,6 +309,11 @@ func (r *NoteTypeRepository) FindByName(ctx context.Context, userID int64, name 
 		model.DeletedAt = deletedAt
 	}
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.NoteTypeToDomain(&model)
 }
 

@@ -277,6 +277,11 @@ func (r *AddOnRepository) FindByCode(ctx context.Context, userID int64, code str
 		return nil, fmt.Errorf("failed to find add-on by code: %w", err)
 	}
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.AddOnToDomain(&model)
 }
 

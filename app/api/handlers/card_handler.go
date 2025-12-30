@@ -39,7 +39,7 @@ func (h *CardHandler) FindByID(c echo.Context) error {
 
 	card, err := h.service.FindByID(ctx, userID, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Card not found")
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToCardResponse(card))
@@ -60,7 +60,7 @@ func (h *CardHandler) FindByDeckID(c echo.Context) error {
 
 	cards, err := h.service.FindByDeckID(ctx, userID, deckID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToCardResponseList(cards))
@@ -81,7 +81,7 @@ func (h *CardHandler) FindDueCards(c echo.Context) error {
 
 	cards, err := h.service.FindDueCards(ctx, userID, deckID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToCardResponseList(cards))
@@ -100,7 +100,7 @@ func (h *CardHandler) Suspend(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Suspend(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -119,7 +119,7 @@ func (h *CardHandler) Unsuspend(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Unsuspend(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -138,7 +138,7 @@ func (h *CardHandler) Bury(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Bury(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -157,7 +157,7 @@ func (h *CardHandler) Unbury(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Unbury(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -182,7 +182,7 @@ func (h *CardHandler) SetFlag(c echo.Context) error {
 	}
 
 	if err := h.service.SetFlag(ctx, userID, id, req.Flag); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -201,7 +201,7 @@ func (h *CardHandler) Delete(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Delete(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)

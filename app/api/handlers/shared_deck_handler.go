@@ -45,7 +45,7 @@ func (h *SharedDeckHandler) Create(c echo.Context) error {
 	sd, err := h.service.Create(ctx, userID, req.Name, req.Description, req.Category, req.PackagePath, req.PackageSize, req.Tags)
 	if err != nil {
 		c.Logger().Errorf("Create shared deck error: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusCreated, mappers.ToSharedDeckResponse(sd))
@@ -70,7 +70,7 @@ func (h *SharedDeckHandler) FindAll(c echo.Context) error {
 
 	decks, err := h.service.FindAll(ctx, catPtr, tags)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToSharedDeckResponseList(decks))
@@ -90,7 +90,7 @@ func (h *SharedDeckHandler) FindByID(c echo.Context) error {
 
 	sd, err := h.service.FindByID(ctx, userID, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Shared deck not found")
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToSharedDeckResponse(sd))
@@ -119,7 +119,7 @@ func (h *SharedDeckHandler) Update(c echo.Context) error {
 	sd, err := h.service.Update(ctx, userID, id, req.Name, req.Description, req.Category, req.IsPublic, req.Tags)
 	if err != nil {
 		c.Logger().Errorf("Update shared deck error: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToSharedDeckResponse(sd))
@@ -138,7 +138,7 @@ func (h *SharedDeckHandler) Delete(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Delete(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -157,7 +157,7 @@ func (h *SharedDeckHandler) Download(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.IncrementDownloadCount(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)

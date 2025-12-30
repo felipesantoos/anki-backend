@@ -1,12 +1,14 @@
 package middlewares
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/pkg/logger"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
 // CustomHTTPErrorHandler is the custom error handler for Echo that formats errors
@@ -21,8 +23,11 @@ func CustomHTTPErrorHandler(err error, c echo.Context) {
 	var message string
 	var errorCode string
 
-	// Check if it's an echo.HTTPError
-	if httpErr, ok := err.(*echo.HTTPError); ok {
+	// Check if it's an ownership error
+	if errors.Is(err, ownership.ErrResourceNotFound) || errors.Is(err, ownership.ErrAccessDenied) {
+		statusCode = http.StatusNotFound
+		message = "Resource not found"
+	} else if httpErr, ok := err.(*echo.HTTPError); ok {
 		statusCode = httpErr.Code
 		if msg, ok := httpErr.Message.(string); ok {
 			message = msg

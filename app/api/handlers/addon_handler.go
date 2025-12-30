@@ -44,7 +44,7 @@ func (h *AddOnHandler) Install(c echo.Context) error {
 	a, err := h.service.Install(ctx, userID, req.Code, req.Name, req.Version, req.ConfigJSON)
 	if err != nil {
 		c.Logger().Errorf("Install add-on error: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusCreated, mappers.ToAddOnResponse(a))
@@ -63,7 +63,7 @@ func (h *AddOnHandler) FindAll(c echo.Context) error {
 
 	addOns, err := h.service.FindByUserID(ctx, userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToAddOnResponseList(addOns))
@@ -91,7 +91,7 @@ func (h *AddOnHandler) UpdateConfig(c echo.Context) error {
 
 	a, err := h.service.UpdateConfig(ctx, userID, code, req.ConfigJSON)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToAddOnResponse(a))
@@ -119,7 +119,7 @@ func (h *AddOnHandler) Toggle(c echo.Context) error {
 
 	a, err := h.service.ToggleEnabled(ctx, userID, code, req.Enabled)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToAddOnResponse(a))
@@ -138,7 +138,7 @@ func (h *AddOnHandler) Uninstall(c echo.Context) error {
 	code := c.Param("code")
 
 	if err := h.service.Uninstall(ctx, userID, code); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)

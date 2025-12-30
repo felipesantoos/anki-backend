@@ -48,7 +48,7 @@ func (h *DeckHandler) Create(c echo.Context) error {
 
 	d, err := h.deckService.Create(ctx, userID, req.Name, req.ParentID, req.OptionsJSON)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusCreated, mappers.ToDeckResponse(d))
@@ -73,7 +73,7 @@ func (h *DeckHandler) FindByID(c echo.Context) error {
 
 	d, err := h.deckService.FindByID(ctx, userID, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Deck not found")
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToDeckResponse(d))
@@ -94,7 +94,7 @@ func (h *DeckHandler) FindAll(c echo.Context) error {
 
 	decks, err := h.deckService.FindByUserID(ctx, userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToDeckResponseList(decks))
@@ -123,7 +123,7 @@ func (h *DeckHandler) Update(c echo.Context) error {
 
 	d, err := h.deckService.Update(ctx, userID, id, req.Name, req.ParentID, req.OptionsJSON)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToDeckResponse(d))
@@ -145,7 +145,7 @@ func (h *DeckHandler) Delete(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.deckService.Delete(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)

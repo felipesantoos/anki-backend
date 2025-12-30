@@ -262,6 +262,11 @@ func (r *FlagNameRepository) FindByFlagNumber(ctx context.Context, userID int64,
 		return nil, fmt.Errorf("failed to find flag name by number: %w", err)
 	}
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.FlagNameToDomain(&model)
 }
 

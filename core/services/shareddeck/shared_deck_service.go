@@ -2,12 +2,12 @@ package shareddeck
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/shared_deck"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
 // SharedDeckService implements ISharedDeckService
@@ -68,11 +68,11 @@ func (s *SharedDeckService) Update(ctx context.Context, authorID int64, id int64
 		return nil, err
 	}
 	if existing == nil {
-		return nil, fmt.Errorf("shared deck not found")
+		return nil, ownership.ErrResourceNotFound
 	}
 
 	if existing.GetAuthorID() != authorID {
-		return nil, fmt.Errorf("not authorized to update this shared deck")
+		return nil, ownership.ErrAccessDenied
 	}
 
 	existing.SetName(name)
@@ -96,11 +96,11 @@ func (s *SharedDeckService) Delete(ctx context.Context, authorID int64, id int64
 		return err
 	}
 	if existing == nil {
-		return fmt.Errorf("shared deck not found")
+		return ownership.ErrResourceNotFound
 	}
 
 	if existing.GetAuthorID() != authorID {
-		return fmt.Errorf("not authorized to delete this shared deck")
+		return ownership.ErrAccessDenied
 	}
 
 	return s.repo.Delete(ctx, authorID, id)
@@ -113,7 +113,7 @@ func (s *SharedDeckService) IncrementDownloadCount(ctx context.Context, userID i
 		return err
 	}
 	if existing == nil {
-		return fmt.Errorf("shared deck not found")
+		return ownership.ErrResourceNotFound
 	}
 
 	existing.SetDownloadCount(existing.GetDownloadCount() + 1)

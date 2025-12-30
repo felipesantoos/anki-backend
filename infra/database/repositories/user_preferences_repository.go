@@ -329,6 +329,11 @@ func (r *UserPreferencesRepository) FindByUserID(ctx context.Context, userID int
 	model.DefaultSearchText = defaultSearchText
 	model.SelfHostedSyncServerURL = selfHostedURL
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.UserPreferencesToDomain(&model)
 }
 

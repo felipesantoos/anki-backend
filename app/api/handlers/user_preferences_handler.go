@@ -39,7 +39,7 @@ func (h *UserPreferencesHandler) FindByUserID(c echo.Context) error {
 
 	prefs, err := h.service.FindByUserID(ctx, userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToUserPreferencesResponse(prefs))
@@ -66,7 +66,7 @@ func (h *UserPreferencesHandler) Update(c echo.Context) error {
 	// 1. Get existing preferences to get the ID and current values
 	existingPrefs, err := h.service.FindByUserID(ctx, userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch existing preferences")
+		return err
 	}
 
 	// 2. Manual mapping to domain entity for update
@@ -105,7 +105,7 @@ func (h *UserPreferencesHandler) Update(c echo.Context) error {
 	}
 
 	if err := h.service.Update(ctx, userID, prefs); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToUserPreferencesResponse(prefs))
@@ -125,7 +125,7 @@ func (h *UserPreferencesHandler) ResetToDefaults(c echo.Context) error {
 	prefs, err := h.service.ResetToDefaults(ctx, userID)
 	if err != nil {
 		c.Logger().Errorf("Reset user preferences error: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToUserPreferencesResponse(prefs))

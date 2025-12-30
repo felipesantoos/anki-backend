@@ -303,6 +303,11 @@ func (r *MediaRepository) FindByHash(ctx context.Context, userID int64, hash str
 		model.DeletedAt = deletedAt
 	}
 
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
+	}
+
 	return mappers.MediaToDomain(&model)
 }
 
@@ -338,6 +343,11 @@ func (r *MediaRepository) FindByFilename(ctx context.Context, userID int64, file
 
 	if deletedAt.Valid {
 		model.DeletedAt = deletedAt
+	}
+
+	// Validate ownership (defense in depth)
+	if err := ownership.EnsureOwnership(userID, model.UserID); err != nil {
+		return nil, ownership.ErrResourceNotFound
 	}
 
 	return mappers.MediaToDomain(&model)

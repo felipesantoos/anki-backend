@@ -44,7 +44,7 @@ func (h *MediaHandler) Create(c echo.Context) error {
 
 	m, err := h.service.Create(ctx, userID, req.Filename, req.Hash, req.Size, req.MimeType, req.StoragePath)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusCreated, mappers.ToMediaResponse(m))
@@ -65,7 +65,7 @@ func (h *MediaHandler) FindByID(c echo.Context) error {
 
 	m, err := h.service.FindByID(ctx, userID, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Media not found")
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToMediaResponse(m))
@@ -84,7 +84,7 @@ func (h *MediaHandler) FindAll(c echo.Context) error {
 
 	mediaFiles, err := h.service.FindByUserID(ctx, userID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToMediaResponseList(mediaFiles))
@@ -103,7 +103,7 @@ func (h *MediaHandler) Delete(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Delete(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)

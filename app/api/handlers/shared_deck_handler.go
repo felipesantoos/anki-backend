@@ -44,6 +44,7 @@ func (h *SharedDeckHandler) Create(c echo.Context) error {
 
 	sd, err := h.service.Create(ctx, userID, req.Name, req.Description, req.Category, req.PackagePath, req.PackageSize, req.Tags)
 	if err != nil {
+		c.Logger().Errorf("Create shared deck error: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -117,6 +118,7 @@ func (h *SharedDeckHandler) Update(c echo.Context) error {
 
 	sd, err := h.service.Update(ctx, userID, id, req.Name, req.Description, req.Category, req.IsPublic, req.Tags)
 	if err != nil {
+		c.Logger().Errorf("Update shared deck error: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

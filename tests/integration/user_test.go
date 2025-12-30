@@ -153,6 +153,30 @@ func TestUser_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		json.Unmarshal(rec.Body.Bytes(), &profileRes)
 		assert.Equal(t, updateReq.Name, profileRes.Name)
+
+		// Enable Sync
+		syncReq := request.EnableSyncRequest{Username: "testuser"}
+		b, _ = json.Marshal(syncReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/profiles/"+strconv.FormatInt(profileID, 10)+"/sync/enable", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Disable Sync
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/profiles/"+strconv.FormatInt(profileID, 10)+"/sync/disable", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Delete Profile
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/profiles/"+strconv.FormatInt(profileID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
 	})
 
 	t.Run("UserPreferences", func(t *testing.T) {
@@ -194,6 +218,30 @@ func TestUser_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &prefsRes)
 		assert.Equal(t, updateReq.Language, prefsRes.Language)
 		assert.Equal(t, updateReq.Theme, prefsRes.Theme)
+
+		// Reset to Defaults
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/user/preferences/reset", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("UserDelete", func(t *testing.T) {
+		// Delete User (Soft Delete)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/user/me", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify user is soft deleted (should not be able to get me anymore)
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/user/me", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 }
 

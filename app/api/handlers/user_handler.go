@@ -35,7 +35,7 @@ func (h *UserHandler) GetMe(c echo.Context) error {
 	userID := middlewares.GetUserID(c)
 
 	u, err := h.service.FindByID(ctx, userID)
-	if err != nil {
+	if err != nil || u == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "User not found")
 	}
 

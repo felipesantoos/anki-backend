@@ -63,11 +63,24 @@ func (s *ReviewService) Create(ctx context.Context, userID int64, cardID int64, 
 		now := time.Now()
 		c.SetLastReviewAt(&now)
 		c.SetReps(c.GetReps() + 1)
+
+		// Basic scheduling to satisfy database constraints and provide minimal logic
 		if rating == 1 { // Again
 			c.SetLapses(c.GetLapses() + 1)
-			c.SetState(valueobjects.CardStateLearn) // Move back to learning if forgotten
-		} else if c.GetState() == valueobjects.CardStateNew {
-			c.SetState(valueobjects.CardStateLearn) // Move from new to learn
+			c.SetState(valueobjects.CardStateLearn)
+			// For learning/relearning cards, Anki often uses negative intervals (seconds)
+			// Here we use -60 as a placeholder for 1 minute to satisfy interval != 0
+			c.SetInterval(-60)
+		} else {
+			// If rating > 1, set a positive interval
+			if c.GetInterval() <= 0 {
+				c.SetInterval(1) // 1 day
+			}
+			// Simplified: just keep current interval if it was already positive
+		}
+
+		if c.GetState() == valueobjects.CardStateNew {
+			c.SetState(valueobjects.CardStateLearn)
 		}
 		
 		c.SetUpdatedAt(now)

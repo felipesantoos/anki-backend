@@ -3,7 +3,6 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -136,16 +135,105 @@ func TestStudy_Integration(t *testing.T) {
 	})
 
 	t.Run("Cards", func(t *testing.T) {
-		// Since we haven't created notes yet, we'll just check if we can list cards for a deck (should be empty)
-		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/decks/%d/cards", deckID), nil)
+		// Manually create a note and card for testing card operations
+		var noteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Test Type', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		require.NoError(t, err)
+
+		var noteID int64
+		// Use a valid UUID for guid
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, note_type_id, fields_json, guid) VALUES ($1, $2, '{}', '550e8400-e29b-41d4-a716-446655440000') RETURNING id", loginRes.User.ID, noteTypeID).Scan(&noteID)
+		require.NoError(t, err)
+
+		var cardID int64
+		err = db.DB.QueryRow("INSERT INTO cards (deck_id, note_id, card_type_id, state) VALUES ($1, $2, 0, 'new') RETURNING id", deckID, noteID).Scan(&cardID)
+		require.NoError(t, err)
+
+		// Get Card
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/"+strconv.FormatInt(cardID, 10), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
-		var cardsRes []response.CardResponse
-		json.Unmarshal(rec.Body.Bytes(), &cardsRes)
-		assert.Len(t, cardsRes, 0)
+		var cardRes response.CardResponse
+		json.Unmarshal(rec.Body.Bytes(), &cardRes)
+		assert.Equal(t, cardID, cardRes.ID)
+
+		// Suspend Card
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/suspend", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Unsuspend Card
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/unsuspend", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Bury Card
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/bury", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Unbury Card
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/unbury", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Set Flag
+		flagReq := request.SetCardFlagRequest{Flag: 1}
+		b, err := json.Marshal(flagReq)
+		require.NoError(t, err)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/flag", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+	})
+
+	t.Run("Reviews", func(t *testing.T) {
+		// We need a card ID from previous test or create a new one
+		var cardID int64
+		err := db.DB.QueryRow("SELECT id FROM cards LIMIT 1").Scan(&cardID)
+		require.NoError(t, err)
+
+		// Create Review
+		createReq := request.CreateReviewRequest{
+			CardID: cardID,
+			Rating: 3,
+			TimeMs: 10000,
+		}
+		b, _ := json.Marshal(createReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/reviews", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var reviewRes response.ReviewResponse
+		json.Unmarshal(rec.Body.Bytes(), &reviewRes)
+		assert.Equal(t, createReq.Rating, reviewRes.Rating)
+
+		// Find Reviews by Card ID
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/reviews", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var reviewsRes []response.ReviewResponse
+		json.Unmarshal(rec.Body.Bytes(), &reviewsRes)
+		assert.NotEmpty(t, reviewsRes)
 	})
 
 	t.Run("FilteredDecks", func(t *testing.T) {

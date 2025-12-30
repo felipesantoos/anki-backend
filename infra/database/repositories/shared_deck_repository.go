@@ -65,6 +65,10 @@ func (r *SharedDeckRepository) Save(ctx context.Context, authorID int64, sharedD
 		}
 
 		var sharedDeckID int64
+		tags := sharedDeckEntity.GetTags()
+		if tags == nil {
+			tags = []string{}
+		}
 		err := r.db.QueryRowContext(ctx, query,
 			authorID,
 			model.Name,
@@ -75,7 +79,7 @@ func (r *SharedDeckRepository) Save(ctx context.Context, authorID int64, sharedD
 			model.DownloadCount,
 			model.RatingAverage,
 			model.RatingCount,
-			pq.Array(sharedDeckEntity.GetTags()),
+			pq.Array(tags),
 			model.IsFeatured,
 			model.IsPublic,
 			model.CreatedAt,
@@ -126,6 +130,11 @@ func (r *SharedDeckRepository) Save(ctx context.Context, authorID int64, sharedD
 		deletedAt = model.DeletedAt.Time
 	}
 
+	tags := sharedDeckEntity.GetTags()
+	if tags == nil {
+		tags = []string{}
+	}
+
 	result, err := r.db.ExecContext(ctx, query,
 		model.Name,
 		description,
@@ -135,7 +144,7 @@ func (r *SharedDeckRepository) Save(ctx context.Context, authorID int64, sharedD
 		model.DownloadCount,
 		model.RatingAverage,
 		model.RatingCount,
-		pq.Array(sharedDeckEntity.GetTags()),
+		pq.Array(tags),
 		model.IsFeatured,
 		model.IsPublic,
 		model.UpdatedAt,

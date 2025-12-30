@@ -124,6 +124,7 @@ func (h *UserPreferencesHandler) ResetToDefaults(c echo.Context) error {
 
 	prefs, err := h.service.ResetToDefaults(ctx, userID)
 	if err != nil {
+		c.Logger().Errorf("Reset user preferences error: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

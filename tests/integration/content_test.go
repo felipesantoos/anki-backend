@@ -128,22 +128,51 @@ func TestContent_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		json.Unmarshal(rec.Body.Bytes(), &ntRes)
 		assert.Equal(t, updateReq.Name, ntRes.Name)
+
+		// List NoteTypes
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var ntListRes []response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &ntListRes)
+		assert.NotEmpty(t, ntListRes)
+
+		// Find NoteType by ID
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types/"+strconv.FormatInt(noteTypeID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Delete NoteType
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/note-types/"+strconv.FormatInt(noteTypeID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
 	})
 
 	t.Run("Notes", func(t *testing.T) {
+		// Re-create a note type for notes test since we deleted it above
+		var noteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'For Notes Test', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		require.NoError(t, err)
+
 		// Get default deck ID
 		var defaultDeckID int64
-		err := db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default'", loginRes.User.ID).Scan(&defaultDeckID)
+		err = db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default'", loginRes.User.ID).Scan(&defaultDeckID)
 		require.NoError(t, err)
 
 		// Create Note
-		createReq := request.CreateNoteRequest{
+		createNoteReq := request.CreateNoteRequest{
 			NoteTypeID: noteTypeID,
 			DeckID:     defaultDeckID,
 			FieldsJSON: `{"Front": "Integration Front", "Back": "Integration Back"}`,
 			Tags:       []string{"integration", "test"},
 		}
-		b, _ := json.Marshal(createReq)
+		b, _ := json.Marshal(createNoteReq)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -156,7 +185,7 @@ func TestContent_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rec.Code)
 		var noteRes response.NoteResponse
 		json.Unmarshal(rec.Body.Bytes(), &noteRes)
-		assert.Equal(t, createReq.FieldsJSON, noteRes.FieldsJSON)
+		assert.Equal(t, createNoteReq.FieldsJSON, noteRes.FieldsJSON)
 		noteID := noteRes.ID
 
 		// Update Note
@@ -191,6 +220,31 @@ func TestContent_Integration(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// List Notes
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var noteListRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &noteListRes)
+		assert.NotEmpty(t, noteListRes)
+
+		// Find Note by ID
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &noteRes)
+		assert.Equal(t, noteID, noteRes.ID)
+
+		// Delete Note
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
 	})
 }
-

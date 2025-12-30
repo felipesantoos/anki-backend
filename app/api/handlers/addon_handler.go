@@ -43,6 +43,7 @@ func (h *AddOnHandler) Install(c echo.Context) error {
 
 	a, err := h.service.Install(ctx, userID, req.Code, req.Name, req.Version, req.ConfigJSON)
 	if err != nil {
+		c.Logger().Errorf("Install add-on error: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

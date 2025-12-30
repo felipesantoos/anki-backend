@@ -204,7 +204,7 @@ func (r *UserPreferencesRepository) FindByID(ctx context.Context, userID int64, 
 
 	var model models.UserPreferencesModel
 	var defaultSearchText, selfHostedURL sql.NullString
-	var nextDayTime time.Time
+	var nextDayStr string
 
 	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(
 		&model.ID,
@@ -212,7 +212,7 @@ func (r *UserPreferencesRepository) FindByID(ctx context.Context, userID int64, 
 		&model.Language,
 		&model.Theme,
 		&model.AutoSync,
-		&nextDayTime,
+		&nextDayStr,
 		&model.LearnAheadLimit,
 		&model.TimeboxTimeLimit,
 		&model.VideoDriver,
@@ -244,6 +244,11 @@ func (r *UserPreferencesRepository) FindByID(ctx context.Context, userID int64, 
 		return nil, fmt.Errorf("failed to find user preferences: %w", err)
 	}
 
+	nextDayTime, err := time.Parse("15:04:05", nextDayStr)
+	if err != nil {
+		// Fallback for different formats
+		nextDayTime, _ = time.Parse("15:04:05.999999", nextDayStr)
+	}
 	model.NextDayStartsAt = time.Date(1970, 1, 1, nextDayTime.Hour(), nextDayTime.Minute(), nextDayTime.Second(), 0, time.UTC)
 
 	model.DefaultSearchText = defaultSearchText
@@ -274,7 +279,7 @@ func (r *UserPreferencesRepository) FindByUserID(ctx context.Context, userID int
 
 	var model models.UserPreferencesModel
 	var defaultSearchText, selfHostedURL sql.NullString
-	var nextDayTime time.Time
+	var nextDayStr string
 
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(
 		&model.ID,
@@ -282,7 +287,7 @@ func (r *UserPreferencesRepository) FindByUserID(ctx context.Context, userID int
 		&model.Language,
 		&model.Theme,
 		&model.AutoSync,
-		&nextDayTime,
+		&nextDayStr,
 		&model.LearnAheadLimit,
 		&model.TimeboxTimeLimit,
 		&model.VideoDriver,
@@ -314,6 +319,11 @@ func (r *UserPreferencesRepository) FindByUserID(ctx context.Context, userID int
 		return nil, fmt.Errorf("failed to find user preferences by user ID: %w", err)
 	}
 
+	nextDayTime, err := time.Parse("15:04:05", nextDayStr)
+	if err != nil {
+		// Fallback for different formats
+		nextDayTime, _ = time.Parse("15:04:05.999999", nextDayStr)
+	}
 	model.NextDayStartsAt = time.Date(1970, 1, 1, nextDayTime.Hour(), nextDayTime.Minute(), nextDayTime.Second(), 0, time.UTC)
 
 	model.DefaultSearchText = defaultSearchText

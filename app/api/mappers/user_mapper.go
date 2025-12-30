@@ -16,6 +16,7 @@ func ToUserResponse(u *user.User) *response.UserResponse {
 		EmailVerified: u.GetEmailVerified(),
 		CreatedAt:     u.GetCreatedAt(),
 		UpdatedAt:     u.GetUpdatedAt(),
+		LastLoginAt:   u.GetLastLoginAt(),
 	}
 }
 

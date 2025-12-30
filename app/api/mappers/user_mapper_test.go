@@ -21,6 +21,7 @@ func TestToUserResponse(t *testing.T) {
 		WithEmailVerified(true).
 		WithCreatedAt(now).
 		WithUpdatedAt(now).
+		WithLastLoginAt(&now).
 		Build()
 
 	t.Run("Success", func(t *testing.T) {
@@ -31,6 +32,7 @@ func TestToUserResponse(t *testing.T) {
 		assert.Equal(t, u.GetEmailVerified(), res.EmailVerified)
 		assert.Equal(t, u.GetCreatedAt(), res.CreatedAt)
 		assert.Equal(t, u.GetUpdatedAt(), res.UpdatedAt)
+		assert.Equal(t, u.GetLastLoginAt(), res.LastLoginAt)
 	})
 
 	t.Run("NilEntity", func(t *testing.T) {

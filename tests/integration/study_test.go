@@ -198,6 +198,61 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 
+	t.Run("DeckOptionsPresets", func(t *testing.T) {
+		// 1. Create Preset
+		createReq := request.CreateDeckOptionsPresetRequest{
+			Name:        "Custom Preset",
+			OptionsJSON: `{"newCardsPerDay": 50}`,
+		}
+		b, _ := json.Marshal(createReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/deck-options-presets", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var presetRes response.DeckOptionsPresetResponse
+		json.Unmarshal(rec.Body.Bytes(), &presetRes)
+		assert.Equal(t, createReq.Name, presetRes.Name)
+		assert.Equal(t, createReq.OptionsJSON, presetRes.OptionsJSON)
+		presetID := presetRes.ID
+
+		// 2. List Presets
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/deck-options-presets", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var presetList []response.DeckOptionsPresetResponse
+		json.Unmarshal(rec.Body.Bytes(), &presetList)
+		assert.NotEmpty(t, presetList)
+
+		// 3. Update Preset
+		updateReq := request.UpdateDeckOptionsPresetRequest{
+			Name:        "Updated Preset",
+			OptionsJSON: `{"newCardsPerDay": 60}`,
+		}
+		b, _ = json.Marshal(updateReq)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/deck-options-presets/"+strconv.FormatInt(presetID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &presetRes)
+		assert.Equal(t, updateReq.Name, presetRes.Name)
+
+		// 4. Delete Preset
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/deck-options-presets/"+strconv.FormatInt(presetID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+	})
+
 	t.Run("DeckHierarchy", func(t *testing.T) {
 		// Create Parent
 		parentReq := request.CreateDeckRequest{Name: "Parent"}

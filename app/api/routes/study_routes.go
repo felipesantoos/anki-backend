@@ -9,11 +9,13 @@ import (
 // RegisterStudyRoutes registers study-related routes (decks, cards, reviews)
 func (r *Router) RegisterStudyRoutes() {
 	deckService := dicontainer.GetDeckService()
+	presetService := dicontainer.GetDeckOptionsPresetService()
 	filteredDeckService := dicontainer.GetFilteredDeckService()
 	cardService := dicontainer.GetCardService()
 	reviewService := dicontainer.GetReviewService()
 
 	deckHandler := handlers.NewDeckHandler(deckService)
+	presetHandler := handlers.NewDeckOptionsPresetHandler(presetService)
 	filteredDeckHandler := handlers.NewFilteredDeckHandler(filteredDeckService)
 	cardHandler := handlers.NewCardHandler(cardService)
 	reviewHandler := handlers.NewReviewHandler(reviewService)
@@ -33,6 +35,13 @@ func (r *Router) RegisterStudyRoutes() {
 	decks.PUT("/:id/options", deckHandler.UpdateOptions)
 	decks.PUT("/:id", deckHandler.Update)
 	decks.DELETE("/:id", deckHandler.Delete)
+
+	// Deck Options Presets
+	presets := v1.Group("/deck-options-presets")
+	presets.POST("", presetHandler.Create)
+	presets.GET("", presetHandler.FindAll)
+	presets.PUT("/:id", presetHandler.Update)
+	presets.DELETE("/:id", presetHandler.Delete)
 
 	// Filtered Decks
 	filteredDecks := v1.Group("/filtered-decks")

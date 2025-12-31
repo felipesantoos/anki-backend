@@ -67,6 +67,12 @@ func GetDeckService() primary.IDeckService {
 	return deckService.NewDeckService(deckRepo)
 }
 
+// GetDeckOptionsPresetService returns a fresh instance of DeckOptionsPresetService
+func GetDeckOptionsPresetService() primary.IDeckOptionsPresetService {
+	presetRepo := repositories.NewDeckOptionsPresetRepository(dbRepo.GetDB())
+	return deckService.NewDeckOptionsPresetService(presetRepo)
+}
+
 // GetFilteredDeckService returns a fresh instance of FilteredDeckService
 func GetFilteredDeckService() primary.IFilteredDeckService {
 	filteredDeckRepo := repositories.NewFilteredDeckRepository(dbRepo.GetDB())

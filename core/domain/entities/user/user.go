@@ -1,9 +1,15 @@
 package user
 
 import (
+	"errors"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
+)
+
+var (
+	// ErrEmailAlreadyExists is returned when trying to register with an existing email
+	ErrEmailAlreadyExists = errors.New("email already registered")
 )
 
 // User represents a user entity in the domain

@@ -23,8 +23,6 @@ import (
 )
 
 var (
-	// ErrEmailAlreadyExists is returned when trying to register with an existing email
-	ErrEmailAlreadyExists = errors.New("email already registered")
 	// ErrInvalidEmail is returned when email format is invalid
 	ErrInvalidEmail = errors.New("invalid email format")
 	// ErrInvalidPassword is returned when password doesn't meet requirements
@@ -115,7 +113,7 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 		return nil, fmt.Errorf("failed to check if email exists: %w", err)
 	}
 	if exists {
-		return nil, ErrEmailAlreadyExists
+		return nil, user.ErrEmailAlreadyExists
 	}
 
 	// 3. Validate and create password value object (includes hashing)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lib/pq"
 	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/infra/database/mappers"
@@ -61,6 +62,12 @@ func (r *UserRepository) Save(ctx context.Context, userEntity *user.User) error 
 		}
 
 		if err != nil {
+			// Check for Postgres unique constraint violation
+			if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" {
+				if pgErr.Constraint == "idx_users_email_active" {
+					return user.ErrEmailAlreadyExists
+				}
+			}
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 
@@ -95,6 +102,12 @@ func (r *UserRepository) Save(ctx context.Context, userEntity *user.User) error 
 	)
 
 	if err != nil {
+		// Check for Postgres unique constraint violation
+		if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" {
+			if pgErr.Constraint == "idx_users_email_active" {
+				return user.ErrEmailAlreadyExists
+			}
+		}
 		return fmt.Errorf("failed to update user: %w", err)
 	}
 

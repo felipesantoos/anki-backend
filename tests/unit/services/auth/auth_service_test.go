@@ -454,7 +454,7 @@ func TestAuthService_Register_EmailAlreadyExists(t *testing.T) {
 		t.Fatalf("Register() expected error, got nil")
 	}
 
-	if err != authService.ErrEmailAlreadyExists {
+	if err != userEntity.ErrEmailAlreadyExists {
 		t.Errorf("Register() error = %v, want ErrEmailAlreadyExists", err)
 	}
 }

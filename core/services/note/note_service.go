@@ -19,6 +19,7 @@ type NoteService struct {
 	noteRepo     secondary.INoteRepository
 	cardRepo     secondary.ICardRepository
 	noteTypeRepo secondary.INoteTypeRepository
+	deckRepo     secondary.IDeckRepository
 	tm           database.TransactionManager
 }
 
@@ -27,12 +28,14 @@ func NewNoteService(
 	noteRepo secondary.INoteRepository,
 	cardRepo secondary.ICardRepository,
 	noteTypeRepo secondary.INoteTypeRepository,
+	deckRepo secondary.IDeckRepository,
 	tm database.TransactionManager,
 ) primary.INoteService {
 	return &NoteService{
 		noteRepo:     noteRepo,
 		cardRepo:     cardRepo,
 		noteTypeRepo: noteTypeRepo,
+		deckRepo:     deckRepo,
 		tm:           tm,
 	}
 }
@@ -51,7 +54,16 @@ func (s *NoteService) Create(ctx context.Context, userID int64, noteTypeID int64
 			return fmt.Errorf("note type not found")
 		}
 
-		// 2. Create Note
+		// 2. Validate Deck ownership
+		d, err := s.deckRepo.FindByID(txCtx, userID, deckID)
+		if err != nil {
+			return err
+		}
+		if d == nil {
+			return fmt.Errorf("deck not found")
+		}
+
+		// 3. Create Note
 		guid, _ := valueobjects.NewGUID(uuid.New().String()) // Generate new GUID
 		now := time.Now()
 		noteEntity, err = note.NewBuilder().

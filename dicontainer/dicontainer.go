@@ -116,8 +116,9 @@ func GetNoteService() primary.INoteService {
 	noteRepo := repositories.NewNoteRepository(dbRepo.GetDB())
 	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
 	noteTypeRepo := repositories.NewNoteTypeRepository(dbRepo.GetDB())
+	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
 	tm := database.NewTransactionManager(dbRepo.GetDB())
-	return noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, tm)
+	return noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tm)
 }
 
 // GetUserService returns a fresh instance of UserService

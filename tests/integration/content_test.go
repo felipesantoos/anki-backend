@@ -131,7 +131,7 @@ func TestContent_Integration(t *testing.T) {
 	t.Run("Notes", func(t *testing.T) {
 		// Re-create a note type for notes test since we deleted it above
 		var noteTypeID int64
-		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'For Notes Test', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'For Notes Test', '[]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
 		require.NoError(t, err)
 
 		// Get default deck ID
@@ -214,11 +214,37 @@ func TestContent_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &noteRes)
 		assert.Equal(t, noteID, noteRes.ID)
 
+		// Verify that cards were created in the database
+		var cardCount int
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCount)
+		require.NoError(t, err)
+		assert.Greater(t, cardCount, 0, "Cards should have been created for the note")
+
 		// Delete Note
 		req = httptest.NewRequest(http.MethodDelete, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Cross-User Isolation: User B tries to create a note in User A's deck
+		loginResB := registerAndLogin(t, e, "userB@example.com", "password123")
+		tokenB := loginResB.AccessToken
+
+		// Create Note in User A's deck (defaultDeckID)
+		badCreateNoteReq := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID, // NoteType created by User A
+			DeckID:     defaultDeckID, // Deck created by User A
+			FieldsJSON: `{"Front": "Bad", "Back": "Bad"}`,
+		}
+		b, _ = json.Marshal(badCreateNoteReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		// Should return 404 because deck (or note type) is not found for User B
+		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 }

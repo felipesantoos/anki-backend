@@ -91,3 +91,35 @@ func TestDeckService_Delete(t *testing.T) {
 	})
 }
 
+func TestDeckService_FindByUserID(t *testing.T) {
+	mockRepo := new(MockDeckRepository)
+	service := deckSvc.NewDeckService(mockRepo)
+	ctx := context.Background()
+	userID := int64(1)
+
+	t.Run("Success", func(t *testing.T) {
+		d1, _ := deck.NewBuilder().WithID(1).WithUserID(userID).WithName("Deck 1").Build()
+		d2, _ := deck.NewBuilder().WithID(2).WithUserID(userID).WithName("Deck 2").Build()
+		expectedDecks := []*deck.Deck{d1, d2}
+
+		mockRepo.On("FindByUserID", ctx, userID).Return(expectedDecks, nil).Once()
+
+		result, err := service.FindByUserID(ctx, userID)
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 2)
+		assert.Equal(t, expectedDecks, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Empty List", func(t *testing.T) {
+		mockRepo.On("FindByUserID", ctx, userID).Return([]*deck.Deck{}, nil).Once()
+
+		result, err := service.FindByUserID(ctx, userID)
+
+		assert.NoError(t, err)
+		assert.Empty(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+}
+

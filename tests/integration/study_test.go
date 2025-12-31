@@ -103,6 +103,28 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		json.Unmarshal(rec.Body.Bytes(), &deckRes)
 		assert.Equal(t, "Updated Integration Deck", deckRes.Name)
+
+		// List Decks
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var deckList []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &deckList)
+		assert.NotEmpty(t, deckList)
+		
+		// Find our created deck in the list
+		found := false
+		for _, d := range deckList {
+			if d.ID == deckID {
+				found = true
+				assert.Equal(t, "Updated Integration Deck", d.Name)
+				break
+			}
+		}
+		assert.True(t, found, "Created deck should be in the list")
 	})
 
 	t.Run("Cards", func(t *testing.T) {

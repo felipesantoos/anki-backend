@@ -10,6 +10,7 @@ import (
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
 	backupService "github.com/felipesantos/anki-backend/core/services/backup"
 	cardService "github.com/felipesantos/anki-backend/core/services/card"
+	exportService "github.com/felipesantos/anki-backend/core/services/export"
 	deckService "github.com/felipesantos/anki-backend/core/services/deck"
 	emailService "github.com/felipesantos/anki-backend/core/services/email"
 	mediaService "github.com/felipesantos/anki-backend/core/services/media"
@@ -20,6 +21,7 @@ import (
 	sessionService "github.com/felipesantos/anki-backend/core/services/session"
 	shareddeckService "github.com/felipesantos/anki-backend/core/services/shareddeck"
 	shareddeckratingService "github.com/felipesantos/anki-backend/core/services/shareddeckrating"
+	storageService "github.com/felipesantos/anki-backend/core/services/storage"
 	syncService "github.com/felipesantos/anki-backend/core/services/sync"
 	userService "github.com/felipesantos/anki-backend/core/services/user"
 	userpreferencesService "github.com/felipesantos/anki-backend/core/services/userpreferences"
@@ -66,7 +68,7 @@ func GetDeckService() primary.IDeckService {
 	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
 	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
 	tm := database.NewTransactionManager(dbRepo.GetDB())
-	return deckService.NewDeckService(deckRepo, cardRepo, tm)
+	return deckService.NewDeckService(deckRepo, cardRepo, GetBackupService(), tm)
 }
 
 // GetDeckOptionsPresetService returns a fresh instance of DeckOptionsPresetService
@@ -145,7 +147,21 @@ func GetAddOnService() primary.IAddOnService {
 // GetBackupService returns a fresh instance of BackupService
 func GetBackupService() primary.IBackupService {
 	backupRepo := repositories.NewBackupRepository(dbRepo.GetDB())
-	return backupService.NewBackupService(backupRepo)
+	storageRepo, _ := GetStorageRepository()
+	return backupService.NewBackupService(backupRepo, GetExportService(), storageRepo)
+}
+
+// GetExportService returns a fresh instance of ExportService
+func GetExportService() primary.IExportService {
+	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
+	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
+	noteRepo := repositories.NewNoteRepository(dbRepo.GetDB())
+	return exportService.NewExportService(deckRepo, cardRepo, noteRepo)
+}
+
+// GetStorageRepository returns a storage repository based on configuration
+func GetStorageRepository() (secondary.IStorageRepository, error) {
+	return storageService.NewStorageRepository(cfg.Storage, log)
 }
 
 // GetMediaService returns a fresh instance of MediaService

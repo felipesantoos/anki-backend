@@ -59,3 +59,6 @@ coverage.xml
 # Air (live reload) tmp directory
 tmp/
 
+# Test storage
+tests/integration/storage_test/
+

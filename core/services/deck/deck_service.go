@@ -21,21 +21,24 @@ var (
 
 // DeckService implements IDeckService
 type DeckService struct {
-	deckRepo secondary.IDeckRepository
-	cardRepo secondary.ICardRepository
-	tm       secondary.ITransactionManager
+	deckRepo   secondary.IDeckRepository
+	cardRepo   secondary.ICardRepository
+	backupSvc  primary.IBackupService
+	tm         secondary.ITransactionManager
 }
 
 // NewDeckService creates a new DeckService instance
 func NewDeckService(
 	deckRepo secondary.IDeckRepository,
 	cardRepo secondary.ICardRepository,
+	backupSvc primary.IBackupService,
 	tm secondary.ITransactionManager,
 ) primary.IDeckService {
 	return &DeckService{
-		deckRepo: deckRepo,
-		cardRepo: cardRepo,
-		tm:       tm,
+		deckRepo:   deckRepo,
+		cardRepo:   cardRepo,
+		backupSvc:  backupSvc,
+		tm:         tm,
 	}
 }
 
@@ -226,7 +229,12 @@ func (s *DeckService) Delete(ctx context.Context, userID int64, id int64, action
 		return fmt.Errorf("cannot delete the default deck")
 	}
 
-	// 3. Handle card strategy
+	// 3. Create pre-operation backup
+	if _, err := s.backupSvc.CreatePreOperationBackup(ctx, userID); err != nil {
+		return fmt.Errorf("failed to create backup before deletion: %w", err)
+	}
+
+	// 4. Handle card strategy
 	var finalTargetDeckID int64
 	if action == deck.ActionMoveToDefault {
 		// Fetch default deck

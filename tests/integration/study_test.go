@@ -776,6 +776,34 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, parent.Name, parentRes.Name)
 	})
 
+	t.Run("BackupBeforeDeletion", func(t *testing.T) {
+		// 1. Create a deck
+		d := createDeck(t, e, token, request.CreateDeckRequest{Name: "Backup Test Deck"})
+		
+		// 2. Delete the deck
+		deleteReq := request.DeleteDeckRequest{Action: request.ActionDeleteCards}
+		b, _ := json.Marshal(deleteReq)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(d.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// 3. Verify backup exists in DB
+		var count int
+		err := db.DB.QueryRow("SELECT COUNT(*) FROM backups WHERE user_id = $1 AND backup_type = 'pre_operation'", loginRes.User.ID).Scan(&count)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, count, 1, "Should have created at least one pre-operation backup")
+
+		// 4. Verify backup record details
+		var filename, storagePath string
+		err = db.DB.QueryRow("SELECT filename, storage_path FROM backups WHERE user_id = $1 AND backup_type = 'pre_operation' ORDER BY created_at DESC LIMIT 1", loginRes.User.ID).Scan(&filename, &storagePath)
+		require.NoError(t, err)
+		assert.Contains(t, filename, "pre_op_")
+		assert.Contains(t, storagePath, "backups/")
+	})
+
 	t.Run("FilteredDecks", func(t *testing.T) {
 		// Create Filtered Deck
 		createReq := request.CreateFilteredDeckRequest{

@@ -8,8 +8,11 @@ import (
 
 // IBackupService defines the interface for backup management
 type IBackupService interface {
-	// Create records a new backup
+	// Create records a new backup manually
 	Create(ctx context.Context, userID int64, filename string, size int64, storagePath string, backupType string) (*backup.Backup, error)
+
+	// CreatePreOperationBackup creates an automatic backup before a destructive operation
+	CreatePreOperationBackup(ctx context.Context, userID int64) (*backup.Backup, error)
 
 	// FindByUserID finds all backups for a user
 	FindByUserID(ctx context.Context, userID int64) ([]*backup.Backup, error)

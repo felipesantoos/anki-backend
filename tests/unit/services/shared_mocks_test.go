@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"io"
 	"time"
 
 	addon "github.com/felipesantos/anki-backend/core/domain/entities/add_on"
@@ -502,6 +503,28 @@ func (m *MockFilteredDeckRepository) Delete(ctx context.Context, uid, id int64) 
 func (m *MockFilteredDeckRepository) Exists(ctx context.Context, uid, id int64) (bool, error) {
 	args := m.Called(ctx, uid, id)
 	return args.Bool(0), args.Error(1)
+}
+
+// MockBackupService
+type MockBackupService struct{ mock.Mock }
+func (m *MockBackupService) Create(ctx context.Context, uid int64, f string, s int64, sp, t string) (*backup.Backup, error) {
+	args := m.Called(ctx, uid, f, s, sp, t); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*backup.Backup), args.Error(1)
+}
+func (m *MockBackupService) CreatePreOperationBackup(ctx context.Context, uid int64) (*backup.Backup, error) {
+	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*backup.Backup), args.Error(1)
+}
+func (m *MockBackupService) FindByUserID(ctx context.Context, uid int64) ([]*backup.Backup, error) {
+	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*backup.Backup), args.Error(1)
+}
+func (m *MockBackupService) Delete(ctx context.Context, uid, id int64) error { return m.Called(ctx, uid, id).Error(0) }
+
+// MockExportService
+type MockExportService struct{ mock.Mock }
+func (m *MockExportService) ExportCollection(ctx context.Context, uid int64) (io.Reader, int64, error) {
+	args := m.Called(ctx, uid)
+	var r io.Reader
+	if args.Get(0) != nil { r = args.Get(0).(io.Reader) }
+	return r, int64(args.Int(1)), args.Error(2)
 }
 
 // MockJobScheduler

@@ -441,3 +441,100 @@ func TestCardRepository_Delete(t *testing.T) {
 	assert.Nil(t, found)
 }
 
+func TestCardRepository_CountByDeckAndState(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+	cardRepo := repositories.NewCardRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "card_count")
+
+	deckID, err := deckRepo.CreateDefaultDeck(ctx, userID)
+	require.NoError(t, err)
+
+	noteType, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID, noteType)
+	require.NoError(t, err)
+
+	guid, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440015")
+	require.NoError(t, err)
+
+	noteEntity, err := note.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithGUID(guid).
+		WithNoteTypeID(noteType.GetID()).
+		WithFieldsJSON(`{"Front":"Test"}`).
+		WithTags([]string{}).
+		WithMarked(false).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteRepo.Save(ctx, userID, noteEntity)
+	require.NoError(t, err)
+
+	// Create 3 new cards and 2 review cards
+	for i := 0; i < 3; i++ {
+		c, _ := card.NewBuilder().
+			WithID(0).
+			WithNoteID(noteEntity.GetID()).
+			WithCardTypeID(i + 1).
+			WithDeckID(deckID).
+			WithEase(2500).
+			WithDue(int64(i)). // For new cards, due is position
+			WithState(valueobjects.CardStateNew).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		err = cardRepo.Save(ctx, userID, c)
+		require.NoError(t, err)
+	}
+
+	for i := 0; i < 2; i++ {
+		c, _ := card.NewBuilder().
+			WithID(0).
+			WithNoteID(noteEntity.GetID()).
+			WithCardTypeID(i + 10).
+			WithDeckID(deckID).
+			WithEase(2500).
+			WithDue(time.Now().Unix() * 1000). // For review cards, due is timestamp
+			WithState(valueobjects.CardStateReview).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		err = cardRepo.Save(ctx, userID, c)
+		require.NoError(t, err)
+	}
+
+	// Count new cards
+	newCount, err := cardRepo.CountByDeckAndState(ctx, userID, deckID, valueobjects.CardStateNew)
+	require.NoError(t, err)
+	assert.Equal(t, 3, newCount)
+
+	// Count review cards
+	reviewCount, err := cardRepo.CountByDeckAndState(ctx, userID, deckID, valueobjects.CardStateReview)
+	require.NoError(t, err)
+	assert.Equal(t, 2, reviewCount)
+
+	// Count learning cards (should be 0)
+	learnCount, err := cardRepo.CountByDeckAndState(ctx, userID, deckID, valueobjects.CardStateLearn)
+	require.NoError(t, err)
+	assert.Equal(t, 0, learnCount)
+}
+

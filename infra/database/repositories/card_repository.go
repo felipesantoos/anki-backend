@@ -600,6 +600,25 @@ func (r *CardRepository) FindByState(ctx context.Context, userID int64, deckID i
 	return cards, nil
 }
 
+// CountByDeckAndState counts cards with a specific state in a deck
+func (r *CardRepository) CountByDeckAndState(ctx context.Context, userID int64, deckID int64, state valueobjects.CardState) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM cards c
+		INNER JOIN decks d ON c.deck_id = d.id
+		WHERE c.deck_id = $1 AND d.user_id = $2 AND d.deleted_at IS NULL
+			AND c.state = $3 AND c.suspended = FALSE AND c.buried = FALSE
+	`
+
+	var count int
+	err := r.db.QueryRowContext(ctx, query, deckID, userID, state.String()).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count cards by state: %w", err)
+	}
+
+	return count, nil
+}
+
 // Ensure CardRepository implements ICardRepository
 var _ secondary.ICardRepository = (*CardRepository)(nil)
 

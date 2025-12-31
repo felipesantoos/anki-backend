@@ -161,6 +161,10 @@ func (m *MockCardRepository) FindDueCards(ctx context.Context, uid, did, dt int6
 func (m *MockCardRepository) FindByState(ctx context.Context, uid, did int64, s valueobjects.CardState) ([]*card.Card, error) {
 	args := m.Called(ctx, uid, did, s); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*card.Card), args.Error(1)
 }
+func (m *MockCardRepository) CountByDeckAndState(ctx context.Context, uid, did int64, s valueobjects.CardState) (int, error) {
+	args := m.Called(ctx, uid, did, s)
+	return args.Int(0), args.Error(1)
+}
 
 // MockReviewRepository
 type MockReviewRepository struct{ mock.Mock }

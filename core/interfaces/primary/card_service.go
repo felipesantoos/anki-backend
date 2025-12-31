@@ -37,5 +37,8 @@ type ICardService interface {
 
 	// FindDueCards finds cards that are due for review in a deck
 	FindDueCards(ctx context.Context, userID int64, deckID int64) ([]*card.Card, error)
+
+	// CountByDeckAndState counts cards with a specific state in a deck
+	CountByDeckAndState(ctx context.Context, userID int64, deckID int64, state string) (int, error)
 }
 

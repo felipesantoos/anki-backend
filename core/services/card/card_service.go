@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
+	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 )
@@ -119,5 +120,14 @@ func (s *CardService) SetFlag(ctx context.Context, userID int64, id int64, flag 
 func (s *CardService) FindDueCards(ctx context.Context, userID int64, deckID int64) ([]*card.Card, error) {
 	now := time.Now().Unix() * 1000 // Current time in milliseconds
 	return s.cardRepo.FindDueCards(ctx, userID, deckID, now)
+}
+
+// CountByDeckAndState counts cards with a specific state in a deck
+func (s *CardService) CountByDeckAndState(ctx context.Context, userID int64, deckID int64, state string) (int, error) {
+	cardState := valueobjects.CardState(state)
+	if !cardState.IsValid() {
+		return 0, fmt.Errorf("invalid card state: %s", state)
+	}
+	return s.cardRepo.CountByDeckAndState(ctx, userID, deckID, cardState)
 }
 

@@ -45,5 +45,8 @@ type ICardRepository interface {
 
 	// FindByState finds all cards with a specific state in a deck
 	FindByState(ctx context.Context, userID int64, deckID int64, state valueobjects.CardState) ([]*card.Card, error)
+
+	// CountByDeckAndState counts cards with a specific state in a deck
+	CountByDeckAndState(ctx context.Context, userID int64, deckID int64, state valueobjects.CardState) (int, error)
 }
 

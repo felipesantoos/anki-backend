@@ -29,6 +29,7 @@ func (r *Router) RegisterStudyRoutes() {
 	decks.POST("", deckHandler.Create)
 	decks.GET("", deckHandler.FindAll)
 	decks.GET("/:id", deckHandler.FindByID)
+	decks.GET("/:id/options", deckHandler.GetOptions)
 	decks.PUT("/:id", deckHandler.Update)
 	decks.DELETE("/:id", deckHandler.Delete)
 

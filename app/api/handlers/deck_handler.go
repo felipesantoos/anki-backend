@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -130,6 +131,36 @@ func (h *DeckHandler) Update(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToDeckResponse(d))
+}
+
+// GetOptions handles GET /api/v1/decks/:id/options
+// @Summary Get deck options
+// @Description Returns the configuration options for a specific deck
+// @Tags decks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Deck ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/decks/{id}/options [get]
+func (h *DeckHandler) GetOptions(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	d, err := h.deckService.FindByID(ctx, userID, id)
+	if err != nil {
+		return handleDeckError(err)
+	}
+
+	var options map[string]interface{}
+	if err := json.Unmarshal([]byte(d.GetOptionsJSON()), &options); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse deck options")
+	}
+
+	return c.JSON(http.StatusOK, options)
 }
 
 // handleDeckError maps service-level deck errors to HTTP errors

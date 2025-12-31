@@ -142,6 +142,40 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 
+	t.Run("DeckOptions", func(t *testing.T) {
+		// 1. Create Deck with specific options
+		options := map[string]interface{}{
+			"newCardsPerDay": 25,
+			"reviewLimit":    100,
+		}
+		optionsJSON, _ := json.Marshal(options)
+		createReq := request.CreateDeckRequest{
+			Name:        "Options Test Deck",
+			OptionsJSON: string(optionsJSON),
+		}
+		d := createDeck(t, e, token, createReq)
+
+		// 2. Get options via endpoint
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(d.ID, 10)+"/options", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var retrievedOptions map[string]interface{}
+		json.Unmarshal(rec.Body.Bytes(), &retrievedOptions)
+
+		assert.Equal(t, float64(25), retrievedOptions["newCardsPerDay"])
+		assert.Equal(t, float64(100), retrievedOptions["reviewLimit"])
+
+		// 3. Try to get options for non-existent deck
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/999999/options", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
+
 	t.Run("DeckHierarchy", func(t *testing.T) {
 		// Create Parent
 		parentReq := request.CreateDeckRequest{Name: "Parent"}

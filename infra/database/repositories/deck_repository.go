@@ -286,15 +286,20 @@ func (r *DeckRepository) Delete(ctx context.Context, userID int64, deckID int64)
 		return ownership.ErrResourceNotFound
 	}
 
-	// Soft delete
+	// Recursive Soft delete
 	query := `
+		WITH RECURSIVE deck_tree AS (
+			SELECT id FROM decks WHERE id = $1 AND user_id = $2
+			UNION ALL
+			SELECT d.id FROM decks d JOIN deck_tree dt ON d.parent_id = dt.id
+		)
 		UPDATE decks
-		SET deleted_at = $1
-		WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL
+		SET deleted_at = $3
+		WHERE id IN (SELECT id FROM deck_tree) AND deleted_at IS NULL
 	`
 
 	now := time.Now()
-	result, err := r.db.ExecContext(ctx, query, now, deckID, userID)
+	result, err := r.db.ExecContext(ctx, query, deckID, userID, now)
 	if err != nil {
 		return fmt.Errorf("failed to delete deck: %w", err)
 	}

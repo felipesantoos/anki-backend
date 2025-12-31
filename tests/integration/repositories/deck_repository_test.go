@@ -149,6 +149,57 @@ func TestDeckRepository_Delete(t *testing.T) {
 	assert.Nil(t, found) // Soft deleted
 }
 
+func TestDeckRepository_Delete_Recursive(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "deck_delete_recursive")
+
+	// Create Hierarchy: Parent -> Child -> Grandchild
+	parent := &deck.Deck{}
+	parent.SetName("Parent")
+	parent.SetUserID(userID)
+	parent.SetOptionsJSON("{}")
+	_ = deckRepo.Save(ctx, userID, parent)
+
+	parentID := parent.GetID()
+	child := &deck.Deck{}
+	child.SetName("Child")
+	child.SetUserID(userID)
+	child.SetParentID(&parentID)
+	child.SetOptionsJSON("{}")
+	_ = deckRepo.Save(ctx, userID, child)
+
+	childID := child.GetID()
+	grandchild := &deck.Deck{}
+	grandchild.SetName("Grandchild")
+	grandchild.SetUserID(userID)
+	grandchild.SetParentID(&childID)
+	grandchild.SetOptionsJSON("{}")
+	_ = deckRepo.Save(ctx, userID, grandchild)
+
+	// Delete Parent
+	err := deckRepo.Delete(ctx, userID, parentID)
+	require.NoError(t, err)
+
+	// Verify all are soft-deleted
+	found, err := deckRepo.FindByID(ctx, userID, parentID)
+	assert.ErrorIs(t, err, ownership.ErrResourceNotFound)
+	assert.Nil(t, found)
+
+	found, err = deckRepo.FindByID(ctx, userID, childID)
+	assert.ErrorIs(t, err, ownership.ErrResourceNotFound)
+	assert.Nil(t, found)
+
+	found, err = deckRepo.FindByID(ctx, userID, grandchild.GetID())
+	assert.ErrorIs(t, err, ownership.ErrResourceNotFound)
+	assert.Nil(t, found)
+}
+
 func TestDeckRepository_Exists(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()

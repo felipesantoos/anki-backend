@@ -56,6 +56,20 @@ func TestDeckService_Create(t *testing.T) {
 		assert.Equal(t, &parentID, result.GetParentID())
 		mockRepo.AssertExpectations(t)
 	})
+
+	t.Run("Invalid Name Format", func(t *testing.T) {
+		_, err := service.Create(ctx, userID, "::", nil, "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid deck name format")
+
+		_, err = service.Create(ctx, userID, "A::::B", nil, "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid deck name format")
+
+		_, err = service.Create(ctx, userID, "  ", nil, "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "deck name cannot be empty")
+	})
 }
 
 func TestDeckService_Delete(t *testing.T) {

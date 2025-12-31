@@ -23,6 +23,17 @@ import (
 	postgresInfra "github.com/felipesantos/anki-backend/infra/postgres"
 )
 
+func init() {
+	// Try to load .env.test file from the project root
+	_, filename, _, _ := runtime.Caller(0)
+	testDir := filepath.Dir(filename)
+	projectRoot := filepath.Join(testDir, "..", "..", "..")
+	envTestPath := filepath.Join(projectRoot, ".env.test")
+
+	// Try to load .env.test (silently ignore if it doesn't exist)
+	_ = config.LoadFromFile(envTestPath)
+}
+
 // setupTestDB creates a test database connection with migrations
 func setupTestDB(t *testing.T) (*postgresInfra.PostgresRepository, func()) {
 	if os.Getenv("SKIP_DB_TESTS") == "true" {

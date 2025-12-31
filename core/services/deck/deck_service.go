@@ -3,6 +3,7 @@ package deck
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
@@ -24,6 +25,15 @@ func NewDeckService(deckRepo secondary.IDeckRepository) primary.IDeckService {
 
 // Create creates a new deck for a user
 func (s *DeckService) Create(ctx context.Context, userID int64, name string, parentID *int64, optionsJSON string) (*deck.Deck, error) {
+	// 0. Validate name
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("deck name cannot be empty")
+	}
+	if name == "::" || strings.Contains(name, "::::") {
+		return nil, fmt.Errorf("invalid deck name format")
+	}
+
 	// 1. Check if deck with same name exists at same level
 	exists, err := s.deckRepo.Exists(ctx, userID, name, parentID)
 	if err != nil {
@@ -84,6 +94,15 @@ func (s *DeckService) FindByUserID(ctx context.Context, userID int64) ([]*deck.D
 
 // Update updates an existing deck
 func (s *DeckService) Update(ctx context.Context, userID int64, id int64, name string, parentID *int64, optionsJSON string) (*deck.Deck, error) {
+	// 0. Validate name
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("deck name cannot be empty")
+	}
+	if name == "::" || strings.Contains(name, "::::") {
+		return nil, fmt.Errorf("invalid deck name format")
+	}
+
 	// 1. Find existing deck
 	existing, err := s.deckRepo.FindByID(ctx, userID, id)
 	if err != nil {

@@ -14,6 +14,9 @@ type DeckResponse struct {
 	// Name of the deck
 	Name string `json:"name" example:"Idiomas::Inglês"`
 
+	// Full hierarchical name of the deck
+	FullName string `json:"full_name" example:"Idiomas::Inglês"`
+
 	// ID of the parent deck (null if it's a root deck)
 	ParentID *int64 `json:"parent_id"`
 

@@ -142,6 +142,53 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 
+	t.Run("DeckHierarchy", func(t *testing.T) {
+		// Create Parent
+		parentReq := request.CreateDeckRequest{Name: "Parent"}
+		b, _ := json.Marshal(parentReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+		var parentRes response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &parentRes)
+
+		// Create Child
+		childReq := request.CreateDeckRequest{
+			Name:     "Child",
+			ParentID: &parentRes.ID,
+		}
+		b, _ = json.Marshal(childReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+		var childRes response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &childRes)
+
+		// Verify FullName in List
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var deckList []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &deckList)
+
+		foundChild := false
+		for _, d := range deckList {
+			if d.ID == childRes.ID {
+				assert.Equal(t, "Parent::Child", d.FullName)
+				foundChild = true
+			}
+		}
+		assert.True(t, foundChild)
+	})
+
 	t.Run("Cards", func(t *testing.T) {
 		// Create a new deck for card operations
 		createReq := request.CreateDeckRequest{

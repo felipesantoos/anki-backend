@@ -89,6 +89,17 @@ func TestDeckService_Delete(t *testing.T) {
 		assert.Contains(t, err.Error(), "cannot delete the default deck")
 		mockRepo.AssertExpectations(t)
 	})
+
+	t.Run("Deck Not Found", func(t *testing.T) {
+		deckID := int64(404)
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(nil, nil).Once()
+
+		err := service.Delete(ctx, userID, deckID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "deck not found")
+		mockRepo.AssertExpectations(t)
+	})
 }
 
 func TestDeckService_FindByUserID(t *testing.T) {

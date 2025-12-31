@@ -52,8 +52,7 @@ func TestStudy_Integration(t *testing.T) {
 	// Setup Echo
 	e := echo.New()
 	router := routes.NewRouter(e, cfg, jwtSvc, redisRepo)
-	router.RegisterAuthRoutes()
-	router.RegisterStudyRoutes()
+	router.Init()
 
 	// Register and login
 	loginRes := registerAndLogin(t, e, "study@example.com", "password123")
@@ -125,9 +124,40 @@ func TestStudy_Integration(t *testing.T) {
 			}
 		}
 		assert.True(t, found, "Created deck should be in the list")
+
+		// Delete Deck
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(deckID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify Deck is gone
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(deckID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 
 	t.Run("Cards", func(t *testing.T) {
+		// Create a new deck for card operations
+		createReq := request.CreateDeckRequest{
+			Name: "Card Test Deck",
+		}
+		b, _ := json.Marshal(createReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+		var deckRes response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &deckRes)
+		cardDeckID := deckRes.ID
+
 		// Manually create a note and card for testing card operations
 		var noteTypeID int64
 		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Test Type', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
@@ -139,13 +169,13 @@ func TestStudy_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		var cardID int64
-		err = db.DB.QueryRow("INSERT INTO cards (deck_id, note_id, card_type_id, state) VALUES ($1, $2, 0, 'new') RETURNING id", deckID, noteID).Scan(&cardID)
+		err = db.DB.QueryRow("INSERT INTO cards (deck_id, note_id, card_type_id, state) VALUES ($1, $2, 0, 'new') RETURNING id", cardDeckID, noteID).Scan(&cardID)
 		require.NoError(t, err)
 
 		// Get Card
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/"+strconv.FormatInt(cardID, 10), nil)
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/cards/"+strconv.FormatInt(cardID, 10), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
-		rec := httptest.NewRecorder()
+		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
@@ -183,7 +213,8 @@ func TestStudy_Integration(t *testing.T) {
 
 		// Set Flag
 		flagReq := request.SetCardFlagRequest{Flag: 1}
-		b, err := json.Marshal(flagReq)
+		b = []byte{} // reset b
+		b, err = json.Marshal(flagReq)
 		require.NoError(t, err)
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/flag", bytes.NewReader(b))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)

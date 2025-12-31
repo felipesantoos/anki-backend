@@ -403,6 +403,35 @@ func (r *NoteRepository) FindByTags(ctx context.Context, userID int64, tags []st
 	return r.scanNotes(rows)
 }
 
+// FindBySearch finds all notes containing the search text within fields_json for a user with pagination
+// Searches case-insensitively within JSON field values using jsonb_each_text
+func (r *NoteRepository) FindBySearch(ctx context.Context, userID int64, searchText string, limit int, offset int) ([]*note.Note, error) {
+	if searchText == "" {
+		return []*note.Note{}, nil
+	}
+
+	query := `
+		SELECT DISTINCT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE user_id = $1 
+		  AND deleted_at IS NULL
+		  AND EXISTS (
+		      SELECT 1 FROM jsonb_each_text(fields_json) 
+		      WHERE value ILIKE '%' || $2 || '%'
+		  )
+		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, searchText, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find notes by search: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanNotes(rows)
+}
+
 // Ensure NoteRepository implements INoteRepository
 var _ secondary.INoteRepository = (*NoteRepository)(nil)
 

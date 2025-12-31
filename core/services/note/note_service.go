@@ -130,7 +130,12 @@ func (s *NoteService) FindAll(ctx context.Context, userID int64, filters note.No
 		filters.Offset = 0
 	}
 
-	// Filter by DeckID (Highest priority)
+	// Filter by Search (Highest priority)
+	if filters.Search != "" {
+		return s.noteRepo.FindBySearch(ctx, userID, filters.Search, filters.Limit, filters.Offset)
+	}
+
+	// Filter by DeckID
 	if filters.DeckID != nil {
 		return s.noteRepo.FindByDeckID(ctx, userID, *filters.DeckID, filters.Limit, filters.Offset)
 	}

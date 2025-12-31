@@ -139,6 +139,58 @@ func TestNoteService_FindAll(t *testing.T) {
 		mockNoteRepo.AssertExpectations(t)
 	})
 
+	t.Run("Filter by Search", func(t *testing.T) {
+		searchText := "hello"
+		filters := note.NoteFilters{Search: searchText}
+		n4 := &note.Note{}; n4.SetID(4)
+		expectedNotes := []*note.Note{n4}
+		mockNoteRepo.On("FindBySearch", ctx, userID, searchText, 50, 0).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Filter by Search with Pagination", func(t *testing.T) {
+		searchText := "world"
+		filters := note.NoteFilters{Search: searchText, Limit: 10, Offset: 20}
+		mockNoteRepo.On("FindBySearch", ctx, userID, searchText, 10, 20).Return([]*note.Note{}, nil).Once()
+
+		_, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Filter by Search - Empty Search Text", func(t *testing.T) {
+		filters := note.NoteFilters{Search: ""}
+		// Empty search should return empty results, not call FindBySearch
+		mockNoteRepo.On("FindByUserID", ctx, userID, 50, 0).Return([]*note.Note{}, nil).Once()
+
+		_, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Search Priority over Other Filters", func(t *testing.T) {
+		searchText := "test"
+		deckID := int64(10)
+		filters := note.NoteFilters{Search: searchText, DeckID: &deckID}
+		n5 := &note.Note{}; n5.SetID(5)
+		expectedNotes := []*note.Note{n5}
+		// Search should be called, not FindByDeckID
+		mockNoteRepo.On("FindBySearch", ctx, userID, searchText, 50, 0).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
 	t.Run("Pagination", func(t *testing.T) {
 		filters := note.NoteFilters{Limit: 10, Offset: 20}
 		mockNoteRepo.On("FindByUserID", ctx, userID, 10, 20).Return([]*note.Note{}, nil).Once()

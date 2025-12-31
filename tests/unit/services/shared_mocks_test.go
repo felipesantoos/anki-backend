@@ -140,6 +140,9 @@ func (m *MockNoteRepository) FindByGUID(ctx context.Context, uid int64, g string
 func (m *MockNoteRepository) FindByTags(ctx context.Context, uid int64, t []string, l, o int) ([]*note.Note, error) {
 	args := m.Called(ctx, uid, t, l, o); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
 }
+func (m *MockNoteRepository) FindBySearch(ctx context.Context, uid int64, s string, l, o int) ([]*note.Note, error) {
+	args := m.Called(ctx, uid, s, l, o); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
+}
 
 // MockCardRepository
 type MockCardRepository struct{ mock.Mock }

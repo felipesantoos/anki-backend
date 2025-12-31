@@ -31,6 +31,10 @@ type INoteRepository interface {
 	// FindByTags finds all notes containing any of the specified tags for a user with pagination
 	FindByTags(ctx context.Context, userID int64, tags []string, limit int, offset int) ([]*note.Note, error)
 
+	// FindBySearch finds all notes containing the search text within fields_json for a user with pagination
+	// Searches case-insensitively within JSON field values
+	FindBySearch(ctx context.Context, userID int64, searchText string, limit int, offset int) ([]*note.Note, error)
+
 	// Update updates an existing note, validating ownership
 	// Returns error if note doesn't exist or doesn't belong to user
 	Update(ctx context.Context, userID int64, id int64, noteEntity *note.Note) error

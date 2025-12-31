@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -225,6 +226,90 @@ func TestContent_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &tagFilteredRes)
 		assert.NotEmpty(t, tagFilteredRes)
 
+		// Create additional notes with different field values for search testing
+		createNoteReq2 := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "Hello World", "Back": "Olá Mundo"}`,
+			Tags:       []string{"search-test"},
+		}
+		b, _ = json.Marshal(createNoteReq2)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var noteRes2 response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &noteRes2)
+
+		createNoteReq3 := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "Goodbye", "Back": "Adeus"}`,
+			Tags:       []string{"search-test"},
+		}
+		b, _ = json.Marshal(createNoteReq3)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+
+		// List Notes with Search - should find notes containing "Hello"
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?search=Hello", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &searchRes)
+		assert.NotEmpty(t, searchRes, "Search should find notes containing 'Hello'")
+		// Verify at least one note contains "Hello" in fields
+		found := false
+		for _, n := range searchRes {
+			if n.FieldsJSON != "" {
+				// Check if FieldsJSON contains "Hello" (case-insensitive)
+				fieldsLower := strings.ToLower(n.FieldsJSON)
+				if strings.Contains(fieldsLower, "hello") {
+					found = true
+					break
+				}
+			}
+		}
+		assert.True(t, found, "At least one note should contain 'Hello' in fields")
+
+		// List Notes with Search - case insensitive
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?search=hello", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchResLower []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &searchResLower)
+		assert.NotEmpty(t, searchResLower, "Search should be case-insensitive")
+
+		// List Notes with Search - no matches
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?search=NonExistentText12345", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchResEmpty []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &searchResEmpty)
+		assert.Empty(t, searchResEmpty, "Search with no matches should return empty results")
+
+		// List Notes with Search and Pagination
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?search=Hello&limit=1&offset=0", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchResPaginated []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &searchResPaginated)
+		assert.LessOrEqual(t, len(searchResPaginated), 1, "Pagination should limit results")
+
 		// Find Note by ID
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -274,6 +359,19 @@ func TestContent_Integration(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 
+		// Cross-User Isolation: User B searches for User A's note content
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?search=Hello", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchResUserB []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &searchResUserB)
+		// User B should not see User A's notes
+		for _, n := range searchResUserB {
+			assert.NotEqual(t, noteID, n.ID, "User B should not see User A's notes in search results")
+		}
+
 		// Update Note - Not Found
 		updateReqNotFound := request.UpdateNoteRequest{
 			FieldsJSON: `{"Front": "Updated Front", "Back": "Updated Back"}`,
@@ -312,9 +410,9 @@ func TestContent_Integration(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		json.Unmarshal(rec.Body.Bytes(), &noteRes)
-		found := false
-		for _, t := range noteRes.Tags {
-			if t == "integration-new" {
+		found = false
+		for _, tag := range noteRes.Tags {
+			if tag == "integration-new" {
 				found = true
 				break
 			}
@@ -335,8 +433,8 @@ func TestContent_Integration(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		json.Unmarshal(rec.Body.Bytes(), &noteRes)
 		found = false
-		for _, t := range noteRes.Tags {
-			if t == "integration-new" {
+		for _, tag := range noteRes.Tags {
+			if tag == "integration-new" {
 				found = true
 				break
 			}

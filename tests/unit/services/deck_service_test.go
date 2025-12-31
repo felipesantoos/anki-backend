@@ -123,3 +123,33 @@ func TestDeckService_FindByUserID(t *testing.T) {
 	})
 }
 
+func TestDeckService_FindByID(t *testing.T) {
+	mockRepo := new(MockDeckRepository)
+	service := deckSvc.NewDeckService(mockRepo)
+	ctx := context.Background()
+	userID := int64(1)
+	deckID := int64(10)
+
+	t.Run("Success", func(t *testing.T) {
+		expectedDeck, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("Target Deck").Build()
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(expectedDeck, nil).Once()
+
+		result, err := service.FindByID(ctx, userID, deckID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, expectedDeck, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Not Found", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(nil, nil).Once()
+
+		result, err := service.FindByID(ctx, userID, deckID)
+
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+}
+

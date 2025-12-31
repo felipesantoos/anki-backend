@@ -19,5 +19,8 @@ type IDeckOptionsPresetService interface {
 
 	// Delete deletes a preset
 	Delete(ctx context.Context, userID int64, id int64) error
+
+	// ApplyToDecks applies a preset's options to multiple decks
+	ApplyToDecks(ctx context.Context, userID int64, id int64, deckIDs []int64) error
 }
 

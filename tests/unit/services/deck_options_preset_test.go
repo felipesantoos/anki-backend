@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck_options_preset"
 	presetSvc "github.com/felipesantos/anki-backend/core/services/deck"
 	"github.com/stretchr/testify/assert"
@@ -12,7 +13,9 @@ import (
 
 func TestDeckOptionsPresetService_Create(t *testing.T) {
 	mockRepo := new(MockDeckOptionsPresetRepository)
-	service := presetSvc.NewDeckOptionsPresetService(mockRepo)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := presetSvc.NewDeckOptionsPresetService(mockRepo, mockDeckRepo, *mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -32,7 +35,9 @@ func TestDeckOptionsPresetService_Create(t *testing.T) {
 
 func TestDeckOptionsPresetService_FindByUserID(t *testing.T) {
 	mockRepo := new(MockDeckOptionsPresetRepository)
-	service := presetSvc.NewDeckOptionsPresetService(mockRepo)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := presetSvc.NewDeckOptionsPresetService(mockRepo, mockDeckRepo, *mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -49,7 +54,9 @@ func TestDeckOptionsPresetService_FindByUserID(t *testing.T) {
 
 func TestDeckOptionsPresetService_Update(t *testing.T) {
 	mockRepo := new(MockDeckOptionsPresetRepository)
-	service := presetSvc.NewDeckOptionsPresetService(mockRepo)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := presetSvc.NewDeckOptionsPresetService(mockRepo, mockDeckRepo, *mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	presetID := int64(10)
@@ -99,7 +106,9 @@ func TestDeckOptionsPresetService_Update(t *testing.T) {
 
 func TestDeckOptionsPresetService_Delete(t *testing.T) {
 	mockRepo := new(MockDeckOptionsPresetRepository)
-	service := presetSvc.NewDeckOptionsPresetService(mockRepo)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := presetSvc.NewDeckOptionsPresetService(mockRepo, mockDeckRepo, *mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	presetID := int64(10)
@@ -111,6 +120,63 @@ func TestDeckOptionsPresetService_Delete(t *testing.T) {
 
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestDeckOptionsPresetService_ApplyToDecks(t *testing.T) {
+	mockRepo := new(MockDeckOptionsPresetRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := presetSvc.NewDeckOptionsPresetService(mockRepo, mockDeckRepo, *mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+	presetID := int64(10)
+	deckIDs := []int64{100, 101}
+
+	preset, _ := deckoptionspreset.NewBuilder().WithID(presetID).WithUserID(userID).WithName("Preset").WithOptionsJSON(`{"key":"value"}`).Build()
+	deck1, _ := deck.NewBuilder().WithID(100).WithUserID(userID).WithName("Deck 1").Build()
+	deck2, _ := deck.NewBuilder().WithID(101).WithUserID(userID).WithName("Deck 2").Build()
+
+	t.Run("Success", func(t *testing.T) {
+		mockTM.ExpectTransaction()
+		mockRepo.On("FindByID", ctx, userID, presetID).Return(preset, nil).Once()
+		mockDeckRepo.On("FindByID", ctx, userID, int64(100)).Return(deck1, nil).Once()
+		mockDeckRepo.On("Update", ctx, userID, int64(100), mock.Anything).Return(nil).Once()
+		mockDeckRepo.On("FindByID", ctx, userID, int64(101)).Return(deck2, nil).Once()
+		mockDeckRepo.On("Update", ctx, userID, int64(101), mock.Anything).Return(nil).Once()
+
+		err := service.ApplyToDecks(ctx, userID, presetID, deckIDs)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Preset Not Found", func(t *testing.T) {
+		mockTM.ExpectTransaction()
+		mockRepo.On("FindByID", ctx, userID, presetID).Return(nil, nil).Once()
+
+		err := service.ApplyToDecks(ctx, userID, presetID, deckIDs)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "preset not found")
+		mockRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Deck Not Found", func(t *testing.T) {
+		mockTM.ExpectTransaction()
+		mockRepo.On("FindByID", ctx, userID, presetID).Return(preset, nil).Once()
+		mockDeckRepo.On("FindByID", ctx, userID, int64(100)).Return(nil, nil).Once()
+
+		err := service.ApplyToDecks(ctx, userID, presetID, deckIDs)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "deck 100 not found")
+		mockRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
 	})
 }
 

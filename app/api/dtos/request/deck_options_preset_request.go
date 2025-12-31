@@ -20,3 +20,10 @@ type UpdateDeckOptionsPresetRequest struct {
 	OptionsJSON string `json:"options_json" example:"{}" validate:"required"`
 }
 
+// ApplyDeckOptionsPresetRequest represents the request payload to apply a preset to multiple decks
+// @Description Request payload for applying a preset to multiple decks
+type ApplyDeckOptionsPresetRequest struct {
+	// IDs of the decks to apply the preset to
+	DeckIDs []int64 `json:"deck_ids" example:"[1, 2, 3]" validate:"required,min=1"`
+}
+

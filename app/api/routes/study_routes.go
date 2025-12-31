@@ -42,6 +42,7 @@ func (r *Router) RegisterStudyRoutes() {
 	presets.GET("", presetHandler.FindAll)
 	presets.PUT("/:id", presetHandler.Update)
 	presets.DELETE("/:id", presetHandler.Delete)
+	presets.POST("/:id/apply", presetHandler.ApplyToDecks)
 
 	// Filtered Decks
 	filteredDecks := v1.Group("/filtered-decks")

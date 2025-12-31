@@ -126,3 +126,33 @@ func (h *DeckOptionsPresetHandler) Delete(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// ApplyToDecks handles POST /api/v1/deck-options-presets/:id/apply
+// @Summary Apply preset to decks
+// @Description Applies a preset's options to a list of decks
+// @Tags deck-options-presets
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Preset ID"
+// @Param request body request.ApplyDeckOptionsPresetRequest true "Apply preset request"
+// @Success 200 "OK"
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/deck-options-presets/{id}/apply [post]
+func (h *DeckOptionsPresetHandler) ApplyToDecks(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	var req request.ApplyDeckOptionsPresetRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	if err := h.service.ApplyToDecks(ctx, userID, id, req.DeckIDs); err != nil {
+		return err
+	}
+
+	return c.NoContent(http.StatusOK)
+}
+

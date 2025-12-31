@@ -251,6 +251,49 @@ func TestStudy_Integration(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// 5. Apply to Decks
+		// Create a new preset
+		createReq = request.CreateDeckOptionsPresetRequest{
+			Name:        "Apply Test Preset",
+			OptionsJSON: `{"newCardsPerDay": 100}`,
+		}
+		b, _ = json.Marshal(createReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/deck-options-presets", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &presetRes)
+		newPresetID := presetRes.ID
+
+		// Create two decks
+		deck1 := createDeck(t, e, token, request.CreateDeckRequest{Name: "Deck 1"})
+		deck2 := createDeck(t, e, token, request.CreateDeckRequest{Name: "Deck 2"})
+
+		// Apply preset
+		applyReq := request.ApplyDeckOptionsPresetRequest{
+			DeckIDs: []int64{deck1.ID, deck2.ID},
+		}
+		b, _ = json.Marshal(applyReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/deck-options-presets/"+strconv.FormatInt(newPresetID, 10)+"/apply", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Verify decks options
+		for _, did := range applyReq.DeckIDs {
+			req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(did, 10), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			var dRes response.DeckResponse
+			json.Unmarshal(rec.Body.Bytes(), &dRes)
+			assert.Equal(t, `{"newCardsPerDay": 100}`, dRes.OptionsJSON)
+		}
 	})
 
 	t.Run("DeckHierarchy", func(t *testing.T) {

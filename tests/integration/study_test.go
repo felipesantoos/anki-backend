@@ -739,6 +739,43 @@ func TestStudy_Integration(t *testing.T) {
 		assert.False(t, exists)
 	})
 
+	t.Run("SubdeckDeletionIsolation", func(t *testing.T) {
+		// 1. Create Parent
+		parent := createDeck(t, e, token, request.CreateDeckRequest{Name: "Parent Isolation Test"})
+
+		// 2. Create Child
+		child := createDeck(t, e, token, request.CreateDeckRequest{Name: "Child Isolation Test", ParentID: &parent.ID})
+
+		// 3. Delete Child
+		deleteReq := request.DeleteDeckRequest{Action: request.ActionDeleteCards}
+		b, _ := json.Marshal(deleteReq)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(child.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// 4. Verify Child is gone
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(child.ID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// 5. Verify Parent still exists
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(parent.ID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var parentRes response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &parentRes)
+		assert.Equal(t, parent.ID, parentRes.ID)
+		assert.Equal(t, parent.Name, parentRes.Name)
+	})
+
 	t.Run("FilteredDecks", func(t *testing.T) {
 		// Create Filtered Deck
 		createReq := request.CreateFilteredDeckRequest{

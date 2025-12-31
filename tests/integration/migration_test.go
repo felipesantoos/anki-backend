@@ -469,7 +469,7 @@ func TestMigration_IndexesCreated(t *testing.T) {
 
 	// Verify key indexes exist
 	expectedIndexes := []string{
-		"idx_users_email",
+		"idx_users_email_active",
 		"idx_decks_user_id",
 		"idx_notes_guid",
 		"idx_cards_deck_id",

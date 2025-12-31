@@ -167,6 +167,74 @@ func TestAuth_Register_Integration(t *testing.T) {
 	})
 }
 
+func TestAuth_EmailReuse_Integration(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	log := logger.GetLogger()
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	_ = eventBus.Start()
+	defer eventBus.Stop()
+
+	cfg, _ := config.Load()
+	redisRepo, _ := redisInfra.NewRedisRepository(cfg.Redis, log)
+	defer redisRepo.Close()
+
+	jwtSvc, _ := jwt.NewJWTService(cfg.JWT)
+	dicontainer.Init(db, redisRepo, eventBus, jwtSvc, cfg, log)
+
+	e := echo.New()
+	router := routes.NewRouter(e, cfg, jwtSvc, redisRepo)
+	router.RegisterAuthRoutes()
+	router.RegisterUserRoutes()
+
+	email := "reuse@example.com"
+	password := "Password123!"
+
+	t.Run("should allow email reuse after soft delete", func(t *testing.T) {
+		// 1. Register User A
+		registerReq := request.RegisterRequest{
+			Email:           email,
+			Password:        password,
+			PasswordConfirm: password,
+		}
+		b, _ := json.Marshal(registerReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+
+		// 2. Login to get token
+		loginReq := request.LoginRequest{Email: email, Password: password}
+		b, _ = json.Marshal(loginReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var loginRes response.LoginResponse
+		json.Unmarshal(rec.Body.Bytes(), &loginRes)
+
+		// 3. Soft delete User A
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/user/me", nil)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+loginRes.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusNoContent, rec.Code)
+
+		// 4. Register new user with SAME email
+		b, _ = json.Marshal(registerReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		// Should succeed because User A is soft-deleted
+		assert.Equal(t, http.StatusCreated, rec.Code, "Email should be reusable after soft delete")
+	})
+}
+
 func TestAuth_Login_Integration(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()

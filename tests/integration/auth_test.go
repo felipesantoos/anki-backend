@@ -338,6 +338,7 @@ func TestAuth_Login_Integration(t *testing.T) {
 		assert.Greater(t, result.ExpiresIn, 0)
 		assert.Equal(t, "testlogin@example.com", result.User.Email)
 		assert.NotZero(t, result.User.ID)
+		assert.NotNil(t, result.User.LastLoginAt)
 	})
 
 	t.Run("invalid credentials - wrong password", func(t *testing.T) {

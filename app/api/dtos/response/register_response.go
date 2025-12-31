@@ -22,4 +22,7 @@ type UserData struct {
 
 	// Timestamp when the user was created
 	CreatedAt time.Time `json:"created_at" example:"2024-01-15T10:30:00Z"`
+
+	// Timestamp of the last login
+	LastLoginAt *time.Time `json:"last_login_at,omitempty" example:"2024-01-15T10:30:00Z"`
 }

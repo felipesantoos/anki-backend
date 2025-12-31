@@ -20,6 +20,7 @@ func ToRegisterResponse(user *user.User) *response.RegisterResponse {
 			Email:         user.GetEmail().Value(),
 			EmailVerified: user.GetEmailVerified(),
 			CreatedAt:     user.GetCreatedAt(),
+			LastLoginAt:   user.GetLastLoginAt(),
 		},
 	}
 }
@@ -36,6 +37,7 @@ func ToLoginResponse(user *user.User, accessToken, refreshToken string, expiresI
 			Email:         user.GetEmail().Value(),
 			EmailVerified: user.GetEmailVerified(),
 			CreatedAt:     user.GetCreatedAt(),
+			LastLoginAt:   user.GetLastLoginAt(),
 		},
 	}
 }

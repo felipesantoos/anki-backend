@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
+	"github.com/felipesantos/anki-backend/app/api/mappers"
 	"github.com/felipesantos/anki-backend/core/domain/entities/profile"
 	"github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/domain/entities/user_preferences"
@@ -314,18 +315,7 @@ func (s *AuthService) Login(ctx context.Context, email string, password string, 
 	expiresIn := int(s.jwtService.GetAccessTokenExpiry().Seconds())
 
 	// 12. Build response
-	return &response.LoginResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    expiresIn,
-		TokenType:    "Bearer",
-		User: response.UserData{
-		ID:            user.GetID(),
-		Email:         user.GetEmail().Value(),
-		EmailVerified: user.GetEmailVerified(),
-		CreatedAt:     user.GetCreatedAt(),
-		},
-	}, nil
+	return mappers.ToLoginResponse(user, accessToken, refreshToken, expiresIn), nil
 }
 
 // extractDeviceInfo extracts device information from user agent string

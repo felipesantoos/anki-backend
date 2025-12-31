@@ -153,3 +153,102 @@ func TestDeckService_FindByID(t *testing.T) {
 	})
 }
 
+func TestDeckService_Update(t *testing.T) {
+	mockRepo := new(MockDeckRepository)
+	service := deckSvc.NewDeckService(mockRepo)
+	ctx := context.Background()
+	userID := int64(1)
+	deckID := int64(10)
+
+	t.Run("Success Name Update", func(t *testing.T) {
+		newName := "Updated Name"
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("Old Name").Build()
+		
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("Exists", ctx, userID, newName, (*int64)(nil)).Return(false, nil).Once()
+		mockRepo.On("Update", ctx, userID, deckID, mock.Anything).Return(nil).Once()
+
+		result, err := service.Update(ctx, userID, deckID, newName, nil, "")
+
+		assert.NoError(t, err)
+		assert.Equal(t, newName, result.GetName())
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Success Parent Update", func(t *testing.T) {
+		name := "Deck Name"
+		newParentID := int64(20)
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName(name).Build()
+		parentDeck, _ := deck.NewBuilder().WithID(newParentID).WithUserID(userID).WithName("Parent").Build()
+		
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("Exists", ctx, userID, name, &newParentID).Return(false, nil).Once()
+		mockRepo.On("FindByID", ctx, userID, newParentID).Return(parentDeck, nil).Once()
+		mockRepo.On("Update", ctx, userID, deckID, mock.Anything).Return(nil).Once()
+
+		result, err := service.Update(ctx, userID, deckID, name, &newParentID, "")
+
+		assert.NoError(t, err)
+		assert.Equal(t, &newParentID, result.GetParentID())
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Deck Not Found", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(nil, nil).Once()
+
+		result, err := service.Update(ctx, userID, deckID, "Name", nil, "")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "deck not found")
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Conflict Same Name At Same Level", func(t *testing.T) {
+		newName := "Conflict Name"
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("Old Name").Build()
+		
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("Exists", ctx, userID, newName, (*int64)(nil)).Return(true, nil).Once()
+
+		result, err := service.Update(ctx, userID, deckID, newName, nil, "")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "already exists")
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Circular Dependency", func(t *testing.T) {
+		name := "Name"
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName(name).Build()
+		
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("Exists", ctx, userID, name, &deckID).Return(false, nil).Once()
+
+		result, err := service.Update(ctx, userID, deckID, name, &deckID, "")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "cannot be its own parent")
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Parent Not Found", func(t *testing.T) {
+		name := "Name"
+		newParentID := int64(20)
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName(name).Build()
+		
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("Exists", ctx, userID, name, &newParentID).Return(false, nil).Once()
+		mockRepo.On("FindByID", ctx, userID, newParentID).Return(nil, nil).Once()
+
+		result, err := service.Update(ctx, userID, deckID, name, &newParentID, "")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "parent deck not found")
+		mockRepo.AssertExpectations(t)
+	})
+}
+

@@ -145,6 +145,59 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 
+	t.Run("DeckNameConflicts", func(t *testing.T) {
+		// 1. Create a deck
+		name := "Conflict Test Deck"
+		createReq := request.CreateDeckRequest{Name: name}
+		createDeck(t, e, token, createReq)
+
+		// 2. Try to create another deck with the same name at root (expect 409)
+		b, _ := json.Marshal(createReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusConflict, rec.Code)
+
+		// 3. Create a child deck
+		parent := createDeck(t, e, token, request.CreateDeckRequest{Name: "Parent Deck"})
+		childName := "Child Deck"
+		createDeck(t, e, token, request.CreateDeckRequest{Name: childName, ParentID: &parent.ID})
+
+		// 4. Try to create another child with same name under same parent (expect 409)
+		childConflictReq := request.CreateDeckRequest{Name: childName, ParentID: &parent.ID}
+		b, _ = json.Marshal(childConflictReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusConflict, rec.Code)
+
+		// 5. Success: Same name is allowed if parent is different
+		otherParent := createDeck(t, e, token, request.CreateDeckRequest{Name: "Other Parent"})
+		childOkReq := request.CreateDeckRequest{Name: childName, ParentID: &otherParent.ID}
+		b, _ = json.Marshal(childOkReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+
+		// 6. Update conflict (expect 409)
+		deckToUpdate := createDeck(t, e, token, request.CreateDeckRequest{Name: "To Update"})
+		updateReq := request.UpdateDeckRequest{Name: name} // name is "Conflict Test Deck" which exists at root
+		b, _ = json.Marshal(updateReq)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/decks/"+strconv.FormatInt(deckToUpdate.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusConflict, rec.Code)
+	})
+
 	t.Run("DeckOptions", func(t *testing.T) {
 		// 1. Create Deck with specific options
 		options := map[string]interface{}{

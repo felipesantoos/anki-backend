@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -52,7 +53,7 @@ func (h *DeckHandler) Create(c echo.Context) error {
 
 	d, err := h.deckService.Create(ctx, userID, req.Name, req.ParentID, req.OptionsJSON)
 	if err != nil {
-		return err
+		return handleDeckError(err)
 	}
 
 	return c.JSON(http.StatusCreated, mappers.ToDeckResponse(d))
@@ -210,6 +211,9 @@ func handleDeckError(err error) error {
 	}
 	if errors.Is(err, deck.ErrCircularDependency) {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	if strings.Contains(err.Error(), "already exists") {
+		return echo.NewHTTPError(http.StatusConflict, err.Error())
 	}
 	// For other errors, let the custom error handler deal with it or default to 500
 	return err

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
@@ -244,7 +245,31 @@ func TestDeckService_Update(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("Circular Dependency", func(t *testing.T) {
+	t.Run("Deep Circular Dependency", func(t *testing.T) {
+		name := "Name"
+		childID := int64(20)
+		grandchildID := int64(30)
+		
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName(name).Build()
+		child, _ := deck.NewBuilder().WithID(childID).WithUserID(userID).WithParentID(&deckID).WithName("Child").Build()
+		grandchild, _ := deck.NewBuilder().WithID(grandchildID).WithUserID(userID).WithParentID(&childID).WithName("Grandchild").Build()
+		
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("Exists", ctx, userID, name, &grandchildID).Return(false, nil).Once()
+		
+		// Traverse up from grandchild
+		mockRepo.On("FindByID", ctx, userID, grandchildID).Return(grandchild, nil).Once()
+		mockRepo.On("FindByID", ctx, userID, childID).Return(child, nil).Once()
+
+		result, err := service.Update(ctx, userID, deckID, name, &grandchildID, "")
+
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, deckSvc.ErrCircularDependency))
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Circular Dependency Self", func(t *testing.T) {
 		name := "Name"
 		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName(name).Build()
 		
@@ -254,8 +279,8 @@ func TestDeckService_Update(t *testing.T) {
 		result, err := service.Update(ctx, userID, deckID, name, &deckID, "")
 
 		assert.Error(t, err)
+		assert.True(t, errors.Is(err, deckSvc.ErrCircularDependency))
 		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "cannot be its own parent")
 		mockRepo.AssertExpectations(t)
 	})
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/mappers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
+	"github.com/felipesantos/anki-backend/core/services/deck"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
 // DeckHandler handles deck-related HTTP requests
@@ -73,7 +76,7 @@ func (h *DeckHandler) FindByID(c echo.Context) error {
 
 	d, err := h.deckService.FindByID(ctx, userID, id)
 	if err != nil {
-		return err
+		return handleDeckError(err)
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToDeckResponse(d))
@@ -123,10 +126,22 @@ func (h *DeckHandler) Update(c echo.Context) error {
 
 	d, err := h.deckService.Update(ctx, userID, id, req.Name, req.ParentID, req.OptionsJSON)
 	if err != nil {
-		return err
+		return handleDeckError(err)
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToDeckResponse(d))
+}
+
+// handleDeckError maps service-level deck errors to HTTP errors
+func handleDeckError(err error) error {
+	if errors.Is(err, deck.ErrDeckNotFound) || errors.Is(err, ownership.ErrResourceNotFound) || errors.Is(err, ownership.ErrAccessDenied) {
+		return echo.NewHTTPError(http.StatusNotFound, "Deck not found")
+	}
+	if errors.Is(err, deck.ErrCircularDependency) {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	// For other errors, let the custom error handler deal with it or default to 500
+	return err
 }
 
 // Delete handles DELETE /api/v1/decks/:id
@@ -145,7 +160,7 @@ func (h *DeckHandler) Delete(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.deckService.Delete(ctx, userID, id); err != nil {
-		return err
+		return handleDeckError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)

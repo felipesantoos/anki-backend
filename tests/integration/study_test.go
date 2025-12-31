@@ -189,6 +189,90 @@ func TestStudy_Integration(t *testing.T) {
 		assert.True(t, foundChild)
 	})
 
+	t.Run("Reorganization", func(t *testing.T) {
+		// 1. Create structure: Parent A, Parent B, Child A (under Parent A)
+		parentAReq := request.CreateDeckRequest{Name: "Parent A"}
+		pA := createDeck(t, e, token, parentAReq)
+
+		parentBReq := request.CreateDeckRequest{Name: "Parent B"}
+		pB := createDeck(t, e, token, parentBReq)
+
+		childAReq := request.CreateDeckRequest{Name: "Child A", ParentID: &pA.ID}
+		cA := createDeck(t, e, token, childAReq)
+
+		// 2. Move Child A to Parent B
+		moveReq := request.UpdateDeckRequest{Name: "Child A", ParentID: &pB.ID}
+		b, _ := json.Marshal(moveReq)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/decks/"+strconv.FormatInt(cA.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var movedRes response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &movedRes)
+		assert.Equal(t, &pB.ID, movedRes.ParentID)
+		
+		// Verify FullName updated in list
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		var movedResList []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &movedResList)
+		found := false
+		for _, d := range movedResList {
+			if d.ID == cA.ID {
+				assert.Equal(t, "Parent B::Child A", d.FullName)
+				found = true
+			}
+		}
+		assert.True(t, found)
+
+		// 3. Move Child A to root
+		moveRootReq := request.UpdateDeckRequest{Name: "Child A", ParentID: nil}
+		b, _ = json.Marshal(moveRootReq)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/decks/"+strconv.FormatInt(cA.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &movedRes)
+		assert.Nil(t, movedRes.ParentID)
+
+		// 4. Try to move Parent A into itself (should fail)
+		moveSelfReq := request.UpdateDeckRequest{Name: "Parent A", ParentID: &pA.ID}
+		b, _ = json.Marshal(moveSelfReq)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/decks/"+strconv.FormatInt(pA.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+		// 5. Deep Circular Dependency
+		// Move Child A back to Parent B
+		moveReq.ParentID = &pB.ID
+		b, _ = json.Marshal(moveReq)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/decks/"+strconv.FormatInt(cA.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		// Now try to move Parent B into Child A
+		moveInvalidReq := request.UpdateDeckRequest{Name: "Parent B", ParentID: &cA.ID}
+		b, _ = json.Marshal(moveInvalidReq)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/decks/"+strconv.FormatInt(pB.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
 	t.Run("Cards", func(t *testing.T) {
 		// Create a new deck for card operations
 		createReq := request.CreateDeckRequest{
@@ -346,5 +430,19 @@ func TestStudy_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &fdRes)
 		assert.Equal(t, updateReq.Name, fdRes.Name)
 	})
+}
+
+// Helper function to create a deck and return its response
+func createDeck(t *testing.T, e *echo.Echo, token string, reqBody request.CreateDeckRequest) response.DeckResponse {
+	b, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var deckRes response.DeckResponse
+	json.Unmarshal(rec.Body.Bytes(), &deckRes)
+	return deckRes
 }
 

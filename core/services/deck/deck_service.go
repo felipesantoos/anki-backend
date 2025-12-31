@@ -2,6 +2,7 @@ package deck
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,6 +10,13 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+)
+
+var (
+	// ErrDeckNotFound is returned when a deck cannot be found
+	ErrDeckNotFound = errors.New("deck not found")
+	// ErrCircularDependency is returned when a deck is moved into its own descendant
+	ErrCircularDependency = errors.New("cannot move deck into itself or its own descendant")
 )
 
 // DeckService implements IDeckService
@@ -109,7 +117,7 @@ func (s *DeckService) Update(ctx context.Context, userID int64, id int64, name s
 		return nil, err
 	}
 	if existing == nil {
-		return nil, fmt.Errorf("deck not found")
+		return nil, ErrDeckNotFound
 	}
 
 	// 2. If name or parent changed, check for conflicts
@@ -135,16 +143,20 @@ func (s *DeckService) Update(ctx context.Context, userID int64, id int64, name s
 
 	// 3. Validate parent if changed
 	if parentChanged && parentID != nil {
-		// Prevent circular dependency (simplified: just check if parent is not self)
-		if *parentID == id {
-			return nil, fmt.Errorf("deck cannot be its own parent")
-		}
-		parent, err := s.deckRepo.FindByID(ctx, userID, *parentID)
-		if err != nil {
-			return nil, err
-		}
-		if parent == nil {
-			return nil, fmt.Errorf("parent deck not found")
+		// Deep cycle check: ensure new parent is not the deck itself or one of its descendants
+		tempParentID := parentID
+		for tempParentID != nil {
+			if *tempParentID == id {
+				return nil, ErrCircularDependency
+			}
+			p, err := s.deckRepo.FindByID(ctx, userID, *tempParentID)
+			if err != nil {
+				return nil, err
+			}
+			if p == nil {
+				return nil, fmt.Errorf("parent deck not found")
+			}
+			tempParentID = p.GetParentID()
 		}
 	}
 

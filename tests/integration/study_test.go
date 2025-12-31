@@ -198,6 +198,29 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 
+	t.Run("DeckStats", func(t *testing.T) {
+		// Create a deck
+		deckReq := request.CreateDeckRequest{Name: "Stats Test Deck"}
+		deckRes := createDeck(t, e, token, deckReq)
+		deckID := deckRes.ID
+
+		// Get Stats (should be empty but exist)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(deckID, 10)+"/stats", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var stats response.DeckStatsResponse
+		json.Unmarshal(rec.Body.Bytes(), &stats)
+		assert.Equal(t, deckID, stats.DeckID)
+		assert.Equal(t, 0, stats.NewCount)
+		assert.Equal(t, 0, stats.NotesCount)
+
+		// Verification of stats with data is better suited for a larger integration test
+		// but this confirms the endpoint is working and correctly mapped.
+	})
+
 	t.Run("DeckOptionsPresets", func(t *testing.T) {
 		// 1. Create Preset
 		createReq := request.CreateDeckOptionsPresetRequest{

@@ -85,6 +85,9 @@ func (m *MockDeckRepository) Exists(ctx context.Context, uid int64, n string, pi
 	args := m.Called(ctx, uid, n, pid)
 	return args.Bool(0), args.Error(1)
 }
+func (m *MockDeckRepository) GetStats(ctx context.Context, uid, did int64) (*deck.DeckStats, error) {
+	args := m.Called(ctx, uid, did); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*deck.DeckStats), args.Error(1)
+}
 
 // MockNoteTypeRepository
 type MockNoteTypeRepository struct{ mock.Mock }

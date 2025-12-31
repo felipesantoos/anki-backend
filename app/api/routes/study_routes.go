@@ -10,12 +10,14 @@ import (
 func (r *Router) RegisterStudyRoutes() {
 	deckService := dicontainer.GetDeckService()
 	presetService := dicontainer.GetDeckOptionsPresetService()
+	deckStatsService := dicontainer.GetDeckStatsService()
 	filteredDeckService := dicontainer.GetFilteredDeckService()
 	cardService := dicontainer.GetCardService()
 	reviewService := dicontainer.GetReviewService()
 
 	deckHandler := handlers.NewDeckHandler(deckService)
 	presetHandler := handlers.NewDeckOptionsPresetHandler(presetService)
+	deckStatsHandler := handlers.NewDeckStatsHandler(deckStatsService)
 	filteredDeckHandler := handlers.NewFilteredDeckHandler(filteredDeckService)
 	cardHandler := handlers.NewCardHandler(cardService)
 	reviewHandler := handlers.NewReviewHandler(reviewService)
@@ -31,6 +33,7 @@ func (r *Router) RegisterStudyRoutes() {
 	decks.POST("", deckHandler.Create)
 	decks.GET("", deckHandler.FindAll)
 	decks.GET("/:id", deckHandler.FindByID)
+	decks.GET("/:id/stats", deckStatsHandler.GetStats)
 	decks.GET("/:id/options", deckHandler.GetOptions)
 	decks.PUT("/:id/options", deckHandler.UpdateOptions)
 	decks.PUT("/:id", deckHandler.Update)

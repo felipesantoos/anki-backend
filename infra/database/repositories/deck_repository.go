@@ -348,5 +348,51 @@ func (r *DeckRepository) Exists(ctx context.Context, userID int64, name string, 
 	return exists, nil
 }
 
+// GetStats retrieves study statistics for a deck
+func (r *DeckRepository) GetStats(ctx context.Context, userID int64, deckID int64) (*deck.DeckStats, error) {
+	query := `
+		SELECT
+			ds.deck_id,
+			ds.new_count,
+			ds.learning_count,
+			ds.review_count,
+			ds.suspended_count,
+			ds.notes_count,
+			(
+				SELECT COUNT(*)
+				FROM cards c
+				WHERE c.deck_id = ds.deck_id
+				  AND c.due <= $1
+				  AND c.suspended = FALSE
+				  AND c.buried = FALSE
+				  AND c.state IN ('learn', 'relearn', 'review')
+			) as due_today_count
+		FROM deck_statistics ds
+		WHERE ds.deck_id = $2 AND ds.user_id = $3
+	`
+
+	now := time.Now().UnixMilli()
+	var stats deck.DeckStats
+
+	err := r.db.QueryRowContext(ctx, query, now, deckID, userID).Scan(
+		&stats.DeckID,
+		&stats.NewCount,
+		&stats.LearningCount,
+		&stats.ReviewCount,
+		&stats.SuspendedCount,
+		&stats.NotesCount,
+		&stats.DueTodayCount,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ownership.ErrResourceNotFound
+		}
+		return nil, fmt.Errorf("failed to get deck statistics: %w", err)
+	}
+
+	return &stats, nil
+}
+
 // Ensure DeckRepository implements IDeckRepository
 var _ secondary.IDeckRepository = (*DeckRepository)(nil)

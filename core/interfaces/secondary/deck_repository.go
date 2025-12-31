@@ -40,4 +40,7 @@ type IDeckRepository interface {
 
 	// Exists checks if a deck with the given name exists for the user at the specified parent level
 	Exists(ctx context.Context, userID int64, name string, parentID *int64) (bool, error)
+
+	// GetStats retrieves study statistics for a deck
+	GetStats(ctx context.Context, userID int64, deckID int64) (*deck.DeckStats, error)
 }

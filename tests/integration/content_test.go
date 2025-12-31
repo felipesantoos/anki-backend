@@ -205,6 +205,26 @@ func TestContent_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &noteListRes)
 		assert.NotEmpty(t, noteListRes)
 
+		// List Notes with Filter by Deck
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?deck_id="+strconv.FormatInt(defaultDeckID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var deckFilteredRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &deckFilteredRes)
+		assert.NotEmpty(t, deckFilteredRes)
+
+		// List Notes with Filter by Tag
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=integration", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var tagFilteredRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &tagFilteredRes)
+		assert.NotEmpty(t, tagFilteredRes)
+
 		// Find Note by ID
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
 		req.Header.Set("Authorization", "Bearer "+token)

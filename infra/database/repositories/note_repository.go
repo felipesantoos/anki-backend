@@ -171,21 +171,27 @@ func (r *NoteRepository) FindByID(ctx context.Context, userID int64, id int64) (
 	return mappers.NoteToDomain(&model)
 }
 
-// FindByUserID finds all notes for a user
-func (r *NoteRepository) FindByUserID(ctx context.Context, userID int64) ([]*note.Note, error) {
+// FindByUserID finds all notes for a user with pagination
+func (r *NoteRepository) FindByUserID(ctx context.Context, userID int64, limit int, offset int) ([]*note.Note, error) {
 	query := `
 		SELECT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
 		FROM notes
 		WHERE user_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find notes by user ID: %w", err)
 	}
 	defer rows.Close()
 
+	return r.scanNotes(rows)
+}
+
+// scanNotes is a helper to scan multiple notes from rows
+func (r *NoteRepository) scanNotes(rows *sql.Rows) ([]*note.Note, error) {
 	var notes []*note.Note
 	for rows.Next() {
 		var model models.NoteModel
@@ -288,62 +294,43 @@ func (r *NoteRepository) Exists(ctx context.Context, userID int64, id int64) (bo
 	return exists, nil
 }
 
-// FindByNoteTypeID finds all notes of a specific note type for a user
-func (r *NoteRepository) FindByNoteTypeID(ctx context.Context, userID int64, noteTypeID int64) ([]*note.Note, error) {
+// FindByNoteTypeID finds all notes of a specific note type for a user with pagination
+func (r *NoteRepository) FindByNoteTypeID(ctx context.Context, userID int64, noteTypeID int64, limit int, offset int) ([]*note.Note, error) {
 	query := `
 		SELECT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
 		FROM notes
 		WHERE user_id = $1 AND note_type_id = $2 AND deleted_at IS NULL
 		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, userID, noteTypeID)
+	rows, err := r.db.QueryContext(ctx, query, userID, noteTypeID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find notes by note type ID: %w", err)
 	}
 	defer rows.Close()
 
-	var notes []*note.Note
-	for rows.Next() {
-		var model models.NoteModel
-		var tagsStr string
-		var deletedAt sql.NullTime
+	return r.scanNotes(rows)
+}
 
-		err := rows.Scan(
-			&model.ID,
-			&model.UserID,
-			&model.GUID,
-			&model.NoteTypeID,
-			&model.FieldsJSON,
-			&tagsStr,
-			&model.Marked,
-			&model.CreatedAt,
-			&model.UpdatedAt,
-			&deletedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan note: %w", err)
-		}
+// FindByDeckID finds all notes that have cards in a specific deck for a user with pagination
+func (r *NoteRepository) FindByDeckID(ctx context.Context, userID int64, deckID int64, limit int, offset int) ([]*note.Note, error) {
+	query := `
+		SELECT DISTINCT n.id, n.user_id, n.guid, n.note_type_id, n.fields_json, n.tags, n.marked, n.created_at, n.updated_at, n.deleted_at
+		FROM notes n
+		JOIN cards c ON c.note_id = n.id
+		WHERE n.user_id = $1 AND c.deck_id = $2 AND n.deleted_at IS NULL
+		ORDER BY n.created_at DESC
+		LIMIT $3 OFFSET $4
+	`
 
-		if tagsStr != "" {
-			model.Tags = sql.NullString{String: tagsStr, Valid: true}
-		}
-		if deletedAt.Valid {
-			model.DeletedAt = deletedAt
-		}
-
-		noteEntity, err := mappers.NoteToDomain(&model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert note to domain: %w", err)
-		}
-		notes = append(notes, noteEntity)
+	rows, err := r.db.QueryContext(ctx, query, userID, deckID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find notes by deck ID: %w", err)
 	}
+	defer rows.Close()
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating notes: %w", err)
-	}
-
-	return notes, nil
+	return r.scanNotes(rows)
 }
 
 // FindByGUID finds a note by GUID, filtering by userID to ensure ownership
@@ -393,8 +380,8 @@ func (r *NoteRepository) FindByGUID(ctx context.Context, userID int64, guid stri
 	return mappers.NoteToDomain(&model)
 }
 
-// FindByTags finds all notes containing any of the specified tags for a user
-func (r *NoteRepository) FindByTags(ctx context.Context, userID int64, tags []string) ([]*note.Note, error) {
+// FindByTags finds all notes containing any of the specified tags for a user with pagination
+func (r *NoteRepository) FindByTags(ctx context.Context, userID int64, tags []string, limit int, offset int) ([]*note.Note, error) {
 	if len(tags) == 0 {
 		return []*note.Note{}, nil
 	}
@@ -404,55 +391,16 @@ func (r *NoteRepository) FindByTags(ctx context.Context, userID int64, tags []st
 		FROM notes
 		WHERE user_id = $1 AND deleted_at IS NULL AND tags && $2::TEXT[]
 		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, userID, pq.Array(tags))
+	rows, err := r.db.QueryContext(ctx, query, userID, pq.Array(tags), limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find notes by tags: %w", err)
 	}
 	defer rows.Close()
 
-	var notes []*note.Note
-	for rows.Next() {
-		var model models.NoteModel
-		var tagsStr string
-		var deletedAt sql.NullTime
-
-		err := rows.Scan(
-			&model.ID,
-			&model.UserID,
-			&model.GUID,
-			&model.NoteTypeID,
-			&model.FieldsJSON,
-			&tagsStr,
-			&model.Marked,
-			&model.CreatedAt,
-			&model.UpdatedAt,
-			&deletedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan note: %w", err)
-		}
-
-		if tagsStr != "" {
-			model.Tags = sql.NullString{String: tagsStr, Valid: true}
-		}
-		if deletedAt.Valid {
-			model.DeletedAt = deletedAt
-		}
-
-		noteEntity, err := mappers.NoteToDomain(&model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert note to domain: %w", err)
-		}
-		notes = append(notes, noteEntity)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating notes: %w", err)
-	}
-
-	return notes, nil
+	return r.scanNotes(rows)
 }
 
 // Ensure NoteRepository implements INoteRepository

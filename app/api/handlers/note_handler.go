@@ -10,6 +10,7 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/mappers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
+	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 )
 
@@ -77,13 +78,33 @@ func (h *NoteHandler) FindByID(c echo.Context) error {
 // @Tags notes
 // @Produce json
 // @Security BearerAuth
+// @Param deck_id query int false "Filter by deck ID"
+// @Param note_type_id query int false "Filter by note type ID"
+// @Param tags query []string false "Filter by tags"
+// @Param search query string false "Search in fields"
+// @Param limit query int false "Pagination limit"
+// @Param offset query int false "Pagination offset"
 // @Success 200 {array} response.NoteResponse
 // @Router /api/v1/notes [get]
 func (h *NoteHandler) FindAll(c echo.Context) error {
 	ctx := c.Request().Context()
 	userID := middlewares.GetUserID(c)
 
-	notes, err := h.service.FindByUserID(ctx, userID)
+	var req request.ListNotesRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid query parameters")
+	}
+
+	filters := note.NoteFilters{
+		DeckID:     req.DeckID,
+		NoteTypeID: req.NoteTypeID,
+		Tags:       req.Tags,
+		Search:     req.Search,
+		Limit:      req.Limit,
+		Offset:     req.Offset,
+	}
+
+	notes, err := h.service.FindAll(ctx, userID, filters)
 	if err != nil {
 		return handleNoteError(err)
 	}

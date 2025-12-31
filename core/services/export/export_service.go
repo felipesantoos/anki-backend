@@ -40,7 +40,8 @@ func (s *ExportService) ExportCollection(ctx context.Context, userID int64) (io.
 	}
 
 	// 2. Fetch all notes (which contain the fields)
-	notes, err := s.noteRepo.FindByUserID(ctx, userID)
+	// Use a large limit for export to ensure all notes are fetched
+	notes, err := s.noteRepo.FindByUserID(ctx, userID, 1000000, 0)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to fetch notes for export: %w", err)
 	}

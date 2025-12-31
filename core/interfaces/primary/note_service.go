@@ -14,8 +14,8 @@ type INoteService interface {
 	// FindByID finds a note by ID
 	FindByID(ctx context.Context, userID int64, id int64) (*note.Note, error)
 
-	// FindByUserID finds all notes for a user
-	FindByUserID(ctx context.Context, userID int64) ([]*note.Note, error)
+	// FindAll finds notes for a user based on filters and pagination
+	FindAll(ctx context.Context, userID int64, filters note.NoteFilters) ([]*note.Note, error)
 
 	// Update updates an existing note and its cards
 	Update(ctx context.Context, userID int64, id int64, fieldsJSON string, tags []string) (*note.Note, error)

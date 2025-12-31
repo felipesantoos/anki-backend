@@ -73,6 +73,83 @@ func TestNoteService_Create(t *testing.T) {
 	})
 }
 
+func TestNoteService_FindAll(t *testing.T) {
+	mockNoteRepo := new(MockNoteRepository)
+	mockCardRepo := new(MockCardRepository)
+	mockNoteTypeRepo := new(MockNoteTypeRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+
+	t.Run("Default - No Filters", func(t *testing.T) {
+		filters := note.NoteFilters{}
+		n1 := &note.Note{}; n1.SetID(1)
+		n2 := &note.Note{}; n2.SetID(2)
+		expectedNotes := []*note.Note{n1, n2}
+		mockNoteRepo.On("FindByUserID", ctx, userID, 50, 0).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Filter by DeckID", func(t *testing.T) {
+		deckID := int64(10)
+		filters := note.NoteFilters{DeckID: &deckID}
+		n1 := &note.Note{}; n1.SetID(1)
+		expectedNotes := []*note.Note{n1}
+		mockNoteRepo.On("FindByDeckID", ctx, userID, deckID, 50, 0).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Filter by NoteTypeID", func(t *testing.T) {
+		noteTypeID := int64(20)
+		filters := note.NoteFilters{NoteTypeID: &noteTypeID}
+		n2 := &note.Note{}; n2.SetID(2)
+		expectedNotes := []*note.Note{n2}
+		mockNoteRepo.On("FindByNoteTypeID", ctx, userID, noteTypeID, 50, 0).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Filter by Tags", func(t *testing.T) {
+		tags := []string{"tag1"}
+		filters := note.NoteFilters{Tags: tags}
+		n3 := &note.Note{}; n3.SetID(3)
+		expectedNotes := []*note.Note{n3}
+		mockNoteRepo.On("FindByTags", ctx, userID, tags, 50, 0).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Pagination", func(t *testing.T) {
+		filters := note.NoteFilters{Limit: 10, Offset: 20}
+		mockNoteRepo.On("FindByUserID", ctx, userID, 10, 20).Return([]*note.Note{}, nil).Once()
+
+		_, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		mockNoteRepo.AssertExpectations(t)
+	})
+}
+
 func TestNoteService_Delete(t *testing.T) {
 	mockNoteRepo := new(MockNoteRepository)
 	mockCardRepo := new(MockCardRepository)

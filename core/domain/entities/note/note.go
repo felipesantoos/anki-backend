@@ -186,3 +186,13 @@ func (n *Note) Unmark() {
 	}
 }
 
+// NoteFilters represents the filters for listing notes
+type NoteFilters struct {
+	DeckID     *int64
+	NoteTypeID *int64
+	Tags       []string
+	Search     string
+	Limit      int
+	Offset     int
+}
+

@@ -120,9 +120,33 @@ func (s *NoteService) FindByID(ctx context.Context, userID int64, id int64) (*no
 	return s.noteRepo.FindByID(ctx, userID, id)
 }
 
-// FindByUserID finds all notes for a user
-func (s *NoteService) FindByUserID(ctx context.Context, userID int64) ([]*note.Note, error) {
-	return s.noteRepo.FindByUserID(ctx, userID)
+// FindAll finds notes for a user based on filters and pagination
+func (s *NoteService) FindAll(ctx context.Context, userID int64, filters note.NoteFilters) ([]*note.Note, error) {
+	// Set defaults for pagination
+	if filters.Limit <= 0 {
+		filters.Limit = 50
+	}
+	if filters.Offset < 0 {
+		filters.Offset = 0
+	}
+
+	// Filter by DeckID (Highest priority)
+	if filters.DeckID != nil {
+		return s.noteRepo.FindByDeckID(ctx, userID, *filters.DeckID, filters.Limit, filters.Offset)
+	}
+
+	// Filter by NoteTypeID
+	if filters.NoteTypeID != nil {
+		return s.noteRepo.FindByNoteTypeID(ctx, userID, *filters.NoteTypeID, filters.Limit, filters.Offset)
+	}
+
+	// Filter by Tags
+	if len(filters.Tags) > 0 {
+		return s.noteRepo.FindByTags(ctx, userID, filters.Tags, filters.Limit, filters.Offset)
+	}
+
+	// Default: Find all notes for user
+	return s.noteRepo.FindByUserID(ctx, userID, filters.Limit, filters.Offset)
 }
 
 // Update updates an existing note

@@ -119,8 +119,8 @@ func (m *MockNoteRepository) Save(ctx context.Context, uid int64, n *note.Note) 
 func (m *MockNoteRepository) FindByID(ctx context.Context, uid, id int64) (*note.Note, error) {
 	args := m.Called(ctx, uid, id); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.Note), args.Error(1)
 }
-func (m *MockNoteRepository) FindByUserID(ctx context.Context, uid int64) ([]*note.Note, error) {
-	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
+func (m *MockNoteRepository) FindByUserID(ctx context.Context, uid int64, l, o int) ([]*note.Note, error) {
+	args := m.Called(ctx, uid, l, o); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
 }
 func (m *MockNoteRepository) Update(ctx context.Context, uid, id int64, n *note.Note) error { return m.Called(ctx, uid, id, n).Error(0) }
 func (m *MockNoteRepository) Delete(ctx context.Context, uid, id int64) error { return m.Called(ctx, uid, id).Error(0) }
@@ -128,14 +128,17 @@ func (m *MockNoteRepository) Exists(ctx context.Context, uid, id int64) (bool, e
 	args := m.Called(ctx, uid, id)
 	return args.Bool(0), args.Error(1)
 }
-func (m *MockNoteRepository) FindByNoteTypeID(ctx context.Context, uid, ntid int64) ([]*note.Note, error) {
-	args := m.Called(ctx, uid, ntid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
+func (m *MockNoteRepository) FindByNoteTypeID(ctx context.Context, uid, ntid int64, l, o int) ([]*note.Note, error) {
+	args := m.Called(ctx, uid, ntid, l, o); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
+}
+func (m *MockNoteRepository) FindByDeckID(ctx context.Context, uid, did int64, l, o int) ([]*note.Note, error) {
+	args := m.Called(ctx, uid, did, l, o); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
 }
 func (m *MockNoteRepository) FindByGUID(ctx context.Context, uid int64, g string) (*note.Note, error) {
 	args := m.Called(ctx, uid, g); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.Note), args.Error(1)
 }
-func (m *MockNoteRepository) FindByTags(ctx context.Context, uid int64, t []string) ([]*note.Note, error) {
-	args := m.Called(ctx, uid, t); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
+func (m *MockNoteRepository) FindByTags(ctx context.Context, uid int64, t []string, l, o int) ([]*note.Note, error) {
+	args := m.Called(ctx, uid, t, l, o); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
 }
 
 // MockCardRepository

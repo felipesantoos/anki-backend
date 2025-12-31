@@ -30,3 +30,13 @@ type AddTagRequest struct {
 	Tag string `json:"tag" example:"importante" validate:"required"`
 }
 
+// ListNotesRequest represents the query parameters for listing notes
+type ListNotesRequest struct {
+	DeckID     *int64   `query:"deck_id"`
+	NoteTypeID *int64   `query:"note_type_id"`
+	Tags       []string `query:"tags"`
+	Search     string   `query:"search"`
+	Limit      int      `query:"limit"`
+	Offset     int      `query:"offset"`
+}
+

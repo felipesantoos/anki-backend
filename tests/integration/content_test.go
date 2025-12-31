@@ -247,13 +247,6 @@ func TestContent_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Greater(t, cardCount, 0, "Cards should have been created for the note")
 
-		// Delete Note
-		req = httptest.NewRequest(http.MethodDelete, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		rec = httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
-		assert.Equal(t, http.StatusNoContent, rec.Code)
-
 		// Cross-User Isolation: User B tries to create a note in User A's deck
 		loginResB := registerAndLogin(t, e, "userB@example.com", "password123")
 		tokenB := loginResB.AccessToken
@@ -280,5 +273,81 @@ func TestContent_Integration(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Update Note - Not Found
+		updateReqNotFound := request.UpdateNoteRequest{
+			FieldsJSON: `{"Front": "Updated Front", "Back": "Updated Back"}`,
+		}
+		b, _ = json.Marshal(updateReqNotFound)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/999999", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Update Note - Cross-User Isolation
+		b, _ = json.Marshal(updateReqNotFound) // Reuse b
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Tag Management Verification
+		// Add Tag
+		addTagReq = request.AddTagRequest{Tag: "integration-new"}
+		b, _ = json.Marshal(addTagReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/"+strconv.FormatInt(noteID, 10)+"/tags", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify Tag Added
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		json.Unmarshal(rec.Body.Bytes(), &noteRes)
+		found := false
+		for _, t := range noteRes.Tags {
+			if t == "integration-new" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Tag should have been added")
+
+		// Remove Tag
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/notes/"+strconv.FormatInt(noteID, 10)+"/tags/integration-new", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify Tag Removed
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		json.Unmarshal(rec.Body.Bytes(), &noteRes)
+		found = false
+		for _, t := range noteRes.Tags {
+			if t == "integration-new" {
+				found = true
+				break
+			}
+		}
+		assert.False(t, found, "Tag should have been removed")
+
+		// Delete Note
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
 	})
 }

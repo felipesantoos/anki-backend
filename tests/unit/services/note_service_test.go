@@ -184,6 +184,101 @@ func TestNoteService_FindByID(t *testing.T) {
 	})
 }
 
+func TestNoteService_Update(t *testing.T) {
+	mockNoteRepo := new(MockNoteRepository)
+	mockCardRepo := new(MockCardRepository)
+	mockNoteTypeRepo := new(MockNoteTypeRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+	noteID := int64(100)
+
+	t.Run("Success", func(t *testing.T) {
+		existing := &note.Note{}
+		existing.SetID(noteID)
+		fields := "{\"Front\":\"New Q\"}"
+		tags := []string{"new-tag"}
+
+		mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(existing, nil).Once()
+		mockNoteRepo.On("Update", ctx, userID, noteID, existing).Return(nil).Once()
+
+		result, err := service.Update(ctx, userID, noteID, fields, tags)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, fields, result.GetFieldsJSON())
+		assert.Equal(t, tags, result.GetTags())
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Not Found", func(t *testing.T) {
+		mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(nil, nil).Once()
+
+		result, err := service.Update(ctx, userID, noteID, "{}", nil)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "note not found")
+		assert.Nil(t, result)
+	})
+}
+
+func TestNoteService_AddTag(t *testing.T) {
+	mockNoteRepo := new(MockNoteRepository)
+	mockCardRepo := new(MockCardRepository)
+	mockNoteTypeRepo := new(MockNoteTypeRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+	noteID := int64(100)
+
+	t.Run("Success", func(t *testing.T) {
+		existing := &note.Note{}
+		existing.SetID(noteID)
+		tag := "new-tag"
+
+		mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(existing, nil).Once()
+		mockNoteRepo.On("Update", ctx, userID, noteID, existing).Return(nil).Once()
+
+		err := service.AddTag(ctx, userID, noteID, tag)
+
+		assert.NoError(t, err)
+		assert.True(t, existing.HasTag(tag))
+		mockNoteRepo.AssertExpectations(t)
+	})
+}
+
+func TestNoteService_RemoveTag(t *testing.T) {
+	mockNoteRepo := new(MockNoteRepository)
+	mockCardRepo := new(MockCardRepository)
+	mockNoteTypeRepo := new(MockNoteTypeRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+	noteID := int64(100)
+
+	t.Run("Success", func(t *testing.T) {
+		existing := &note.Note{}
+		existing.SetID(noteID)
+		existing.SetTags([]string{"tag1", "tag2"})
+		tag := "tag1"
+
+		mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(existing, nil).Once()
+		mockNoteRepo.On("Update", ctx, userID, noteID, existing).Return(nil).Once()
+
+		err := service.RemoveTag(ctx, userID, noteID, tag)
+
+		assert.NoError(t, err)
+		assert.False(t, existing.HasTag(tag))
+		mockNoteRepo.AssertExpectations(t)
+	})
+}
+
 func TestNoteService_Delete(t *testing.T) {
 	mockNoteRepo := new(MockNoteRepository)
 	mockCardRepo := new(MockCardRepository)

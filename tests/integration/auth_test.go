@@ -149,6 +149,40 @@ func TestAuth_Register_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
+	t.Run("password without letters", func(t *testing.T) {
+		reqBody := request.RegisterRequest{
+			Email:           "noletters@example.com",
+			Password:        "12345678",
+			PasswordConfirm: "12345678",
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("password without numbers", func(t *testing.T) {
+		reqBody := request.RegisterRequest{
+			Email:           "nonumbers@example.com",
+			Password:        "password",
+			PasswordConfirm: "password",
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(jsonBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
 	t.Run("password mismatch", func(t *testing.T) {
 		reqBody := request.RegisterRequest{
 			Email:           "testmismatch@example.com",
@@ -1155,7 +1189,32 @@ func TestAuth_ResetPassword_Integration(t *testing.T) {
 		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		resetRec := httptest.NewRecorder()
 		e.ServeHTTP(resetRec, resetHTTPReq)
+		assert.Equal(t, http.StatusBadRequest, resetRec.Code)
 
+		// Try to reset with password without letters
+		resetReq = request.ResetPasswordRequest{
+			Token:           token,
+			NewPassword:     "12345678",
+			PasswordConfirm: "12345678",
+		}
+		resetBody, _ = json.Marshal(resetReq)
+		resetHTTPReq = httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec = httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
+		assert.Equal(t, http.StatusBadRequest, resetRec.Code)
+
+		// Try to reset with password without numbers
+		resetReq = request.ResetPasswordRequest{
+			Token:           token,
+			NewPassword:     "password",
+			PasswordConfirm: "password",
+		}
+		resetBody, _ = json.Marshal(resetReq)
+		resetHTTPReq = httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewReader(resetBody))
+		resetHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		resetRec = httptest.NewRecorder()
+		e.ServeHTTP(resetRec, resetHTTPReq)
 		assert.Equal(t, http.StatusBadRequest, resetRec.Code)
 	})
 
@@ -1409,7 +1468,34 @@ func TestAuth_ChangePassword_Integration(t *testing.T) {
 		changeHTTPReq.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
 		changeRec := httptest.NewRecorder()
 		e.ServeHTTP(changeRec, changeHTTPReq)
+		assert.Equal(t, http.StatusBadRequest, changeRec.Code)
 
+		// Try to change password with new password without letters
+		changeReq = request.ChangePasswordRequest{
+			CurrentPassword: "password123",
+			NewPassword:     "12345678",
+			PasswordConfirm: "12345678",
+		}
+		changeBody, _ = json.Marshal(changeReq)
+		changeHTTPReq = httptest.NewRequest(http.MethodPost, "/api/v1/auth/change-password", bytes.NewReader(changeBody))
+		changeHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		changeHTTPReq.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
+		changeRec = httptest.NewRecorder()
+		e.ServeHTTP(changeRec, changeHTTPReq)
+		assert.Equal(t, http.StatusBadRequest, changeRec.Code)
+
+		// Try to change password with new password without numbers
+		changeReq = request.ChangePasswordRequest{
+			CurrentPassword: "password123",
+			NewPassword:     "password",
+			PasswordConfirm: "password",
+		}
+		changeBody, _ = json.Marshal(changeReq)
+		changeHTTPReq = httptest.NewRequest(http.MethodPost, "/api/v1/auth/change-password", bytes.NewReader(changeBody))
+		changeHTTPReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		changeHTTPReq.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
+		changeRec = httptest.NewRecorder()
+		e.ServeHTTP(changeRec, changeHTTPReq)
 		assert.Equal(t, http.StatusBadRequest, changeRec.Code)
 	})
 

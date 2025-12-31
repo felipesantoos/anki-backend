@@ -18,7 +18,6 @@ import (
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/core/services/session"
-	"github.com/felipesantos/anki-backend/pkg/database"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
 )
@@ -52,7 +51,7 @@ type AuthService struct {
 	cacheRepo          secondary.ICacheRepository
 	emailService       primary.IEmailService
 	sessionService     primary.ISessionService
-	tm                 database.TransactionManager
+	tm                 secondary.ITransactionManager
 }
 
 // NewAuthService creates a new AuthService instance
@@ -66,7 +65,7 @@ func NewAuthService(
 	cacheRepo secondary.ICacheRepository,
 	emailService primary.IEmailService,
 	sessionService primary.ISessionService,
-	tm database.TransactionManager,
+	tm secondary.ITransactionManager,
 ) primary.IAuthService {
 	return &AuthService{
 		userRepo:            userRepo,

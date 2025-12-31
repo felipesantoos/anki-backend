@@ -32,7 +32,7 @@ func (s *UserPreferencesService) FindByUserID(ctx context.Context, userID int64)
 	
 	if prefs == nil {
 		// Create default preferences if not found
-		return s.ResetToDefaults(ctx, userID)
+		return s.createAndSaveDefaults(ctx, userID, nil)
 	}
 	
 	return prefs, nil
@@ -52,6 +52,10 @@ func (s *UserPreferencesService) ResetToDefaults(ctx context.Context, userID int
 		return nil, err
 	}
 
+	return s.createAndSaveDefaults(ctx, userID, existing)
+}
+
+func (s *UserPreferencesService) createAndSaveDefaults(ctx context.Context, userID int64, existing *userpreferences.UserPreferences) (*userpreferences.UserPreferences, error) {
 	now := time.Now()
 	// Default time for next day starts at 4 AM
 	nextDayStartsAt := time.Date(1970, 1, 1, 4, 0, 0, 0, time.UTC)

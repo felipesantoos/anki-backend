@@ -165,6 +165,12 @@ func (m *MockCardRepository) CountByDeckAndState(ctx context.Context, uid, did i
 	args := m.Called(ctx, uid, did, s)
 	return args.Int(0), args.Error(1)
 }
+func (m *MockCardRepository) MoveCards(ctx context.Context, uid, src, dst int64) error {
+	args := m.Called(ctx, uid, src, dst); return args.Error(0)
+}
+func (m *MockCardRepository) DeleteByDeckRecursive(ctx context.Context, uid, did int64) error {
+	args := m.Called(ctx, uid, did); return args.Error(0)
+}
 
 // MockReviewRepository
 type MockReviewRepository struct{ mock.Mock }

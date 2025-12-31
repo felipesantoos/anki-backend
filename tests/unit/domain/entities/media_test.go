@@ -1,6 +1,6 @@
 package entities
 import (
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/media"
 )
 
 import (
@@ -11,13 +11,13 @@ import (
 func TestMedia_IsActive(t *testing.T) {
 	tests := []struct {
 		name     string
-		media    *entities.Media
+		media    *media.Media
 		expected bool
 	}{
 		{
 			name: "active media",
-			media: func() *entities.Media {
-				m := &entities.Media{}
+			media: func() *media.Media {
+				m := &media.Media{}
 				m.SetDeletedAt(nil)
 				return m
 			}(),
@@ -25,8 +25,8 @@ func TestMedia_IsActive(t *testing.T) {
 		},
 		{
 			name: "deleted media",
-			media: func() *entities.Media {
-				m := &entities.Media{}
+			media: func() *media.Media {
+				m := &media.Media{}
 				m.SetDeletedAt(timePtr(time.Now()))
 				return m
 			}(),
@@ -84,9 +84,9 @@ func TestMedia_GetFileExtension(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			media := &entities.Media{}
-			media.SetFilename(tt.filename)
-			got := media.GetFileExtension()
+			m := &media.Media{}
+			m.SetFilename(tt.filename)
+			got := m.GetFileExtension()
 			if got != tt.expected {
 				t.Errorf("Media.GetFileExtension() = %v, want %v", got, tt.expected)
 			}

@@ -4,18 +4,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	addon "github.com/felipesantos/anki-backend/core/domain/entities/add_on"
 )
 
 func TestAddOn_IsEnabled(t *testing.T) {
-	enabledAddOn := &entities.AddOn{}
+	enabledAddOn := &addon.AddOn{}
 	enabledAddOn.SetEnabled(true)
 
 	if !enabledAddOn.IsEnabled() {
 		t.Errorf("AddOn.IsEnabled() = false, want true")
 	}
 
-	disabledAddOn := &entities.AddOn{}
+	disabledAddOn := &addon.AddOn{}
 	disabledAddOn.SetEnabled(false)
 
 	if disabledAddOn.IsEnabled() {
@@ -24,7 +24,7 @@ func TestAddOn_IsEnabled(t *testing.T) {
 }
 
 func TestAddOn_Enable(t *testing.T) {
-	addOn := &entities.AddOn{}
+	addOn := &addon.AddOn{}
 	addOn.SetEnabled(false)
 	addOn.SetUpdatedAt(time.Now())
 
@@ -41,7 +41,7 @@ func TestAddOn_Enable(t *testing.T) {
 }
 
 func TestAddOn_Disable(t *testing.T) {
-	addOn := &entities.AddOn{}
+	addOn := &addon.AddOn{}
 	addOn.SetEnabled(true)
 	addOn.SetUpdatedAt(time.Now())
 

@@ -3,19 +3,19 @@ package entities
 import (
 	"testing"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/backup"
 )
 
 func TestBackup_IsAutomatic(t *testing.T) {
-	backup := &entities.Backup{}
-	backup.SetBackupType(entities.BackupTypeAutomatic)
+	b := &backup.Backup{}
+	b.SetBackupType(backup.BackupTypeAutomatic)
 
-	if !backup.IsAutomatic() {
+	if !b.IsAutomatic() {
 		t.Errorf("Backup.IsAutomatic() = false, want true")
 	}
 
-	manualBackup := &entities.Backup{}
-	manualBackup.SetBackupType(entities.BackupTypeManual)
+	manualBackup := &backup.Backup{}
+	manualBackup.SetBackupType(backup.BackupTypeManual)
 
 	if manualBackup.IsAutomatic() {
 		t.Errorf("Backup.IsAutomatic() = true, want false for manual backup")
@@ -23,15 +23,15 @@ func TestBackup_IsAutomatic(t *testing.T) {
 }
 
 func TestBackup_IsManual(t *testing.T) {
-	backup := &entities.Backup{}
-	backup.SetBackupType(entities.BackupTypeManual)
+	b := &backup.Backup{}
+	b.SetBackupType(backup.BackupTypeManual)
 
-	if !backup.IsManual() {
+	if !b.IsManual() {
 		t.Errorf("Backup.IsManual() = false, want true")
 	}
 
-	automaticBackup := &entities.Backup{}
-	automaticBackup.SetBackupType(entities.BackupTypeAutomatic)
+	automaticBackup := &backup.Backup{}
+	automaticBackup.SetBackupType(backup.BackupTypeAutomatic)
 
 	if automaticBackup.IsManual() {
 		t.Errorf("Backup.IsManual() = true, want false for automatic backup")
@@ -39,15 +39,15 @@ func TestBackup_IsManual(t *testing.T) {
 }
 
 func TestBackup_IsPreOperation(t *testing.T) {
-	backup := &entities.Backup{}
-	backup.SetBackupType(entities.BackupTypePreOperation)
+	b := &backup.Backup{}
+	b.SetBackupType(backup.BackupTypePreOperation)
 
-	if !backup.IsPreOperation() {
+	if !b.IsPreOperation() {
 		t.Errorf("Backup.IsPreOperation() = false, want true")
 	}
 
-	automaticBackup := &entities.Backup{}
-	automaticBackup.SetBackupType(entities.BackupTypeAutomatic)
+	automaticBackup := &backup.Backup{}
+	automaticBackup.SetBackupType(backup.BackupTypeAutomatic)
 
 	if automaticBackup.IsPreOperation() {
 		t.Errorf("Backup.IsPreOperation() = true, want false for automatic backup")

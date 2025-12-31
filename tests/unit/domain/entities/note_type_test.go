@@ -1,6 +1,6 @@
 package entities
 import (
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
 )
 
 import (
@@ -11,13 +11,13 @@ import (
 func TestNoteType_IsActive(t *testing.T) {
 	tests := []struct {
 		name     string
-		noteType *entities.NoteType
+		noteType *notetype.NoteType
 		expected bool
 	}{
 		{
 			name: "active note type",
-			noteType: func() *entities.NoteType {
-				nt := &entities.NoteType{}
+			noteType: func() *notetype.NoteType {
+				nt := &notetype.NoteType{}
 				nt.SetDeletedAt(nil)
 				return nt
 			}(),
@@ -25,8 +25,8 @@ func TestNoteType_IsActive(t *testing.T) {
 		},
 		{
 			name: "deleted note type",
-			noteType: func() *entities.NoteType {
-				nt := &entities.NoteType{}
+			noteType: func() *notetype.NoteType {
+				nt := &notetype.NoteType{}
 				nt.SetDeletedAt(timePtr(time.Now()))
 				return nt
 			}(),
@@ -79,9 +79,9 @@ func TestNoteType_GetFieldCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			noteType := &entities.NoteType{}
-			noteType.SetFieldsJSON(tt.fieldsJSON)
-			got := noteType.GetFieldCount()
+			nt := &notetype.NoteType{}
+			nt.SetFieldsJSON(tt.fieldsJSON)
+			got := nt.GetFieldCount()
 			if got != tt.expected {
 				t.Errorf("NoteType.GetFieldCount() = %v, want %v", got, tt.expected)
 			}
@@ -124,9 +124,9 @@ func TestNoteType_GetCardTypeCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			noteType := &entities.NoteType{}
-			noteType.SetCardTypesJSON(tt.cardTypesJSON)
-			got := noteType.GetCardTypeCount()
+			nt := &notetype.NoteType{}
+			nt.SetCardTypesJSON(tt.cardTypesJSON)
+			got := nt.GetCardTypeCount()
 			if got != tt.expected {
 				t.Errorf("NoteType.GetCardTypeCount() = %v, want %v", got, tt.expected)
 			}

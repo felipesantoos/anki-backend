@@ -48,5 +48,11 @@ type ICardRepository interface {
 
 	// CountByDeckAndState counts cards with a specific state in a deck
 	CountByDeckAndState(ctx context.Context, userID int64, deckID int64, state valueobjects.CardState) (int, error)
+
+	// MoveCards moves all cards from a source deck (including sub-decks) to a target deck
+	MoveCards(ctx context.Context, userID int64, srcDeckID int64, targetDeckID int64) error
+
+	// DeleteByDeckRecursive deletes all cards from a deck and its sub-decks
+	DeleteByDeckRecursive(ctx context.Context, userID int64, deckID int64) error
 }
 

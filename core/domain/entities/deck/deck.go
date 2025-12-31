@@ -17,6 +17,18 @@ type Deck struct {
 	deletedAt   *time.Time
 }
 
+// DeleteAction defines the strategy for handling cards when deleting a deck
+type DeleteAction string
+
+const (
+	// ActionDeleteCards permanently deletes all cards in the deck
+	ActionDeleteCards DeleteAction = "delete_cards"
+	// ActionMoveToDefault moves all cards to the user's default deck
+	ActionMoveToDefault DeleteAction = "move_to_default"
+	// ActionMoveToDeck moves all cards to a specific target deck
+	ActionMoveToDeck DeleteAction = "move_to_deck"
+)
+
 // Getters
 func (d *Deck) GetID() int64 {
 	return d.id

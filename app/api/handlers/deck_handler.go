@@ -12,8 +12,9 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/mappers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
+	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
-	"github.com/felipesantos/anki-backend/core/services/deck"
+	deckSvc "github.com/felipesantos/anki-backend/core/services/deck"
 	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
@@ -206,10 +207,10 @@ func (h *DeckHandler) UpdateOptions(c echo.Context) error {
 
 // handleDeckError maps service-level deck errors to HTTP errors
 func handleDeckError(err error) error {
-	if errors.Is(err, deck.ErrDeckNotFound) || errors.Is(err, ownership.ErrResourceNotFound) || errors.Is(err, ownership.ErrAccessDenied) {
+	if errors.Is(err, deckSvc.ErrDeckNotFound) || errors.Is(err, ownership.ErrResourceNotFound) || errors.Is(err, ownership.ErrAccessDenied) {
 		return echo.NewHTTPError(http.StatusNotFound, "Deck not found")
 	}
-	if errors.Is(err, deck.ErrCircularDependency) {
+	if errors.Is(err, deckSvc.ErrCircularDependency) {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 	if strings.Contains(err.Error(), "already exists") {
@@ -221,20 +222,43 @@ func handleDeckError(err error) error {
 
 // Delete handles DELETE /api/v1/decks/:id
 // @Summary Delete deck
-// @Description Soft deletes a deck and its sub-decks
+// @Description Soft deletes a deck and its sub-decks with card management choices
 // @Tags decks
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "Deck ID"
+// @Param request body request.DeleteDeckRequest true "Deck deletion strategy"
 // @Success 204 "No Content"
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Failure 409 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
 // @Router /api/v1/decks/{id} [delete]
 func (h *DeckHandler) Delete(c echo.Context) error {
 	ctx := c.Request().Context()
 	userID := middlewares.GetUserID(c)
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
-	if err := h.deckService.Delete(ctx, userID, id); err != nil {
+	var req request.DeleteDeckRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if req.Action == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "action is required")
+	}
+	if req.Action != request.ActionDeleteCards && req.Action != request.ActionMoveToDefault && req.Action != request.ActionMoveToDeck {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid action")
+	}
+	if req.Action == request.ActionMoveToDeck && req.TargetDeckID == nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "target_deck_id is required for 'move_to_deck' action")
+	}
+
+	action := deck.DeleteAction(req.Action)
+	if err := h.deckService.Delete(ctx, userID, id, action, req.TargetDeckID); err != nil {
 		return handleDeckError(err)
 	}
 

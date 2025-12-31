@@ -26,3 +26,25 @@ type UpdateDeckRequest struct {
 	OptionsJSON string `json:"options_json,omitempty" example:"{}"`
 }
 
+// DeleteDeckAction defines the strategy for handling cards when deleting a deck
+type DeleteDeckAction string
+
+const (
+	// ActionDeleteCards permanently deletes all cards in the deck
+	ActionDeleteCards DeleteDeckAction = "delete_cards"
+	// ActionMoveToDefault moves all cards to the user's default deck
+	ActionMoveToDefault DeleteDeckAction = "move_to_default"
+	// ActionMoveToDeck moves all cards to a specific target deck
+	ActionMoveToDeck DeleteDeckAction = "move_to_deck"
+)
+
+// DeleteDeckRequest represents the request payload to delete a deck with card management choices
+// @Description Request payload for deleting a deck with card management choices
+type DeleteDeckRequest struct {
+	// Strategy for handling cards in the deleted deck
+	Action DeleteDeckAction `json:"action" example:"move_to_default" validate:"required,oneof=delete_cards move_to_default move_to_deck"`
+
+	// ID of the target deck when action is 'move_to_deck'
+	TargetDeckID *int64 `json:"target_deck_id,omitempty" example:"10"`
+}
+

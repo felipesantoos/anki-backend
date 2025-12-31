@@ -8,21 +8,20 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck_options_preset"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
-	"github.com/felipesantos/anki-backend/pkg/database"
 )
 
 // DeckOptionsPresetService implements IDeckOptionsPresetService
 type DeckOptionsPresetService struct {
 	repo     secondary.IDeckOptionsPresetRepository
 	deckRepo secondary.IDeckRepository
-	tm       database.TransactionManager
+	tm       secondary.ITransactionManager
 }
 
 // NewDeckOptionsPresetService creates a new DeckOptionsPresetService instance
 func NewDeckOptionsPresetService(
 	repo secondary.IDeckOptionsPresetRepository,
 	deckRepo secondary.IDeckRepository,
-	tm database.TransactionManager,
+	tm secondary.ITransactionManager,
 ) primary.IDeckOptionsPresetService {
 	return &DeckOptionsPresetService{
 		repo:     repo,

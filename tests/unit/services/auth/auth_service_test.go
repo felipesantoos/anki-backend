@@ -176,6 +176,10 @@ func (m *mockDeckRepository) Exists(ctx context.Context, userID int64, name stri
 	return false, nil
 }
 
+func (m *mockDeckRepository) GetStats(ctx context.Context, userID int64, deckID int64) (*deck.DeckStats, error) {
+	return nil, nil
+}
+
 // mockEventBus is a mock implementation of IEventBus
 type mockEventBus struct {
 	publishFunc func(ctx context.Context, event domainEvents.DomainEvent) error

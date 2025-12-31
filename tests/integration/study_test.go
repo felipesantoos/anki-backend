@@ -18,6 +18,7 @@ import (
 	"github.com/felipesantos/anki-backend/dicontainer"
 	"github.com/felipesantos/anki-backend/config"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
+	postgresInfra "github.com/felipesantos/anki-backend/infra/postgres"
 	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
 	"github.com/felipesantos/anki-backend/pkg/logger"
@@ -129,7 +130,10 @@ func TestStudy_Integration(t *testing.T) {
 		assert.True(t, found, "Created deck should be in the list")
 
 		// Delete Deck
-		req = httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(deckID, 10), nil)
+		deleteReq := request.DeleteDeckRequest{Action: request.ActionDeleteCards}
+		b, _ = json.Marshal(deleteReq)
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(deckID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
@@ -621,6 +625,120 @@ func TestStudy_Integration(t *testing.T) {
 		assert.NotEmpty(t, reviewsRes)
 	})
 
+	t.Run("FlexibleDeckDeletion", func(t *testing.T) {
+		// 1. Setup structure:
+		// Parent
+		//   - Child
+		//     - Card 1
+		//   - Card 2
+		// Target Deck (for moving)
+		// Default Deck (implicitly exists)
+
+		parent := createDeck(t, e, token, request.CreateDeckRequest{Name: "Delete Parent"})
+		child := createDeck(t, e, token, request.CreateDeckRequest{Name: "Delete Child", ParentID: &parent.ID})
+		target := createDeck(t, e, token, request.CreateDeckRequest{Name: "Target For Move"})
+
+		// Create Note Type
+		var noteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Delete Test Type', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		require.NoError(t, err)
+
+		// Create Cards
+		card1ID := createCard(t, db, loginRes.User.ID, noteTypeID, child.ID, "550e8400-e29b-41d4-a716-446655440001")
+		card2ID := createCard(t, db, loginRes.User.ID, noteTypeID, parent.ID, "550e8400-e29b-41d4-a716-446655440002")
+
+		// --- Scenario 1: move_to_deck ---
+		deleteReq := request.DeleteDeckRequest{
+			Action:       request.ActionMoveToDeck,
+			TargetDeckID: &target.ID,
+		}
+		b, _ := json.Marshal(deleteReq)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(child.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify Child is gone
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(child.ID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Verify Card 1 moved to Target
+		var currentDeckID int64
+		err = db.DB.QueryRow("SELECT deck_id FROM cards WHERE id = $1", card1ID).Scan(&currentDeckID)
+		require.NoError(t, err)
+		assert.Equal(t, target.ID, currentDeckID)
+
+		// --- Scenario 2: move_to_default ---
+		// Find Default deck ID
+		var defaultDeckID int64
+		err = db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default' AND parent_id IS NULL AND deleted_at IS NULL", loginRes.User.ID).Scan(&defaultDeckID)
+		require.NoError(t, err)
+
+		// Create another deck under Parent
+		child2 := createDeck(t, e, token, request.CreateDeckRequest{Name: "Delete Child 2", ParentID: &parent.ID})
+		card3ID := createCard(t, db, loginRes.User.ID, noteTypeID, child2.ID, "550e8400-e29b-41d4-a716-446655440003")
+
+		deleteReq = request.DeleteDeckRequest{
+			Action: request.ActionMoveToDefault,
+		}
+		b, _ = json.Marshal(deleteReq)
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(parent.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify Parent and Child 2 are gone
+		for _, id := range []int64{parent.ID, child2.ID} {
+			req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(id, 10), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusNotFound, rec.Code)
+		}
+
+		// Verify Card 2 and Card 3 moved to Default
+		for _, id := range []int64{card2ID, card3ID} {
+			err = db.DB.QueryRow("SELECT deck_id FROM cards WHERE id = $1", id).Scan(&currentDeckID)
+			require.NoError(t, err)
+			assert.Equal(t, defaultDeckID, currentDeckID)
+		}
+
+		// --- Scenario 3: delete_cards ---
+		deckWithCards := createDeck(t, e, token, request.CreateDeckRequest{Name: "Final Delete Deck"})
+		card4ID := createCard(t, db, loginRes.User.ID, noteTypeID, deckWithCards.ID, "550e8400-e29b-41d4-a716-446655440004")
+
+		deleteReq = request.DeleteDeckRequest{
+			Action: request.ActionDeleteCards,
+		}
+		b, _ = json.Marshal(deleteReq)
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(deckWithCards.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify Deck is gone
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/"+strconv.FormatInt(deckWithCards.ID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Verify Card 4 is hard-deleted
+		var exists bool
+		err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM cards WHERE id = $1)", card4ID).Scan(&exists)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+
 	t.Run("FilteredDecks", func(t *testing.T) {
 		// Create Filtered Deck
 		createReq := request.CreateFilteredDeckRequest{
@@ -674,5 +792,18 @@ func createDeck(t *testing.T, e *echo.Echo, token string, reqBody request.Create
 	var deckRes response.DeckResponse
 	json.Unmarshal(rec.Body.Bytes(), &deckRes)
 	return deckRes
+}
+
+// Helper function to create a card manually in DB
+func createCard(t *testing.T, pgRepo *postgresInfra.PostgresRepository, userID, noteTypeID, deckID int64, guid string) int64 {
+	var noteID int64
+	err := pgRepo.DB.QueryRow("INSERT INTO notes (user_id, note_type_id, fields_json, guid) VALUES ($1, $2, '{}', $3) RETURNING id", userID, noteTypeID, guid).Scan(&noteID)
+	require.NoError(t, err)
+
+	var cardID int64
+	err = pgRepo.DB.QueryRow("INSERT INTO cards (deck_id, note_id, card_type_id, state) VALUES ($1, $2, 0, 'new') RETURNING id", deckID, noteID).Scan(&cardID)
+	require.NoError(t, err)
+
+	return cardID
 }
 

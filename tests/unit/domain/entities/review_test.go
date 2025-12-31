@@ -1,6 +1,6 @@
 package entities
 import (
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/review"
 )
 
 import (
@@ -13,13 +13,13 @@ import (
 func TestReview_IsValidRating(t *testing.T) {
 	tests := []struct {
 		name     string
-		review   *entities.Review
+		review   *review.Review
 		expected bool
 	}{
 		{
 			name: "valid rating 1",
-			review: func() *entities.Review {
-				r := &entities.Review{}
+			review: func() *review.Review {
+				r := &review.Review{}
 				r.SetRating(1)
 				return r
 			}(),
@@ -27,8 +27,8 @@ func TestReview_IsValidRating(t *testing.T) {
 		},
 		{
 			name: "valid rating 4",
-			review: func() *entities.Review {
-				r := &entities.Review{}
+			review: func() *review.Review {
+				r := &review.Review{}
 				r.SetRating(4)
 				return r
 			}(),
@@ -36,8 +36,8 @@ func TestReview_IsValidRating(t *testing.T) {
 		},
 		{
 			name: "invalid rating 0",
-			review: func() *entities.Review {
-				r := &entities.Review{}
+			review: func() *review.Review {
+				r := &review.Review{}
 				r.SetRating(0)
 				return r
 			}(),
@@ -45,8 +45,8 @@ func TestReview_IsValidRating(t *testing.T) {
 		},
 		{
 			name: "invalid rating 5",
-			review: func() *entities.Review {
-				r := &entities.Review{}
+			review: func() *review.Review {
+				r := &review.Review{}
 				r.SetRating(5)
 				return r
 			}(),
@@ -99,9 +99,9 @@ func TestReview_GetRatingName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			review := &entities.Review{}
-			review.SetRating(tt.rating)
-			got := review.GetRatingName()
+			r := &review.Review{}
+			r.SetRating(tt.rating)
+			got := r.GetRatingName()
 			if got != tt.expected {
 				t.Errorf("Review.GetRatingName() = %v, want %v", got, tt.expected)
 			}
@@ -110,12 +110,12 @@ func TestReview_GetRatingName(t *testing.T) {
 }
 
 func TestReview_ReviewType(t *testing.T) {
-	review := &entities.Review{}
-	review.SetType(valueobjects.ReviewTypeLearn)
-	review.SetCreatedAt(time.Now())
+	r := &review.Review{}
+	r.SetType(valueobjects.ReviewTypeLearn)
+	r.SetCreatedAt(time.Now())
 
-	if review.GetType() != valueobjects.ReviewTypeLearn {
-		t.Errorf("Review.GetType() = %v, want ReviewTypeLearn", review.GetType())
+	if r.GetType() != valueobjects.ReviewTypeLearn {
+		t.Errorf("Review.GetType() = %v, want ReviewTypeLearn", r.GetType())
 	}
 }
 

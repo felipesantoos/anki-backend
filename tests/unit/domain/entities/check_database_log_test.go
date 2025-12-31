@@ -3,38 +3,38 @@ package entities
 import (
 	"testing"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	checkdatabaselog "github.com/felipesantos/anki-backend/core/domain/entities/check_database_log"
 )
 
 func TestCheckDatabaseLog_IsCompleted(t *testing.T) {
 	tests := []struct {
 		name  string
-		log   *entities.CheckDatabaseLog
+		log   *checkdatabaselog.CheckDatabaseLog
 		want  bool
 	}{
 		{
 			name: "completed status",
-			log: func() *entities.CheckDatabaseLog {
-				cdl := &entities.CheckDatabaseLog{}
-				cdl.SetStatus(entities.CheckStatusCompleted)
+			log: func() *checkdatabaselog.CheckDatabaseLog {
+				cdl := &checkdatabaselog.CheckDatabaseLog{}
+				cdl.SetStatus(checkdatabaselog.CheckStatusCompleted)
 				return cdl
 			}(),
 			want: true,
 		},
 		{
 			name: "running status",
-			log: func() *entities.CheckDatabaseLog {
-				cdl := &entities.CheckDatabaseLog{}
-				cdl.SetStatus(entities.CheckStatusRunning)
+			log: func() *checkdatabaselog.CheckDatabaseLog {
+				cdl := &checkdatabaselog.CheckDatabaseLog{}
+				cdl.SetStatus(checkdatabaselog.CheckStatusRunning)
 				return cdl
 			}(),
 			want: false,
 		},
 		{
 			name: "failed status",
-			log: func() *entities.CheckDatabaseLog {
-				cdl := &entities.CheckDatabaseLog{}
-				cdl.SetStatus(entities.CheckStatusFailed)
+			log: func() *checkdatabaselog.CheckDatabaseLog {
+				cdl := &checkdatabaselog.CheckDatabaseLog{}
+				cdl.SetStatus(checkdatabaselog.CheckStatusFailed)
 				return cdl
 			}(),
 			want: false,
@@ -54,23 +54,23 @@ func TestCheckDatabaseLog_IsCompleted(t *testing.T) {
 func TestCheckDatabaseLog_IsFailed(t *testing.T) {
 	tests := []struct {
 		name  string
-		log   *entities.CheckDatabaseLog
+		log   *checkdatabaselog.CheckDatabaseLog
 		want  bool
 	}{
 		{
 			name: "failed status",
-			log: func() *entities.CheckDatabaseLog {
-				cdl := &entities.CheckDatabaseLog{}
-				cdl.SetStatus(entities.CheckStatusFailed)
+			log: func() *checkdatabaselog.CheckDatabaseLog {
+				cdl := &checkdatabaselog.CheckDatabaseLog{}
+				cdl.SetStatus(checkdatabaselog.CheckStatusFailed)
 				return cdl
 			}(),
 			want: true,
 		},
 		{
 			name: "completed status",
-			log: func() *entities.CheckDatabaseLog {
-				cdl := &entities.CheckDatabaseLog{}
-				cdl.SetStatus(entities.CheckStatusCompleted)
+			log: func() *checkdatabaselog.CheckDatabaseLog {
+				cdl := &checkdatabaselog.CheckDatabaseLog{}
+				cdl.SetStatus(checkdatabaselog.CheckStatusCompleted)
 				return cdl
 			}(),
 			want: false,
@@ -90,23 +90,23 @@ func TestCheckDatabaseLog_IsFailed(t *testing.T) {
 func TestCheckDatabaseLog_IsCorrupted(t *testing.T) {
 	tests := []struct {
 		name  string
-		log   *entities.CheckDatabaseLog
+		log   *checkdatabaselog.CheckDatabaseLog
 		want  bool
 	}{
 		{
 			name: "corrupted status",
-			log: func() *entities.CheckDatabaseLog {
-				cdl := &entities.CheckDatabaseLog{}
-				cdl.SetStatus(entities.CheckStatusCorrupted)
+			log: func() *checkdatabaselog.CheckDatabaseLog {
+				cdl := &checkdatabaselog.CheckDatabaseLog{}
+				cdl.SetStatus(checkdatabaselog.CheckStatusCorrupted)
 				return cdl
 			}(),
 			want: true,
 		},
 		{
 			name: "completed status",
-			log: func() *entities.CheckDatabaseLog {
-				cdl := &entities.CheckDatabaseLog{}
-				cdl.SetStatus(entities.CheckStatusCompleted)
+			log: func() *checkdatabaselog.CheckDatabaseLog {
+				cdl := &checkdatabaselog.CheckDatabaseLog{}
+				cdl.SetStatus(checkdatabaselog.CheckStatusCompleted)
 				return cdl
 			}(),
 			want: false,

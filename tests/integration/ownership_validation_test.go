@@ -88,7 +88,10 @@ func TestOwnership_Validation(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to update User A's deck")
 
 		// User B tries to DELETE User A's deck
-		req = httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(deckA.ID, 10), nil)
+		deleteReq := request.DeleteDeckRequest{Action: request.ActionDeleteCards}
+		b, _ = json.Marshal(deleteReq)
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/decks/"+strconv.FormatInt(deckA.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)

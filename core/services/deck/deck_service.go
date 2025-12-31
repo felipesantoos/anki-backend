@@ -22,12 +22,20 @@ var (
 // DeckService implements IDeckService
 type DeckService struct {
 	deckRepo secondary.IDeckRepository
+	cardRepo secondary.ICardRepository
+	tm       secondary.ITransactionManager
 }
 
 // NewDeckService creates a new DeckService instance
-func NewDeckService(deckRepo secondary.IDeckRepository) primary.IDeckService {
+func NewDeckService(
+	deckRepo secondary.IDeckRepository,
+	cardRepo secondary.ICardRepository,
+	tm secondary.ITransactionManager,
+) primary.IDeckService {
 	return &DeckService{
 		deckRepo: deckRepo,
+		cardRepo: cardRepo,
+		tm:       tm,
 	}
 }
 
@@ -202,15 +210,15 @@ func (s *DeckService) UpdateOptions(ctx context.Context, userID int64, id int64,
 	return existing, nil
 }
 
-// Delete deletes a deck (soft delete)
-func (s *DeckService) Delete(ctx context.Context, userID int64, id int64) error {
-	// 1. Find deck
+// Delete deletes a deck (soft delete) with a strategy for handling cards
+func (s *DeckService) Delete(ctx context.Context, userID int64, id int64, action deck.DeleteAction, targetDeckID *int64) error {
+	// 1. Find deck (validates ownership)
 	existing, err := s.deckRepo.FindByID(ctx, userID, id)
 	if err != nil {
 		return err
 	}
 	if existing == nil {
-		return fmt.Errorf("deck not found")
+		return ErrDeckNotFound
 	}
 
 	// 2. Prevent deleting default deck
@@ -218,8 +226,60 @@ func (s *DeckService) Delete(ctx context.Context, userID int64, id int64) error 
 		return fmt.Errorf("cannot delete the default deck")
 	}
 
-	// 3. Perform soft delete
-	return s.deckRepo.Delete(ctx, userID, id)
+	// 3. Handle card strategy
+	var finalTargetDeckID int64
+	if action == deck.ActionMoveToDefault {
+		// Fetch default deck
+		decks, err := s.deckRepo.FindByUserID(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch user decks: %w", err)
+		}
+		var defaultDeck *deck.Deck
+		for _, d := range decks {
+			if d.GetName() == "Default" && d.IsRoot() {
+				defaultDeck = d
+				break
+			}
+		}
+		if defaultDeck == nil {
+			return fmt.Errorf("default deck not found")
+		}
+		finalTargetDeckID = defaultDeck.GetID()
+	} else if action == deck.ActionMoveToDeck {
+		if targetDeckID == nil {
+			return fmt.Errorf("target deck ID is required for 'move_to_deck' action")
+		}
+		if *targetDeckID == id {
+			return fmt.Errorf("cannot move cards to the deck being deleted")
+		}
+		// Validate target deck exists and belongs to user
+		target, err := s.deckRepo.FindByID(ctx, userID, *targetDeckID)
+		if err != nil {
+			return fmt.Errorf("failed to validate target deck: %w", err)
+		}
+		if target == nil {
+			return fmt.Errorf("target deck not found")
+		}
+		finalTargetDeckID = target.GetID()
+	}
+
+	// 4. Perform operation in transaction
+	return s.tm.WithTransaction(ctx, func(txCtx context.Context) error {
+		// A. Execute card action
+		switch action {
+		case deck.ActionDeleteCards:
+			if err := s.cardRepo.DeleteByDeckRecursive(txCtx, userID, id); err != nil {
+				return fmt.Errorf("failed to delete cards: %w", err)
+			}
+		case deck.ActionMoveToDefault, deck.ActionMoveToDeck:
+			if err := s.cardRepo.MoveCards(txCtx, userID, id, finalTargetDeckID); err != nil {
+				return fmt.Errorf("failed to move cards: %w", err)
+			}
+		}
+
+		// B. Perform soft delete of the deck tree
+		return s.deckRepo.Delete(txCtx, userID, id)
+	})
 }
 
 // CreateDefaultDeck creates the initial "Default" deck for a user

@@ -1,6 +1,6 @@
 package entities
 import (
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	"github.com/felipesantos/anki-backend/core/domain/entities/profile"
 )
 
 import (
@@ -12,13 +12,13 @@ import (
 func TestProfile_IsActive(t *testing.T) {
 	tests := []struct {
 		name     string
-		profile  *entities.Profile
+		profile  *profile.Profile
 		expected bool
 	}{
 		{
 			name: "active profile",
-			profile: func() *entities.Profile {
-				p := &entities.Profile{}
+			profile: func() *profile.Profile {
+				p := &profile.Profile{}
 				p.SetDeletedAt(nil)
 				return p
 			}(),
@@ -26,8 +26,8 @@ func TestProfile_IsActive(t *testing.T) {
 		},
 		{
 			name: "deleted profile",
-			profile: func() *entities.Profile {
-				p := &entities.Profile{}
+			profile: func() *profile.Profile {
+				p := &profile.Profile{}
 				p.SetDeletedAt(timePtr(time.Now()))
 				return p
 			}(),
@@ -46,48 +46,48 @@ func TestProfile_IsActive(t *testing.T) {
 }
 
 func TestProfile_EnableAnkiWebSync(t *testing.T) {
-	profile := &entities.Profile{}
-	profile.SetAnkiWebSyncEnabled(false)
-	profile.SetAnkiWebUsername(nil)
-	profile.SetUpdatedAt(time.Now())
+	p := &profile.Profile{}
+	p.SetAnkiWebSyncEnabled(false)
+	p.SetAnkiWebUsername(nil)
+	p.SetUpdatedAt(time.Now())
 
 	// Enable with valid username
-	err := profile.EnableAnkiWebSync("testuser")
+	err := p.EnableAnkiWebSync("testuser")
 	if err != nil {
 		t.Errorf("Profile.EnableAnkiWebSync() error = %v, want nil", err)
 	}
 
-	if !profile.GetAnkiWebSyncEnabled() {
+	if !p.GetAnkiWebSyncEnabled() {
 		t.Errorf("Profile.EnableAnkiWebSync() failed to enable sync")
 	}
 
-	if profile.GetAnkiWebUsername() == nil || *profile.GetAnkiWebUsername() != "testuser" {
+	if p.GetAnkiWebUsername() == nil || *p.GetAnkiWebUsername() != "testuser" {
 		t.Errorf("Profile.EnableAnkiWebSync() failed to set username")
 	}
 
 	// Try to enable with empty username
-	err = profile.EnableAnkiWebSync("")
+	err = p.EnableAnkiWebSync("")
 	if err == nil {
 		t.Errorf("Profile.EnableAnkiWebSync() expected error for empty username")
 	}
-	if !errors.Is(err, entities.ErrAnkiWebUsernameEmpty) {
-		t.Errorf("Profile.EnableAnkiWebSync() error = %v, want entities.ErrAnkiWebUsernameEmpty", err)
+	if !errors.Is(err, profile.ErrAnkiWebUsernameEmpty) {
+		t.Errorf("Profile.EnableAnkiWebSync() error = %v, want profile.ErrAnkiWebUsernameEmpty", err)
 	}
 }
 
 func TestProfile_DisableAnkiWebSync(t *testing.T) {
 	username := "testuser"
-	profile := &entities.Profile{}
-	profile.SetAnkiWebSyncEnabled(true)
-	profile.SetAnkiWebUsername(&username)
-	profile.SetUpdatedAt(time.Now())
+	p := &profile.Profile{}
+	p.SetAnkiWebSyncEnabled(true)
+	p.SetAnkiWebUsername(&username)
+	p.SetUpdatedAt(time.Now())
 
-	profile.DisableAnkiWebSync()
-	if profile.GetAnkiWebSyncEnabled() {
+	p.DisableAnkiWebSync()
+	if p.GetAnkiWebSyncEnabled() {
 		t.Errorf("Profile.DisableAnkiWebSync() failed to disable sync")
 	}
 
-	if profile.GetAnkiWebUsername() != nil {
+	if p.GetAnkiWebUsername() != nil {
 		t.Errorf("Profile.DisableAnkiWebSync() failed to clear username")
 	}
 }

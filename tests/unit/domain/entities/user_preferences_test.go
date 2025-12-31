@@ -1,6 +1,6 @@
 package entities
 import (
-	"github.com/felipesantos/anki-backend/core/domain/entities"
+	userpreferences "github.com/felipesantos/anki-backend/core/domain/entities/user_preferences"
 )
 
 import (
@@ -11,7 +11,7 @@ import (
 )
 
 func TestUserPreferences_GetTheme(t *testing.T) {
-	prefs := &entities.UserPreferences{}
+	prefs := &userpreferences.UserPreferences{}
 	prefs.SetTheme(valueobjects.ThemeTypeDark)
 
 	if prefs.GetTheme() != valueobjects.ThemeTypeDark {
@@ -20,7 +20,7 @@ func TestUserPreferences_GetTheme(t *testing.T) {
 }
 
 func TestUserPreferences_SetTheme(t *testing.T) {
-	prefs := &entities.UserPreferences{}
+	prefs := &userpreferences.UserPreferences{}
 	prefs.SetTheme(valueobjects.ThemeTypeLight)
 	prefs.SetUpdatedAt(time.Now())
 

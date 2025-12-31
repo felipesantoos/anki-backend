@@ -59,7 +59,7 @@ func TestSharedDeckService_Update(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "not authorized")
+		assert.Contains(t, err.Error(), "access denied")
 		mockRepo.AssertExpectations(t)
 	})
 }

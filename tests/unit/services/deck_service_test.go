@@ -13,7 +13,9 @@ import (
 
 func TestDeckService_Create(t *testing.T) {
 	mockRepo := new(MockDeckRepository)
-	service := deckSvc.NewDeckService(mockRepo)
+	mockCardRepo := new(MockCardRepository)
+	mockTM := new(MockTransactionManager)
+	service := deckSvc.NewDeckService(mockRepo, mockCardRepo, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -75,21 +77,64 @@ func TestDeckService_Create(t *testing.T) {
 
 func TestDeckService_Delete(t *testing.T) {
 	mockRepo := new(MockDeckRepository)
-	service := deckSvc.NewDeckService(mockRepo)
+	mockCardRepo := new(MockCardRepository)
+	mockTM := new(MockTransactionManager)
+	service := deckSvc.NewDeckService(mockRepo, mockCardRepo, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
-	t.Run("Success", func(t *testing.T) {
+	t.Run("Success Delete Cards", func(t *testing.T) {
 		deckID := int64(100)
 		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("To Delete").Build()
 
 		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
-		mockRepo.On("Delete", ctx, userID, deckID).Return(nil).Once()
+		mockTM.ExpectTransaction()
+		mockCardRepo.On("DeleteByDeckRecursive", mock.Anything, userID, deckID).Return(nil).Once()
+		mockRepo.On("Delete", mock.Anything, userID, deckID).Return(nil).Once()
 
-		err := service.Delete(ctx, userID, deckID)
+		err := service.Delete(ctx, userID, deckID, deck.ActionDeleteCards, nil)
 
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+	})
+
+	t.Run("Success Move to Default", func(t *testing.T) {
+		deckID := int64(100)
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("To Delete").Build()
+		defaultDeckID := int64(1)
+		defaultDeck, _ := deck.NewBuilder().WithID(defaultDeckID).WithUserID(userID).WithName("Default").Build()
+
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("FindByUserID", ctx, userID).Return([]*deck.Deck{defaultDeck}, nil).Once()
+		mockTM.ExpectTransaction()
+		mockCardRepo.On("MoveCards", mock.Anything, userID, deckID, defaultDeckID).Return(nil).Once()
+		mockRepo.On("Delete", mock.Anything, userID, deckID).Return(nil).Once()
+
+		err := service.Delete(ctx, userID, deckID, deck.ActionMoveToDefault, nil)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+	})
+
+	t.Run("Success Move to Another Deck", func(t *testing.T) {
+		deckID := int64(100)
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("To Delete").Build()
+		targetDeckID := int64(200)
+		targetDeck, _ := deck.NewBuilder().WithID(targetDeckID).WithUserID(userID).WithName("Target").Build()
+
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("FindByID", ctx, userID, targetDeckID).Return(targetDeck, nil).Once()
+		mockTM.ExpectTransaction()
+		mockCardRepo.On("MoveCards", mock.Anything, userID, deckID, targetDeckID).Return(nil).Once()
+		mockRepo.On("Delete", mock.Anything, userID, deckID).Return(nil).Once()
+
+		err := service.Delete(ctx, userID, deckID, deck.ActionMoveToDeck, &targetDeckID)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
 	})
 
 	t.Run("Prevent Default Deck Deletion", func(t *testing.T) {
@@ -98,7 +143,7 @@ func TestDeckService_Delete(t *testing.T) {
 
 		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
 
-		err := service.Delete(ctx, userID, deckID)
+		err := service.Delete(ctx, userID, deckID, deck.ActionDeleteCards, nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot delete the default deck")
@@ -109,17 +154,19 @@ func TestDeckService_Delete(t *testing.T) {
 		deckID := int64(404)
 		mockRepo.On("FindByID", ctx, userID, deckID).Return(nil, nil).Once()
 
-		err := service.Delete(ctx, userID, deckID)
+		err := service.Delete(ctx, userID, deckID, deck.ActionDeleteCards, nil)
 
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "deck not found")
+		assert.True(t, errors.Is(err, deckSvc.ErrDeckNotFound))
 		mockRepo.AssertExpectations(t)
 	})
 }
 
 func TestDeckService_FindByUserID(t *testing.T) {
 	mockRepo := new(MockDeckRepository)
-	service := deckSvc.NewDeckService(mockRepo)
+	mockCardRepo := new(MockCardRepository)
+	mockTM := new(MockTransactionManager)
+	service := deckSvc.NewDeckService(mockRepo, mockCardRepo, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -151,7 +198,9 @@ func TestDeckService_FindByUserID(t *testing.T) {
 
 func TestDeckService_FindByID(t *testing.T) {
 	mockRepo := new(MockDeckRepository)
-	service := deckSvc.NewDeckService(mockRepo)
+	mockCardRepo := new(MockCardRepository)
+	mockTM := new(MockTransactionManager)
+	service := deckSvc.NewDeckService(mockRepo, mockCardRepo, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	deckID := int64(10)
@@ -181,7 +230,9 @@ func TestDeckService_FindByID(t *testing.T) {
 
 func TestDeckService_Update(t *testing.T) {
 	mockRepo := new(MockDeckRepository)
-	service := deckSvc.NewDeckService(mockRepo)
+	mockCardRepo := new(MockCardRepository)
+	mockTM := new(MockTransactionManager)
+	service := deckSvc.NewDeckService(mockRepo, mockCardRepo, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	deckID := int64(10)
@@ -304,7 +355,9 @@ func TestDeckService_Update(t *testing.T) {
 
 func TestDeckService_UpdateOptions(t *testing.T) {
 	mockRepo := new(MockDeckRepository)
-	service := deckSvc.NewDeckService(mockRepo)
+	mockCardRepo := new(MockCardRepository)
+	mockTM := new(MockTransactionManager)
+	service := deckSvc.NewDeckService(mockRepo, mockCardRepo, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	deckID := int64(10)

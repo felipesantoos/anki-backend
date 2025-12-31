@@ -619,6 +619,49 @@ func (r *CardRepository) CountByDeckAndState(ctx context.Context, userID int64, 
 	return count, nil
 }
 
+// MoveCards moves all cards from a source deck (including sub-decks) to a target deck
+func (r *CardRepository) MoveCards(ctx context.Context, userID int64, srcDeckID int64, targetDeckID int64) error {
+	query := `
+		UPDATE cards
+		SET deck_id = $1, updated_at = $2
+		WHERE deck_id IN (
+			WITH RECURSIVE tree AS (
+				SELECT id FROM decks WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL
+				UNION ALL
+				SELECT d.id FROM decks d JOIN tree t ON d.parent_id = t.id WHERE d.deleted_at IS NULL
+			) SELECT id FROM tree
+		)
+	`
+
+	_, err := r.db.ExecContext(ctx, query, targetDeckID, time.Now(), srcDeckID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to move cards: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteByDeckRecursive deletes all cards from a deck and its sub-decks
+func (r *CardRepository) DeleteByDeckRecursive(ctx context.Context, userID int64, deckID int64) error {
+	query := `
+		DELETE FROM cards
+		WHERE deck_id IN (
+			WITH RECURSIVE tree AS (
+				SELECT id FROM decks WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+				UNION ALL
+				SELECT d.id FROM decks d JOIN tree t ON d.parent_id = t.id WHERE d.deleted_at IS NULL
+			) SELECT id FROM tree
+		)
+	`
+
+	_, err := r.db.ExecContext(ctx, query, deckID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete cards recursively: %w", err)
+	}
+
+	return nil
+}
+
 // Ensure CardRepository implements ICardRepository
 var _ secondary.ICardRepository = (*CardRepository)(nil)
 

@@ -64,7 +64,9 @@ func Init(
 // GetDeckService returns a fresh instance of DeckService
 func GetDeckService() primary.IDeckService {
 	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
-	return deckService.NewDeckService(deckRepo)
+	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
+	tm := database.NewTransactionManager(dbRepo.GetDB())
+	return deckService.NewDeckService(deckRepo, cardRepo, tm)
 }
 
 // GetDeckOptionsPresetService returns a fresh instance of DeckOptionsPresetService

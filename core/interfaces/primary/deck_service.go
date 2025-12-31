@@ -23,8 +23,8 @@ type IDeckService interface {
 	// UpdateOptions updates only the options of an existing deck
 	UpdateOptions(ctx context.Context, userID int64, id int64, optionsJSON string) (*deck.Deck, error)
 
-	// Delete deletes a deck (soft delete)
-	Delete(ctx context.Context, userID int64, id int64) error
+	// Delete deletes a deck (soft delete) with a strategy for handling cards
+	Delete(ctx context.Context, userID int64, id int64, action deck.DeleteAction, targetDeckID *int64) error
 
 	// CreateDefaultDeck creates the initial "Default" deck for a user
 	CreateDefaultDeck(ctx context.Context, userID int64) (*deck.Deck, error)

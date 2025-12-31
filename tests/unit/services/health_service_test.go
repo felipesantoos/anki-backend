@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -17,6 +18,10 @@ type mockDatabaseRepository struct {
 
 func (m *mockDatabaseRepository) Ping(ctx context.Context) error {
 	return m.pingErr
+}
+
+func (m *mockDatabaseRepository) GetDB() *sql.DB {
+	return nil
 }
 
 // mockCacheRepositoryForHealth is a mock implementation of ICacheRepository for health tests

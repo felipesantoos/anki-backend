@@ -343,11 +343,51 @@ func TestContent_Integration(t *testing.T) {
 		}
 		assert.False(t, found, "Tag should have been removed")
 
-		// Delete Note
+		// Delete Note - Not Found
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/notes/999999", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Delete Note - Cross-User Isolation
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Verify that User A's note still exists after User B's failed attempt
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code, "User A's note should still exist")
+
+		// Delete Note - Success and verify card deletion
+		// First, verify cards exist before deletion
+		var cardCountBefore int
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountBefore)
+		require.NoError(t, err)
+		assert.Greater(t, cardCountBefore, 0, "Cards should exist before note deletion")
+
+		// Delete the note
 		req = httptest.NewRequest(http.MethodDelete, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify note is soft-deleted (has deleted_at set)
+		var deletedAt interface{}
+		err = db.DB.QueryRow("SELECT deleted_at FROM notes WHERE id = $1", noteID).Scan(&deletedAt)
+		require.NoError(t, err)
+		assert.NotNil(t, deletedAt, "Note should have deleted_at set (soft delete)")
+
+		// Verify all associated cards are hard-deleted (removed from cards table)
+		var cardCountAfter int
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountAfter)
+		require.NoError(t, err)
+		assert.Equal(t, 0, cardCountAfter, "All cards should be deleted when note is deleted")
 	})
 }

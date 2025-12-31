@@ -176,6 +176,32 @@ func (s *DeckService) Update(ctx context.Context, userID int64, id int64, name s
 	return existing, nil
 }
 
+// UpdateOptions updates only the options of an existing deck
+func (s *DeckService) UpdateOptions(ctx context.Context, userID int64, id int64, optionsJSON string) (*deck.Deck, error) {
+	// 1. Find existing deck (validates ownership)
+	existing, err := s.deckRepo.FindByID(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return nil, ErrDeckNotFound
+	}
+
+	// 2. Update options
+	if optionsJSON == "" {
+		optionsJSON = "{}"
+	}
+	existing.SetOptionsJSON(optionsJSON)
+	existing.SetUpdatedAt(time.Now())
+
+	// 3. Save
+	if err := s.deckRepo.Update(ctx, userID, id, existing); err != nil {
+		return nil, err
+	}
+
+	return existing, nil
+}
+
 // Delete deletes a deck (soft delete)
 func (s *DeckService) Delete(ctx context.Context, userID int64, id int64) error {
 	// 1. Find deck

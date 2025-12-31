@@ -163,6 +163,46 @@ func (h *DeckHandler) GetOptions(c echo.Context) error {
 	return c.JSON(http.StatusOK, options)
 }
 
+// UpdateOptions handles PUT /api/v1/decks/:id/options
+// @Summary Update deck options
+// @Description Updates the configuration options for a specific deck
+// @Tags decks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Deck ID"
+// @Param request body map[string]interface{} true "Deck options update request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/decks/{id}/options [put]
+func (h *DeckHandler) UpdateOptions(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	var options map[string]interface{}
+	if err := json.NewDecoder(c.Request().Body).Decode(&options); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	optionsJSON, err := json.Marshal(options)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Failed to marshal deck options")
+	}
+
+	d, err := h.deckService.UpdateOptions(ctx, userID, id, string(optionsJSON))
+	if err != nil {
+		return handleDeckError(err)
+	}
+
+	var result map[string]interface{}
+	json.Unmarshal([]byte(d.GetOptionsJSON()), &result)
+
+	return c.JSON(http.StatusOK, result)
+}
+
 // handleDeckError maps service-level deck errors to HTTP errors
 func handleDeckError(err error) error {
 	if errors.Is(err, deck.ErrDeckNotFound) || errors.Is(err, ownership.ErrResourceNotFound) || errors.Is(err, ownership.ErrAccessDenied) {

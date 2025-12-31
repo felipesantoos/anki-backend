@@ -20,6 +20,9 @@ type IDeckService interface {
 	// Update updates an existing deck
 	Update(ctx context.Context, userID int64, id int64, name string, parentID *int64, optionsJSON string) (*deck.Deck, error)
 
+	// UpdateOptions updates only the options of an existing deck
+	UpdateOptions(ctx context.Context, userID int64, id int64, optionsJSON string) (*deck.Deck, error)
+
 	// Delete deletes a deck (soft delete)
 	Delete(ctx context.Context, userID int64, id int64) error
 

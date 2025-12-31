@@ -31,6 +31,9 @@ func TestStudy_Integration(t *testing.T) {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 
+	// Disable rate limiting for tests
+	cfg.RateLimit.Enabled = false
+
 	// Setup Redis
 	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
 	require.NoError(t, err)
@@ -168,7 +171,26 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, float64(25), retrievedOptions["newCardsPerDay"])
 		assert.Equal(t, float64(100), retrievedOptions["reviewLimit"])
 
-		// 3. Try to get options for non-existent deck
+		// 3. Update options
+		updatedOptions := map[string]interface{}{
+			"newCardsPerDay": 30,
+			"reviewLimit":    150,
+			"newOption":      true,
+		}
+		b, _ := json.Marshal(updatedOptions)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/decks/"+strconv.FormatInt(d.ID, 10)+"/options", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &retrievedOptions)
+		assert.Equal(t, float64(30), retrievedOptions["newCardsPerDay"])
+		assert.Equal(t, float64(150), retrievedOptions["reviewLimit"])
+		assert.Equal(t, true, retrievedOptions["newOption"])
+
+		// 4. Try to get options for non-existent deck
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks/999999/options", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec = httptest.NewRecorder()

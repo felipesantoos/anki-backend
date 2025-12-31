@@ -302,3 +302,37 @@ func TestDeckService_Update(t *testing.T) {
 	})
 }
 
+func TestDeckService_UpdateOptions(t *testing.T) {
+	mockRepo := new(MockDeckRepository)
+	service := deckSvc.NewDeckService(mockRepo)
+	ctx := context.Background()
+	userID := int64(1)
+	deckID := int64(10)
+
+	t.Run("Success", func(t *testing.T) {
+		oldOptions := `{"old": "value"}`
+		newOptions := `{"new": "value"}`
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithOptionsJSON(oldOptions).Build()
+
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockRepo.On("Update", ctx, userID, deckID, mock.AnythingOfType("*deck.Deck")).Return(nil).Once()
+
+		result, err := service.UpdateOptions(ctx, userID, deckID, newOptions)
+
+		assert.NoError(t, err)
+		assert.Equal(t, newOptions, result.GetOptionsJSON())
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Deck Not Found", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, deckID).Return(nil, nil).Once()
+
+		result, err := service.UpdateOptions(ctx, userID, deckID, `{}`)
+
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, deckSvc.ErrDeckNotFound))
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+}
+

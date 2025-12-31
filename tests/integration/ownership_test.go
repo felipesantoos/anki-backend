@@ -78,8 +78,14 @@ func TestOwnership_DeckRepository_Isolation(t *testing.T) {
 	deck1ID, err := deckRepo.CreateDefaultDeck(ctx, user1ID)
 	require.NoError(t, err, "Failed to create deck for user 1")
 
-	deck2ID, err := deckRepo.CreateDefaultDeck(ctx, user1ID)
+	// Create second deck for user 1 with different name
+	deck2 := &deck.Deck{}
+	deck2.SetName("User 1 Custom Deck")
+	deck2.SetUserID(user1ID)
+	deck2.SetOptionsJSON("{}")
+	err = deckRepo.Save(ctx, user1ID, deck2)
 	require.NoError(t, err, "Failed to create second deck for user 1")
+	deck2ID := deck2.GetID()
 
 	// Create deck for user 2
 	deck3ID, err := deckRepo.CreateDefaultDeck(ctx, user2ID)

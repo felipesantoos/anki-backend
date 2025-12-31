@@ -50,10 +50,7 @@ CREATE TABLE decks (
     options_json JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Constraint: unique name per user at the same hierarchical level
-    CONSTRAINT unique_deck_name_per_user UNIQUE (user_id, name, parent_id, deleted_at)
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
 
 -- 3.3 note_types
@@ -436,6 +433,14 @@ CREATE INDEX idx_decks_name ON decks(name) WHERE deleted_at IS NULL;
 CREATE INDEX idx_decks_user_parent ON decks(user_id, parent_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_decks_sync ON decks(user_id, updated_at) WHERE deleted_at IS NULL;
 CREATE INDEX idx_decks_active ON decks(user_id, parent_id) WHERE deleted_at IS NULL;
+
+-- Unique name per user at root level
+CREATE UNIQUE INDEX idx_decks_unique_name_root ON decks(user_id, name) 
+WHERE parent_id IS NULL AND deleted_at IS NULL;
+
+-- Unique name per user per parent
+CREATE UNIQUE INDEX idx_decks_unique_name_child ON decks(user_id, name, parent_id) 
+WHERE parent_id IS NOT NULL AND deleted_at IS NULL;
 
 -- note_types indexes
 CREATE INDEX idx_note_types_user_id ON note_types(user_id) WHERE deleted_at IS NULL;

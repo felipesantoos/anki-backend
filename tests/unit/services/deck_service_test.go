@@ -59,13 +59,13 @@ func TestDeckService_Create(t *testing.T) {
 	})
 
 	t.Run("Invalid Name Format", func(t *testing.T) {
-		_, err := service.Create(ctx, userID, "::", nil, "")
+		_, err := service.Create(ctx, userID, "A::B", nil, "")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid deck name format")
+		assert.Contains(t, err.Error(), "deck name cannot contain '::'")
 
-		_, err = service.Create(ctx, userID, "A::::B", nil, "")
+		_, err = service.Create(ctx, userID, "::", nil, "")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid deck name format")
+		assert.Contains(t, err.Error(), "deck name cannot contain '::'")
 
 		_, err = service.Create(ctx, userID, "  ", nil, "")
 		assert.Error(t, err)

@@ -225,3 +225,95 @@ func TestDeckRepository_Exists(t *testing.T) {
 	assert.False(t, exists)
 }
 
+func TestDeckRepository_UniqueConstraints(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "deck_unique")
+
+	t.Run("Root Name Conflict", func(t *testing.T) {
+		name := "Root Deck"
+		d1 := &deck.Deck{}
+		d1.SetName(name)
+		d1.SetUserID(userID)
+		d1.SetOptionsJSON("{}")
+		err := deckRepo.Save(ctx, userID, d1)
+		require.NoError(t, err)
+
+		d2 := &deck.Deck{}
+		d2.SetName(name)
+		d2.SetUserID(userID)
+		d2.SetOptionsJSON("{}")
+		err = deckRepo.Save(ctx, userID, d2)
+		
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "already exists at this level")
+	})
+
+	t.Run("Child Name Conflict", func(t *testing.T) {
+		parent := &deck.Deck{}
+		parent.SetName("Parent")
+		parent.SetUserID(userID)
+		parent.SetOptionsJSON("{}")
+		err := deckRepo.Save(ctx, userID, parent)
+		require.NoError(t, err)
+		parentID := parent.GetID()
+
+		name := "Child Deck"
+		c1 := &deck.Deck{}
+		c1.SetName(name)
+		c1.SetUserID(userID)
+		c1.SetParentID(&parentID)
+		c1.SetOptionsJSON("{}")
+		err = deckRepo.Save(ctx, userID, c1)
+		require.NoError(t, err)
+
+		c2 := &deck.Deck{}
+		c2.SetName(name)
+		c2.SetUserID(userID)
+		c2.SetParentID(&parentID)
+		c2.SetOptionsJSON("{}")
+		err = deckRepo.Save(ctx, userID, c2)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "already exists at this level")
+	})
+
+	t.Run("Same Name Different Parents Allowed", func(t *testing.T) {
+		p1 := &deck.Deck{}
+		p1.SetName("P1")
+		p1.SetUserID(userID)
+		p1.SetOptionsJSON("{}")
+		deckRepo.Save(ctx, userID, p1)
+		id1 := p1.GetID()
+
+		p2 := &deck.Deck{}
+		p2.SetName("P2")
+		p2.SetUserID(userID)
+		p2.SetOptionsJSON("{}")
+		deckRepo.Save(ctx, userID, p2)
+		id2 := p2.GetID()
+
+		name := "Common Name"
+		c1 := &deck.Deck{}
+		c1.SetName(name)
+		c1.SetUserID(userID)
+		c1.SetParentID(&id1)
+		c1.SetOptionsJSON("{}")
+		err := deckRepo.Save(ctx, userID, c1)
+		assert.NoError(t, err)
+
+		c2 := &deck.Deck{}
+		c2.SetName(name)
+		c2.SetUserID(userID)
+		c2.SetParentID(&id2)
+		c2.SetOptionsJSON("{}")
+		err = deckRepo.Save(ctx, userID, c2)
+		assert.NoError(t, err)
+	})
+}
+

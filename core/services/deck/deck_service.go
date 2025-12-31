@@ -38,8 +38,8 @@ func (s *DeckService) Create(ctx context.Context, userID int64, name string, par
 	if name == "" {
 		return nil, fmt.Errorf("deck name cannot be empty")
 	}
-	if name == "::" || strings.Contains(name, "::::") {
-		return nil, fmt.Errorf("invalid deck name format")
+	if strings.Contains(name, "::") {
+		return nil, fmt.Errorf("deck name cannot contain '::'")
 	}
 
 	// 1. Check if deck with same name exists at same level
@@ -107,8 +107,8 @@ func (s *DeckService) Update(ctx context.Context, userID int64, id int64, name s
 	if name == "" {
 		return nil, fmt.Errorf("deck name cannot be empty")
 	}
-	if name == "::" || strings.Contains(name, "::::") {
-		return nil, fmt.Errorf("invalid deck name format")
+	if strings.Contains(name, "::") {
+		return nil, fmt.Errorf("deck name cannot contain '::'")
 	}
 
 	// 1. Find existing deck

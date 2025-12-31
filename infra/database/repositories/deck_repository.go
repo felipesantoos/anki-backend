@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
+
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/infra/database/mappers"
@@ -218,6 +220,9 @@ func (r *DeckRepository) Save(ctx context.Context, userID int64, deckEntity *dec
 		).Scan(&deckID)
 
 		if err != nil {
+			if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" {
+				return fmt.Errorf("deck with name %s already exists at this level", model.Name)
+			}
 			return fmt.Errorf("failed to create deck: %w", err)
 		}
 
@@ -255,6 +260,9 @@ func (r *DeckRepository) Save(ctx context.Context, userID int64, deckEntity *dec
 	)
 
 	if err != nil {
+		if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" {
+			return fmt.Errorf("deck with name %s already exists at this level", model.Name)
+		}
 		return fmt.Errorf("failed to update deck: %w", err)
 	}
 

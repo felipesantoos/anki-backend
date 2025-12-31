@@ -150,6 +150,40 @@ func TestNoteService_FindAll(t *testing.T) {
 	})
 }
 
+func TestNoteService_FindByID(t *testing.T) {
+	mockNoteRepo := new(MockNoteRepository)
+	mockCardRepo := new(MockCardRepository)
+	mockNoteTypeRepo := new(MockNoteTypeRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+	noteID := int64(100)
+
+	t.Run("Success", func(t *testing.T) {
+		expectedNote := &note.Note{}
+		expectedNote.SetID(noteID)
+		mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(expectedNote, nil).Once()
+
+		result, err := service.FindByID(ctx, userID, noteID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNote, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Not Found", func(t *testing.T) {
+		mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(nil, nil).Once()
+
+		result, err := service.FindByID(ctx, userID, noteID)
+
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+}
+
 func TestNoteService_Delete(t *testing.T) {
 	mockNoteRepo := new(MockNoteRepository)
 	mockCardRepo := new(MockCardRepository)

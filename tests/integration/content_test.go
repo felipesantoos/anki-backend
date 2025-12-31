@@ -234,6 +234,13 @@ func TestContent_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &noteRes)
 		assert.Equal(t, noteID, noteRes.ID)
 
+		// Find Note by ID - Not Found
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/999999", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
 		// Verify that cards were created in the database
 		var cardCount int
 		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCount)
@@ -265,6 +272,13 @@ func TestContent_Integration(t *testing.T) {
 		e.ServeHTTP(rec, req)
 
 		// Should return 404 because deck (or note type) is not found for User B
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Cross-User Isolation: User B tries to access User A's note by ID
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 }

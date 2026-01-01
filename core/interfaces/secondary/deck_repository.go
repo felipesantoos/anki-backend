@@ -19,8 +19,9 @@ type IDeckRepository interface {
 	FindByID(ctx context.Context, userID int64, deckID int64) (*deck.Deck, error)
 
 	// FindByUserID finds all decks for a user
+	// If search is provided (non-empty), filters decks by name using case-insensitive partial matching
 	// Returns a list of decks belonging to the user
-	FindByUserID(ctx context.Context, userID int64) ([]*deck.Deck, error)
+	FindByUserID(ctx context.Context, userID int64, search string) ([]*deck.Deck, error)
 
 	// FindByParentID finds all decks with a specific parent ID, filtering by userID
 	// Returns a list of decks belonging to the user with the specified parent

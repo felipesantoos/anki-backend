@@ -34,7 +34,7 @@ func NewExportService(
 // ExportCollection exports all user data as a JSON snapshot in a stream
 func (s *ExportService) ExportCollection(ctx context.Context, userID int64) (io.Reader, int64, error) {
 	// 1. Fetch all decks
-	decks, err := s.deckRepo.FindByUserID(ctx, userID)
+	decks, err := s.deckRepo.FindByUserID(ctx, userID, "")
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to fetch decks for export: %w", err)
 	}

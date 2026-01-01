@@ -96,7 +96,7 @@ func TestDeckRepository_Hierarchy(t *testing.T) {
 	assert.Equal(t, child.GetID(), children[0].GetID())
 
 	// Test GetFullPath
-	allDecks, _ := deckRepo.FindByUserID(ctx, userID)
+	allDecks, _ := deckRepo.FindByUserID(ctx, userID, "")
 	assert.Equal(t, "Parent::Child", child.GetFullPath(allDecks))
 }
 
@@ -314,6 +314,98 @@ func TestDeckRepository_UniqueConstraints(t *testing.T) {
 		c2.SetOptionsJSON("{}")
 		err = deckRepo.Save(ctx, userID, c2)
 		assert.NoError(t, err)
+	})
+}
+
+func TestDeckRepository_FindByUserID_Search(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "deck_search")
+
+	// Create multiple decks with different names
+	decks := []struct {
+		name string
+	}{
+		{"Math Deck"},
+		{"Mathematics Advanced"},
+		{"Science Deck"},
+		{"Math Basics"},
+		{"History"},
+	}
+
+	for _, d := range decks {
+		deckEntity := &deck.Deck{}
+		deckEntity.SetName(d.name)
+		deckEntity.SetUserID(userID)
+		deckEntity.SetOptionsJSON("{}")
+		deckEntity.SetCreatedAt(time.Now())
+		deckEntity.SetUpdatedAt(time.Now())
+		_ = deckRepo.Save(ctx, userID, deckEntity)
+	}
+
+	t.Run("Search with Match", func(t *testing.T) {
+		results, err := deckRepo.FindByUserID(ctx, userID, "Math")
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(results), 3) // Should find "Math Deck", "Mathematics Advanced", "Math Basics"
+		
+		// Verify all results contain "Math" (case-insensitive)
+		for _, d := range results {
+			assert.Contains(t, d.GetName(), "Math")
+		}
+	})
+
+	t.Run("Search Case-Insensitive", func(t *testing.T) {
+		results, err := deckRepo.FindByUserID(ctx, userID, "math")
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(results), 3)
+		
+		// Verify case-insensitive matching
+		for _, d := range results {
+			assert.Contains(t, d.GetName(), "Math")
+		}
+	})
+
+	t.Run("Search with Partial Match", func(t *testing.T) {
+		results, err := deckRepo.FindByUserID(ctx, userID, "Science")
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "Science Deck", results[0].GetName())
+	})
+
+	t.Run("Search with No Matches", func(t *testing.T) {
+		results, err := deckRepo.FindByUserID(ctx, userID, "NonExistentDeck12345")
+		require.NoError(t, err)
+		assert.Empty(t, results)
+	})
+
+	t.Run("Search with Empty String", func(t *testing.T) {
+		results, err := deckRepo.FindByUserID(ctx, userID, "")
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(results), 5) // Should return all decks
+	})
+
+	t.Run("Cross-User Isolation", func(t *testing.T) {
+		// Create another user with a deck that matches search
+		userID2, _ := createTestUser(t, ctx, userRepo, "deck_search_user2")
+		deckEntity := &deck.Deck{}
+		deckEntity.SetName("Math Deck")
+		deckEntity.SetUserID(userID2)
+		deckEntity.SetOptionsJSON("{}")
+		deckEntity.SetCreatedAt(time.Now())
+		deckEntity.SetUpdatedAt(time.Now())
+		_ = deckRepo.Save(ctx, userID2, deckEntity)
+
+		// User 1 should not see User 2's deck
+		results, err := deckRepo.FindByUserID(ctx, userID, "Math")
+		require.NoError(t, err)
+		for _, d := range results {
+			assert.Equal(t, userID, d.GetUserID(), "User 1 should not see User 2's decks")
+		}
 	})
 }
 

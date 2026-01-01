@@ -107,8 +107,9 @@ func (s *DeckService) FindByID(ctx context.Context, userID int64, id int64) (*de
 }
 
 // FindByUserID finds all decks for a user
-func (s *DeckService) FindByUserID(ctx context.Context, userID int64) ([]*deck.Deck, error) {
-	return s.deckRepo.FindByUserID(ctx, userID)
+// If search is provided (non-empty), filters decks by name using case-insensitive partial matching
+func (s *DeckService) FindByUserID(ctx context.Context, userID int64, search string) ([]*deck.Deck, error) {
+	return s.deckRepo.FindByUserID(ctx, userID, search)
 }
 
 // Update updates an existing deck
@@ -238,7 +239,7 @@ func (s *DeckService) Delete(ctx context.Context, userID int64, id int64, action
 	var finalTargetDeckID int64
 	if action == deck.ActionMoveToDefault {
 		// Fetch default deck
-		decks, err := s.deckRepo.FindByUserID(ctx, userID)
+		decks, err := s.deckRepo.FindByUserID(ctx, userID, "")
 		if err != nil {
 			return fmt.Errorf("failed to fetch user decks: %w", err)
 		}

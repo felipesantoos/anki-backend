@@ -120,7 +120,7 @@ func TestOwnership_DeckRepository_Isolation(t *testing.T) {
 
 	t.Run("FindByUserID returns only user's decks", func(t *testing.T) {
 		// User 1 should only see their own decks
-		user1Decks, err := deckRepo.FindByUserID(ctx, user1ID)
+		user1Decks, err := deckRepo.FindByUserID(ctx, user1ID, "")
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(user1Decks), 2, "User 1 should have at least 2 decks")
 		for _, d := range user1Decks {
@@ -128,7 +128,7 @@ func TestOwnership_DeckRepository_Isolation(t *testing.T) {
 		}
 
 		// User 2 should only see their own decks
-		user2Decks, err := deckRepo.FindByUserID(ctx, user2ID)
+		user2Decks, err := deckRepo.FindByUserID(ctx, user2ID, "")
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(user2Decks), 1, "User 2 should have at least 1 deck")
 		for _, d := range user2Decks {

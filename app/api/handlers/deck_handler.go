@@ -87,18 +87,24 @@ func (h *DeckHandler) FindByID(c echo.Context) error {
 
 // FindAll handles GET /api/v1/decks
 // @Summary List all decks
-// @Description Returns all decks belonging to the authenticated user
+// @Description Returns all decks belonging to the authenticated user. Supports optional search parameter for filtering by deck name (case-insensitive partial matching).
 // @Tags decks
 // @Accept json
 // @Produce json
 // @Security BearerAuth
+// @Param search query string false "Search term to filter decks by name (case-insensitive partial matching)"
 // @Success 200 {array} response.DeckResponse
 // @Router /api/v1/decks [get]
 func (h *DeckHandler) FindAll(c echo.Context) error {
 	ctx := c.Request().Context()
 	userID := middlewares.GetUserID(c)
 
-	decks, err := h.deckService.FindByUserID(ctx, userID)
+	var req request.ListDecksRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid query parameters")
+	}
+
+	decks, err := h.deckService.FindByUserID(ctx, userID, req.Search)
 	if err != nil {
 		return err
 	}

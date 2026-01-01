@@ -152,7 +152,7 @@ func (m *mockDeckRepository) FindByID(ctx context.Context, userID int64, deckID 
 	return nil, nil
 }
 
-func (m *mockDeckRepository) FindByUserID(ctx context.Context, userID int64) ([]*deck.Deck, error) {
+func (m *mockDeckRepository) FindByUserID(ctx context.Context, userID int64, search string) ([]*deck.Deck, error) {
 	return nil, nil
 }
 

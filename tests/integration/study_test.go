@@ -129,6 +129,118 @@ func TestStudy_Integration(t *testing.T) {
 		}
 		assert.True(t, found, "Created deck should be in the list")
 
+		// List Decks with Search - Match
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks?search=Integration", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchResults []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &searchResults)
+		assert.NotEmpty(t, searchResults, "Search should find decks containing 'Integration'")
+		found = false
+		for _, d := range searchResults {
+			if d.ID == deckID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Created deck should be found in search results")
+
+		// List Decks with Search - Case Insensitive
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks?search=integration", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var caseInsensitiveResults []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &caseInsensitiveResults)
+		assert.NotEmpty(t, caseInsensitiveResults, "Search should be case-insensitive")
+		found = false
+		for _, d := range caseInsensitiveResults {
+			if d.ID == deckID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Created deck should be found in case-insensitive search")
+
+		// List Decks with Search - Partial Match
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks?search=Updated", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var partialResults []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &partialResults)
+		assert.NotEmpty(t, partialResults, "Search should support partial matching")
+		found = false
+		for _, d := range partialResults {
+			if d.ID == deckID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Created deck should be found in partial search results")
+
+		// List Decks with Search - No Matches
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks?search=NonExistentDeck12345", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var emptyResults []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &emptyResults)
+		assert.Empty(t, emptyResults, "Search with no matches should return empty results")
+
+		// List Decks with Search - Empty String (should return all)
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks?search=", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var allResults []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &allResults)
+		assert.NotEmpty(t, allResults, "Empty search should return all decks")
+
+		// Cross-User Isolation: User B searches for decks that User A has
+		loginResB := registerAndLogin(t, e, "decksearch_userB@example.com", "password123")
+		tokenB := loginResB.AccessToken
+
+		// Create a deck with same name for User B
+		createReqB := request.CreateDeckRequest{
+			Name: "Integration Test Deck",
+		}
+		b, _ = json.Marshal(createReqB)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var deckResB response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &deckResB)
+
+		// User B searches for "Integration" - should only find their own deck
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks?search=Integration", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var userBSearchResults []response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &userBSearchResults)
+		// User B should not see User A's deck
+		for _, d := range userBSearchResults {
+			assert.NotEqual(t, deckID, d.ID, "User B should not see User A's deck in search results")
+			assert.Equal(t, loginResB.User.ID, d.UserID, "User B should only see their own decks")
+		}
+
 		// Delete Deck
 		deleteReq := request.DeleteDeckRequest{Action: request.ActionDeleteCards}
 		b, _ = json.Marshal(deleteReq)

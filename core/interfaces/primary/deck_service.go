@@ -15,7 +15,8 @@ type IDeckService interface {
 	FindByID(ctx context.Context, userID int64, id int64) (*deck.Deck, error)
 
 	// FindByUserID finds all decks for a user
-	FindByUserID(ctx context.Context, userID int64) ([]*deck.Deck, error)
+	// If search is provided (non-empty), filters decks by name using case-insensitive partial matching
+	FindByUserID(ctx context.Context, userID int64, search string) ([]*deck.Deck, error)
 
 	// Update updates an existing deck
 	Update(ctx context.Context, userID int64, id int64, name string, parentID *int64, optionsJSON string) (*deck.Deck, error)

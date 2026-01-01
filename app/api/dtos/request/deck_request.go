@@ -48,3 +48,10 @@ type DeleteDeckRequest struct {
 	TargetDeckID *int64 `json:"target_deck_id,omitempty" example:"10"`
 }
 
+// ListDecksRequest represents the query parameters for listing decks
+// @Description Query parameters for listing decks with optional search
+type ListDecksRequest struct {
+	// Search term to filter decks by name (case-insensitive partial matching)
+	Search string `query:"search" example:"Math"`
+}
+

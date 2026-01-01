@@ -73,8 +73,8 @@ func (m *MockDeckRepository) CreateDefaultDeck(ctx context.Context, uid int64) (
 func (m *MockDeckRepository) FindByID(ctx context.Context, uid, id int64) (*deck.Deck, error) {
 	args := m.Called(ctx, uid, id); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*deck.Deck), args.Error(1)
 }
-func (m *MockDeckRepository) FindByUserID(ctx context.Context, uid int64) ([]*deck.Deck, error) {
-	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*deck.Deck), args.Error(1)
+func (m *MockDeckRepository) FindByUserID(ctx context.Context, uid int64, search string) ([]*deck.Deck, error) {
+	args := m.Called(ctx, uid, search); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*deck.Deck), args.Error(1)
 }
 func (m *MockDeckRepository) FindByParentID(ctx context.Context, uid, pid int64) ([]*deck.Deck, error) {
 	args := m.Called(ctx, uid, pid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*deck.Deck), args.Error(1)

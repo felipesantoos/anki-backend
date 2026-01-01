@@ -64,3 +64,82 @@ func TestNoteTypeService_Update(t *testing.T) {
 	})
 }
 
+func TestNoteTypeService_FindByUserID(t *testing.T) {
+	mockRepo := new(MockNoteTypeRepository)
+	service := noteTypeSvc.NewNoteTypeService(mockRepo)
+	ctx := context.Background()
+	userID := int64(1)
+
+	t.Run("Success with Search", func(t *testing.T) {
+		search := "Basic"
+		nt1, _ := notetype.NewBuilder().WithID(1).WithUserID(userID).WithName("Basic").Build()
+		expectedNoteTypes := []*notetype.NoteType{nt1}
+
+		mockRepo.On("FindByUserID", ctx, userID, search).Return(expectedNoteTypes, nil).Once()
+
+		result, err := service.FindByUserID(ctx, userID, search)
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 1)
+		assert.Equal(t, expectedNoteTypes, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Case-Insensitive Search", func(t *testing.T) {
+		search := "basic" // lowercase search for "Basic"
+		nt1, _ := notetype.NewBuilder().WithID(1).WithUserID(userID).WithName("Basic").Build()
+		expectedNoteTypes := []*notetype.NoteType{nt1}
+
+		mockRepo.On("FindByUserID", ctx, userID, search).Return(expectedNoteTypes, nil).Once()
+
+		result, err := service.FindByUserID(ctx, userID, search)
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 1)
+		assert.Equal(t, expectedNoteTypes, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Partial Match Search", func(t *testing.T) {
+		search := "Basic"
+		nt1, _ := notetype.NewBuilder().WithID(1).WithUserID(userID).WithName("Basic").Build()
+		nt2, _ := notetype.NewBuilder().WithID(2).WithUserID(userID).WithName("Basic with Reverso").Build()
+		expectedNoteTypes := []*notetype.NoteType{nt1, nt2}
+
+		mockRepo.On("FindByUserID", ctx, userID, search).Return(expectedNoteTypes, nil).Once()
+
+		result, err := service.FindByUserID(ctx, userID, search)
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 2)
+		assert.Equal(t, expectedNoteTypes, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("No Matches", func(t *testing.T) {
+		search := "NonExistent"
+		mockRepo.On("FindByUserID", ctx, userID, search).Return([]*notetype.NoteType{}, nil).Once()
+
+		result, err := service.FindByUserID(ctx, userID, search)
+
+		assert.NoError(t, err)
+		assert.Empty(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Empty Search String", func(t *testing.T) {
+		nt1, _ := notetype.NewBuilder().WithID(1).WithUserID(userID).WithName("Basic").Build()
+		nt2, _ := notetype.NewBuilder().WithID(2).WithUserID(userID).WithName("Cloze").Build()
+		expectedNoteTypes := []*notetype.NoteType{nt1, nt2}
+
+		mockRepo.On("FindByUserID", ctx, userID, "").Return(expectedNoteTypes, nil).Once()
+
+		result, err := service.FindByUserID(ctx, userID, "")
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 2)
+		assert.Equal(t, expectedNoteTypes, result)
+		mockRepo.AssertExpectations(t)
+	})
+}
+

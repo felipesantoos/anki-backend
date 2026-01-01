@@ -30,3 +30,9 @@ type UpdateNoteTypeRequest struct {
 	TemplatesJSON string `json:"templates_json" validate:"required"`
 }
 
+// ListNoteTypesRequest represents the query parameters for listing note types
+type ListNoteTypesRequest struct {
+	// Search term to filter note types by name (case-insensitive partial matching)
+	Search string `query:"search" example:"Basic"`
+}
+

@@ -59,7 +59,7 @@ func TestNoteTypeHandler_FindAll(t *testing.T) {
 		c.Set(middlewares.UserIDContextKey, userID)
 
 		nt1, _ := notetype.NewBuilder().WithID(1).WithUserID(userID).WithName("Basic").Build()
-		mockSvc.On("FindByUserID", mock.Anything, userID).Return([]*notetype.NoteType{nt1}, nil).Once()
+		mockSvc.On("FindByUserID", mock.Anything, userID, "").Return([]*notetype.NoteType{nt1}, nil).Once()
 
 		if assert.NoError(t, handler.FindAll(c)) {
 			assert.Equal(t, http.StatusOK, rec.Code)

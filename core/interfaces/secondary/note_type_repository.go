@@ -18,9 +18,9 @@ type INoteTypeRepository interface {
 	// Returns the note type if found and belongs to user, nil if not found, or an error
 	FindByID(ctx context.Context, userID int64, id int64) (*notetype.NoteType, error)
 
-	// FindByUserID finds all note types for a user
+	// FindByUserID finds all note types for a user, with optional search filter
 	// Returns a list of note types belonging to the user
-	FindByUserID(ctx context.Context, userID int64) ([]*notetype.NoteType, error)
+	FindByUserID(ctx context.Context, userID int64, search string) ([]*notetype.NoteType, error)
 
 	// Update updates an existing note type, validating ownership
 	// Returns error if note type doesn't exist or doesn't belong to user

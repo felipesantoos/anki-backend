@@ -63,9 +63,9 @@ func (s *NoteTypeService) FindByID(ctx context.Context, userID int64, id int64) 
 	return s.noteTypeRepo.FindByID(ctx, userID, id)
 }
 
-// FindByUserID finds all note types for a user
-func (s *NoteTypeService) FindByUserID(ctx context.Context, userID int64) ([]*notetype.NoteType, error) {
-	return s.noteTypeRepo.FindByUserID(ctx, userID)
+// FindByUserID finds all note types for a user, with optional search filter
+func (s *NoteTypeService) FindByUserID(ctx context.Context, userID int64, search string) ([]*notetype.NoteType, error) {
+	return s.noteTypeRepo.FindByUserID(ctx, userID, search)
 }
 
 // Update updates an existing note type

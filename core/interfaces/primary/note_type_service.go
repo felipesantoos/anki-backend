@@ -14,8 +14,8 @@ type INoteTypeService interface {
 	// FindByID finds a note type by ID
 	FindByID(ctx context.Context, userID int64, id int64) (*notetype.NoteType, error)
 
-	// FindByUserID finds all note types for a user
-	FindByUserID(ctx context.Context, userID int64) ([]*notetype.NoteType, error)
+	// FindByUserID finds all note types for a user, with optional search filter
+	FindByUserID(ctx context.Context, userID int64, search string) ([]*notetype.NoteType, error)
 
 	// Update updates an existing note type
 	Update(ctx context.Context, userID int64, id int64, name string, fieldsJSON string, cardTypesJSON string, templatesJSON string) (*notetype.NoteType, error)

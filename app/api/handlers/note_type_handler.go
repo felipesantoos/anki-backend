@@ -73,16 +73,23 @@ func (h *NoteTypeHandler) FindByID(c echo.Context) error {
 
 // FindAll handles GET /api/v1/note-types
 // @Summary List note types
+// @Description Returns all note types belonging to the authenticated user, with optional search filter by name (case-insensitive, partial match).
 // @Tags note-types
 // @Produce json
 // @Security BearerAuth
+// @Param search query string false "Search note types by name (case-insensitive, partial match)"
 // @Success 200 {array} response.NoteTypeResponse
 // @Router /api/v1/note-types [get]
 func (h *NoteTypeHandler) FindAll(c echo.Context) error {
 	ctx := c.Request().Context()
 	userID := middlewares.GetUserID(c)
 
-	noteTypes, err := h.service.FindByUserID(ctx, userID)
+	var req request.ListNoteTypesRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid query parameters")
+	}
+
+	noteTypes, err := h.service.FindByUserID(ctx, userID, req.Search)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

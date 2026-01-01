@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
@@ -163,16 +164,33 @@ func (r *NoteTypeRepository) FindByID(ctx context.Context, userID int64, id int6
 	return mappers.NoteTypeToDomain(&model)
 }
 
-// FindByUserID finds all note types for a user
-func (r *NoteTypeRepository) FindByUserID(ctx context.Context, userID int64) ([]*notetype.NoteType, error) {
-	query := `
-		SELECT id, user_id, name, fields_json, card_types_json, templates_json, created_at, updated_at, deleted_at
-		FROM note_types
-		WHERE user_id = $1 AND deleted_at IS NULL
-		ORDER BY name ASC
-	`
+// FindByUserID finds all note types for a user, with optional search filter
+func (r *NoteTypeRepository) FindByUserID(ctx context.Context, userID int64, search string) ([]*notetype.NoteType, error) {
+	var query string
+	var args []interface{}
 
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	if search != "" {
+		// Escape special characters for ILIKE
+		escapedSearch := strings.ReplaceAll(search, "%", "\\%")
+		escapedSearch = strings.ReplaceAll(escapedSearch, "_", "\\_")
+		query = `
+			SELECT id, user_id, name, fields_json, card_types_json, templates_json, created_at, updated_at, deleted_at
+			FROM note_types
+			WHERE user_id = $1 AND deleted_at IS NULL AND name ILIKE $2
+			ORDER BY name ASC
+		`
+		args = []interface{}{userID, "%" + escapedSearch + "%"}
+	} else {
+		query = `
+			SELECT id, user_id, name, fields_json, card_types_json, templates_json, created_at, updated_at, deleted_at
+			FROM note_types
+			WHERE user_id = $1 AND deleted_at IS NULL
+			ORDER BY name ASC
+		`
+		args = []interface{}{userID}
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find note types by user ID: %w", err)
 	}

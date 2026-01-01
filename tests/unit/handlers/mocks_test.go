@@ -273,8 +273,8 @@ func (m *MockNoteTypeService) FindByID(ctx context.Context, userID int64, id int
 	return args.Get(0).(*notetype.NoteType), args.Error(1)
 }
 
-func (m *MockNoteTypeService) FindByUserID(ctx context.Context, userID int64) ([]*notetype.NoteType, error) {
-	args := m.Called(ctx, userID)
+func (m *MockNoteTypeService) FindByUserID(ctx context.Context, userID int64, search string) ([]*notetype.NoteType, error) {
+	args := m.Called(ctx, userID, search)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

@@ -96,8 +96,8 @@ func (m *MockNoteTypeRepository) Save(ctx context.Context, uid int64, nt *notety
 func (m *MockNoteTypeRepository) FindByID(ctx context.Context, uid, id int64) (*notetype.NoteType, error) {
 	args := m.Called(ctx, uid, id); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*notetype.NoteType), args.Error(1)
 }
-func (m *MockNoteTypeRepository) FindByUserID(ctx context.Context, uid int64) ([]*notetype.NoteType, error) {
-	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*notetype.NoteType), args.Error(1)
+func (m *MockNoteTypeRepository) FindByUserID(ctx context.Context, uid int64, search string) ([]*notetype.NoteType, error) {
+	args := m.Called(ctx, uid, search); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*notetype.NoteType), args.Error(1)
 }
 func (m *MockNoteTypeRepository) Update(ctx context.Context, uid, id int64, nt *notetype.NoteType) error { return m.Called(ctx, uid, id, nt).Error(0) }
 func (m *MockNoteTypeRepository) Delete(ctx context.Context, uid, id int64) error { return m.Called(ctx, uid, id).Error(0) }

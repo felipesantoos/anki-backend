@@ -114,6 +114,121 @@ func TestContent_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &ntListRes)
 		assert.NotEmpty(t, ntListRes)
 
+		// List NoteTypes with Search - Match
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types?search=Updated", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchResults []response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &searchResults)
+		assert.NotEmpty(t, searchResults, "Search should find note types containing 'Updated'")
+		found := false
+		for _, nt := range searchResults {
+			if nt.ID == noteTypeID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Created note type should be found in search results")
+
+		// List NoteTypes with Search - Case Insensitive
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types?search=updated", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var caseInsensitiveResults []response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &caseInsensitiveResults)
+		assert.NotEmpty(t, caseInsensitiveResults, "Search should be case-insensitive")
+		found = false
+		for _, nt := range caseInsensitiveResults {
+			if nt.ID == noteTypeID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Created note type should be found in case-insensitive search")
+
+		// List NoteTypes with Search - Partial Match
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types?search=Basic", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var partialResults []response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &partialResults)
+		assert.NotEmpty(t, partialResults, "Search should support partial matching")
+		found = false
+		for _, nt := range partialResults {
+			if nt.ID == noteTypeID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Created note type should be found in partial search results")
+
+		// List NoteTypes with Search - No Matches
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types?search=NonExistentNoteType12345", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var emptyResults []response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &emptyResults)
+		assert.Empty(t, emptyResults, "Search with no matches should return empty results")
+
+		// List NoteTypes with Search - Empty String (should return all)
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types?search=", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var allResults []response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &allResults)
+		assert.NotEmpty(t, allResults, "Empty search should return all note types")
+
+		// Cross-User Isolation: User B searches for note types that User A has
+		loginResB := registerAndLogin(t, e, "notetype_search_userB@example.com", "password123")
+		tokenB := loginResB.AccessToken
+
+		// Create NoteType for User B
+		createReqB := request.CreateNoteTypeRequest{
+			Name:          "User B Note Type",
+			FieldsJSON:    `[{"name": "Front"}]`,
+			CardTypesJSON: `[{"name": "Card 1"}]`,
+			TemplatesJSON: `[{"name": "Template 1"}]`,
+		}
+		b, _ = json.Marshal(createReqB)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+
+		// User B searches for "Updated" - should only find their own note types
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types?search=Updated", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var userBSearchResults []response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &userBSearchResults)
+		// User B should not find User A's note type
+		for _, nt := range userBSearchResults {
+			assert.NotEqual(t, noteTypeID, nt.ID, "User B should not see User A's note type in search results")
+		}
+
+		// User B searches for "User B" - should find their own note type
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types?search=User+B", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &userBSearchResults)
+		assert.NotEmpty(t, userBSearchResults, "User B should find their own note type")
+
 		// Find NoteType by ID
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/note-types/"+strconv.FormatInt(noteTypeID, 10), nil)
 		req.Header.Set("Authorization", "Bearer "+token)

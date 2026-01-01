@@ -383,6 +383,7 @@ func (r *NoteRepository) FindByGUID(ctx context.Context, userID int64, guid stri
 }
 
 // FindByTags finds all notes containing any of the specified tags for a user with pagination
+// Uses case-insensitive comparison to match domain HasTag() behavior
 func (r *NoteRepository) FindByTags(ctx context.Context, userID int64, tags []string, limit int, offset int) ([]*note.Note, error) {
 	if len(tags) == 0 {
 		return []*note.Note{}, nil
@@ -391,7 +392,12 @@ func (r *NoteRepository) FindByTags(ctx context.Context, userID int64, tags []st
 	query := `
 		SELECT DISTINCT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
 		FROM notes
-		WHERE user_id = $1 AND deleted_at IS NULL AND tags && $2::TEXT[]
+		WHERE user_id = $1 
+		  AND deleted_at IS NULL 
+		  AND EXISTS (
+		      SELECT 1 FROM unnest(tags) AS note_tag
+		      WHERE LOWER(note_tag) = ANY(SELECT LOWER(unnest($2::TEXT[])))
+		  )
 		ORDER BY created_at DESC
 		LIMIT $3 OFFSET $4
 	`

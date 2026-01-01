@@ -226,6 +226,110 @@ func TestContent_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &tagFilteredRes)
 		assert.NotEmpty(t, tagFilteredRes)
 
+		// List Notes with Multiple Tags (OR logic) - should find notes with ANY tag
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=integration&tags=updated", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var multiTagRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &multiTagRes)
+		assert.NotEmpty(t, multiTagRes, "Should find notes with any of the specified tags")
+		// Verify at least one note has one of the tags
+		foundTag := false
+		for _, n := range multiTagRes {
+			for _, tag := range n.Tags {
+				if tag == "integration" || tag == "updated" {
+					foundTag = true
+					break
+				}
+			}
+			if foundTag {
+				break
+			}
+		}
+		assert.True(t, foundTag, "At least one note should have one of the specified tags")
+
+		// List Notes with Tag Filter and Pagination
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=integration&limit=1&offset=0", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var tagPaginatedRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &tagPaginatedRes)
+		assert.LessOrEqual(t, len(tagPaginatedRes), 1, "Pagination should limit tag search results")
+
+		// List Notes with Tag Filter - Case Insensitive
+		// Create a note with uppercase tag
+		createNoteWithUppercaseTag := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "Test", "Back": "Test"}`,
+			Tags:       []string{"UPPERCASE-TAG"},
+		}
+		b, _ = json.Marshal(createNoteWithUppercaseTag)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var uppercaseTagNote response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &uppercaseTagNote)
+		
+		// Search with lowercase tag should find the note with uppercase tag
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=uppercase-tag", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var caseInsensitiveRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &caseInsensitiveRes)
+		found := false
+		for _, n := range caseInsensitiveRes {
+			if n.ID == uppercaseTagNote.ID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Tag search should be case-insensitive")
+
+		// List Notes with Tag Filter - Empty Results
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=NonExistentTag12345", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var emptyTagRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &emptyTagRes)
+		assert.Empty(t, emptyTagRes, "Tag search with non-existent tag should return empty results")
+
+		// List Notes with Tag Filter - Special Characters
+		createNoteWithSpecialTag := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "Special", "Back": "Tag"}`,
+			Tags:       []string{"tag-with-dash", "tag_with_underscore"},
+		}
+		b, _ = json.Marshal(createNoteWithSpecialTag)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		
+		// Search for tag with special characters
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=tag-with-dash", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var specialTagRes []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &specialTagRes)
+		assert.NotEmpty(t, specialTagRes, "Should find notes with tags containing special characters")
+
 		// Create additional notes with different field values for search testing
 		createNoteReq2 := request.CreateNoteRequest{
 			NoteTypeID: noteTypeID,
@@ -267,7 +371,7 @@ func TestContent_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &searchRes)
 		assert.NotEmpty(t, searchRes, "Search should find notes containing 'Hello'")
 		// Verify at least one note contains "Hello" in fields
-		found := false
+		found = false
 		for _, n := range searchRes {
 			if n.FieldsJSON != "" {
 				// Check if FieldsJSON contains "Hello" (case-insensitive)
@@ -370,6 +474,19 @@ func TestContent_Integration(t *testing.T) {
 		// User B should not see User A's notes
 		for _, n := range searchResUserB {
 			assert.NotEqual(t, noteID, n.ID, "User B should not see User A's notes in search results")
+		}
+
+		// Cross-User Isolation: User B searches for tags that User A's notes have
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=integration", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var tagSearchResUserB []response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &tagSearchResUserB)
+		// User B should not see User A's notes even if they have matching tags
+		for _, n := range tagSearchResUserB {
+			assert.NotEqual(t, noteID, n.ID, "User B should not see User A's notes in tag search results")
 		}
 
 		// Update Note - Not Found

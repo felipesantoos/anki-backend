@@ -139,6 +139,65 @@ func TestNoteService_FindAll(t *testing.T) {
 		mockNoteRepo.AssertExpectations(t)
 	})
 
+	t.Run("Filter by Tags - Multiple Tags (OR logic)", func(t *testing.T) {
+		tags := []string{"tag1", "tag2", "tag3"}
+		filters := note.NoteFilters{Tags: tags}
+		n1 := &note.Note{}; n1.SetID(1)
+		n2 := &note.Note{}; n2.SetID(2)
+		expectedNotes := []*note.Note{n1, n2}
+		// Should find notes with ANY of the tags (OR logic)
+		mockNoteRepo.On("FindByTags", ctx, userID, tags, 50, 0).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Filter by Tags with Pagination", func(t *testing.T) {
+		tags := []string{"tag1"}
+		filters := note.NoteFilters{Tags: tags, Limit: 10, Offset: 20}
+		n1 := &note.Note{}; n1.SetID(1)
+		expectedNotes := []*note.Note{n1}
+		mockNoteRepo.On("FindByTags", ctx, userID, tags, 10, 20).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Filter by Tags - Empty Tags Array", func(t *testing.T) {
+		tags := []string{}
+		filters := note.NoteFilters{Tags: tags}
+		// Empty tags should return empty results, not call FindByTags
+		mockNoteRepo.On("FindByUserID", ctx, userID, 50, 0).Return([]*note.Note{}, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Empty(t, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Tag Search Priority - Search Takes Precedence", func(t *testing.T) {
+		searchText := "test"
+		tags := []string{"tag1", "tag2"}
+		filters := note.NoteFilters{Search: searchText, Tags: tags}
+		n1 := &note.Note{}; n1.SetID(1)
+		expectedNotes := []*note.Note{n1}
+		// Search should be called, not FindByTags (Search has higher priority)
+		mockNoteRepo.On("FindBySearch", ctx, userID, searchText, 50, 0).Return(expectedNotes, nil).Once()
+
+		result, err := service.FindAll(ctx, userID, filters)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expectedNotes, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
 	t.Run("Filter by Search", func(t *testing.T) {
 		searchText := "hello"
 		filters := note.NoteFilters{Search: searchText}

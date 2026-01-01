@@ -75,15 +75,16 @@ func (h *NoteHandler) FindByID(c echo.Context) error {
 
 // FindAll handles GET /api/v1/notes
 // @Summary List notes
+// @Description List notes with optional filters. Multiple tags use OR logic (returns notes with ANY of the specified tags). Tag search is case-insensitive.
 // @Tags notes
 // @Produce json
 // @Security BearerAuth
 // @Param deck_id query int false "Filter by deck ID"
 // @Param note_type_id query int false "Filter by note type ID"
-// @Param tags query []string false "Filter by tags"
-// @Param search query string false "Search in fields"
-// @Param limit query int false "Pagination limit"
-// @Param offset query int false "Pagination offset"
+// @Param tags query []string false "Filter by tags (OR logic: returns notes with ANY of the specified tags). Case-insensitive."
+// @Param search query string false "Search in fields (takes priority over other filters)"
+// @Param limit query int false "Pagination limit (default: 50)"
+// @Param offset query int false "Pagination offset (default: 0)"
 // @Success 200 {array} response.NoteResponse
 // @Router /api/v1/notes [get]
 func (h *NoteHandler) FindAll(c echo.Context) error {

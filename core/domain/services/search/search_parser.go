@@ -121,12 +121,7 @@ func (p *Parser) processToken(token string, sq *SearchQuery) error {
 		return nil
 	}
 
-	// Handle field searches: field:value or field:name:value
-	if strings.Contains(token, ":") {
-		return p.processFieldToken(token, isNegated, sq)
-	}
-
-	// Handle special prefixes: re:, nc:, w:
+	// Handle special prefixes: re:, nc:, w: (must be checked before field searches)
 	if strings.HasPrefix(token, "re:") {
 		pattern := strings.TrimPrefix(token, "re:")
 		sq.TextSearches = append(sq.TextSearches, TextSearch{
@@ -155,6 +150,11 @@ func (p *Parser) processToken(token string, sq *SearchQuery) error {
 			IsNegated:     isNegated,
 		})
 		return nil
+	}
+
+	// Handle field searches: field:value or field:name:value
+	if strings.Contains(token, ":") {
+		return p.processFieldToken(token, isNegated, sq)
 	}
 
 	// Handle wildcards
@@ -238,6 +238,17 @@ func (p *Parser) processFieldToken(token string, isNegated bool, sq *SearchQuery
 
 	case "front", "back":
 		// Field search: front:text, back:text
+		// Check if value starts with "re:" for regex search
+		if strings.HasPrefix(value, "re:") {
+			pattern := strings.TrimPrefix(value, "re:")
+			sq.TextSearches = append(sq.TextSearches, TextSearch{
+				Text:      pattern,
+				IsRegex:   true,
+				Field:     field,
+				IsNegated: isNegated,
+			})
+			return nil
+		}
 		sq.FieldSearches[field] = value
 
 	default:
@@ -247,8 +258,30 @@ func (p *Parser) processFieldToken(token string, isNegated bool, sq *SearchQuery
 			fieldParts := strings.SplitN(value, ":", 2)
 			fieldName := fieldParts[0]
 			fieldValue := fieldParts[1]
+			// Check if fieldValue starts with "re:" for regex search
+			if strings.HasPrefix(fieldValue, "re:") {
+				pattern := strings.TrimPrefix(fieldValue, "re:")
+				sq.TextSearches = append(sq.TextSearches, TextSearch{
+					Text:      pattern,
+					IsRegex:   true,
+					Field:     fieldName,
+					IsNegated: isNegated,
+				})
+				return nil
+			}
 			sq.FieldSearches[fieldName] = fieldValue
 		} else {
+			// Check if value starts with "re:" for regex search
+			if strings.HasPrefix(value, "re:") {
+				pattern := strings.TrimPrefix(value, "re:")
+				sq.TextSearches = append(sq.TextSearches, TextSearch{
+					Text:      pattern,
+					IsRegex:   true,
+					Field:     field,
+					IsNegated: isNegated,
+				})
+				return nil
+			}
 			// Treat as field name
 			sq.FieldSearches[field] = value
 		}

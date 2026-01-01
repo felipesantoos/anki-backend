@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -447,6 +448,15 @@ func (r *NoteRepository) FindByAdvancedSearch(ctx context.Context, userID int64,
 		return []*note.Note{}, nil
 	}
 
+	// Validate all regex patterns before building query
+	for _, textSearch := range query.TextSearches {
+		if textSearch.IsRegex {
+			if _, err := regexp.Compile(textSearch.Text); err != nil {
+				return nil, fmt.Errorf("invalid regex pattern '%s': %w", textSearch.Text, err)
+			}
+		}
+	}
+
 	// Build dynamic SQL query
 	var conditions []string
 	var args []interface{}
@@ -523,9 +533,17 @@ func (r *NoteRepository) FindByAdvancedSearch(ctx context.Context, userID int64,
 			argIndex++
 		} else if textSearch.IsRegex {
 			// Regex search - use PostgreSQL ~ operator
-			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ~ $%d)", argIndex))
-			args = append(args, textSearch.Text)
-			argIndex++
+			if textSearch.Field != "" {
+				// Field-specific regex search - use LOWER for case-insensitive key matching
+				conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE LOWER(key) = LOWER($%d) AND value ~ $%d)", argIndex, argIndex+1))
+				args = append(args, textSearch.Field, textSearch.Text)
+				argIndex += 2
+			} else {
+				// General regex search (all fields)
+				conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ~ $%d)", argIndex))
+				args = append(args, textSearch.Text)
+				argIndex++
+			}
 		} else {
 			// Regular text search
 			escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")

@@ -88,6 +88,10 @@ func handleSearchError(err error) error {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 
+	if strings.Contains(err.Error(), "invalid regex") || strings.Contains(err.Error(), "regex pattern") {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
 	if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "parse") {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}

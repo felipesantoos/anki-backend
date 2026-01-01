@@ -721,3 +721,154 @@ func TestContent_Integration(t *testing.T) {
 		assert.Equal(t, 0, cardCountAfter, "All cards should be deleted when note is deleted")
 	})
 }
+
+func TestSearch_Regex(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	log := logger.GetLogger()
+	cfg, err := config.Load()
+	require.NoError(t, err)
+
+	// Setup Redis
+	redisRepo, err := redisInfra.NewRedisRepository(cfg.Redis, log)
+	require.NoError(t, err)
+	defer redisRepo.Close()
+
+	// Setup JWT
+	jwtSvc, err := jwt.NewJWTService(cfg.JWT)
+	require.NoError(t, err)
+
+	// Setup Services
+	eventBus := infraEvents.NewInMemoryEventBus(1, 10, log)
+	err = eventBus.Start()
+	require.NoError(t, err)
+	defer eventBus.Stop()
+
+	// Initialize DI Package
+	dicontainer.Init(db, redisRepo, eventBus, jwtSvc, cfg, log)
+
+	// Setup Echo
+	e := echo.New()
+	router := routes.NewRouter(e, cfg, jwtSvc, redisRepo)
+	router.RegisterAuthRoutes()
+	router.RegisterContentRoutes()
+	router.RegisterSearchRoutes()
+
+	// Register and login
+	loginRes := registerAndLogin(t, e, "regex_search_user@example.com", "password123")
+	token := loginRes.AccessToken
+
+	// Create note type
+	var noteTypeID int64
+	err = db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Basic', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+	require.NoError(t, err)
+
+	// Get default deck ID
+	var defaultDeckID int64
+	err = db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default'", loginRes.User.ID).Scan(&defaultDeckID)
+	require.NoError(t, err)
+
+	// Create notes with different field values for regex testing
+	createNoteReq := request.CreateNoteRequest{
+		NoteTypeID: noteTypeID,
+		DeckID:     defaultDeckID,
+		FieldsJSON: `{"Front": "a1", "Back": "test"}`,
+		Tags:       []string{},
+	}
+	b, _ := json.Marshal(createNoteReq)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	createNoteReq = request.CreateNoteRequest{
+		NoteTypeID: noteTypeID,
+		DeckID:     defaultDeckID,
+		FieldsJSON: `{"Front": "b1", "Back": "test"}`,
+		Tags:       []string{},
+	}
+	b, _ = json.Marshal(createNoteReq)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	createNoteReq = request.CreateNoteRequest{
+		NoteTypeID: noteTypeID,
+		DeckID:     defaultDeckID,
+		FieldsJSON: `{"Front": "hello world", "Back": "test"}`,
+		Tags:       []string{},
+	}
+	b, _ = json.Marshal(createNoteReq)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	t.Run("Basic_Regex", func(t *testing.T) {
+		searchReq := request.AdvancedSearchRequest{
+			Query:  "re:hello.*world",
+			Type:   "notes",
+			Limit:  100,
+			Offset: 0,
+		}
+		b, _ := json.Marshal(searchReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/search/advanced", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchRes response.SearchResult
+		json.Unmarshal(rec.Body.Bytes(), &searchRes)
+		assert.Greater(t, searchRes.Total, 0, "Should find at least one note matching regex")
+	})
+
+	t.Run("Field_Regex", func(t *testing.T) {
+		searchReq := request.AdvancedSearchRequest{
+			Query:  "front:re:[a-c]1",
+			Type:   "notes",
+			Limit:  100,
+			Offset: 0,
+		}
+		b, _ := json.Marshal(searchReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/search/advanced", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchRes response.SearchResult
+		json.Unmarshal(rec.Body.Bytes(), &searchRes)
+		assert.GreaterOrEqual(t, searchRes.Total, 2, "Should find at least 2 notes (a1 and b1)")
+	})
+
+	t.Run("Invalid_Regex", func(t *testing.T) {
+		searchReq := request.AdvancedSearchRequest{
+			Query:  "re:[invalid",
+			Type:   "notes",
+			Limit:  100,
+			Offset: 0,
+		}
+		b, _ := json.Marshal(searchReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/search/advanced", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code, "Invalid regex should return 400 Bad Request")
+		var errorRes map[string]interface{}
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Contains(t, errorRes["message"].(string), "invalid regex", "Error message should mention invalid regex")
+	})
+}

@@ -105,6 +105,50 @@ func TestParser_Parse(t *testing.T) {
 		assert.Equal(t, "hello.*world", query.TextSearches[0].Text)
 	})
 
+	t.Run("Field regex search - front", func(t *testing.T) {
+		query, err := parser.Parse("front:re:[a-c]1")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsRegex)
+		assert.Equal(t, "[a-c]1", query.TextSearches[0].Text)
+		assert.Equal(t, "front", query.TextSearches[0].Field)
+		assert.Empty(t, query.FieldSearches)
+	})
+
+	t.Run("Field regex search - back", func(t *testing.T) {
+		query, err := parser.Parse("back:re:hello.*world")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsRegex)
+		assert.Equal(t, "hello.*world", query.TextSearches[0].Text)
+		assert.Equal(t, "back", query.TextSearches[0].Field)
+		assert.Empty(t, query.FieldSearches)
+	})
+
+	t.Run("Field regex search - generic field", func(t *testing.T) {
+		query, err := parser.Parse("field:name:re:pattern")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsRegex)
+		assert.Equal(t, "pattern", query.TextSearches[0].Text)
+		assert.Equal(t, "name", query.TextSearches[0].Field)
+		assert.Empty(t, query.FieldSearches)
+	})
+
+	t.Run("Field regex search - negated", func(t *testing.T) {
+		query, err := parser.Parse("-front:re:pattern")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsRegex)
+		assert.True(t, query.TextSearches[0].IsNegated)
+		assert.Equal(t, "pattern", query.TextSearches[0].Text)
+		assert.Equal(t, "front", query.TextSearches[0].Field)
+	})
+
 	t.Run("Complex query", func(t *testing.T) {
 		query, err := parser.Parse("deck:Default tag:vocabulary front:hello -tag:marked")
 		assert.NoError(t, err)

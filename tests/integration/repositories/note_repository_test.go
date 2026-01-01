@@ -2,6 +2,8 @@ package repositories
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
+	searchdomain "github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
 	"github.com/felipesantos/anki-backend/pkg/ownership"
@@ -365,5 +368,120 @@ func TestNoteRepository_Exists(t *testing.T) {
 	exists, err = noteRepo.Exists(ctx, userID, 99999)
 	require.NoError(t, err)
 	assert.False(t, exists)
+}
+
+func TestNoteRepository_FindByAdvancedSearch_Regex(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+	parser := searchdomain.NewParser()
+
+	userID, _ := createTestUser(t, ctx, userRepo, "note_regex_search")
+
+	// Create note type with Front and Back fields
+	noteType, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID, noteType)
+	require.NoError(t, err)
+	noteTypeID := noteType.GetID()
+
+	// Create test notes with different field values
+	counter := 0
+	createNote := func(front, back string) int64 {
+		counter++
+		guid, err := valueobjects.NewGUID(fmt.Sprintf("550e8400-e29b-41d4-a716-44665544%04d", counter))
+		require.NoError(t, err)
+
+		noteEntity, err := note.NewBuilder().
+			WithID(0).
+			WithUserID(userID).
+			WithGUID(guid).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(fmt.Sprintf(`{"Front":"%s","Back":"%s"}`, front, back)).
+			WithTags([]string{}).
+			WithMarked(false).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+
+		err = noteRepo.Save(ctx, userID, noteEntity)
+		require.NoError(t, err)
+		return noteEntity.GetID()
+	}
+
+	// Create notes: a1, b1, c1 in Front; 123, 456 in Back; hello world in Front
+	_ = createNote("a1", "test")
+	_ = createNote("b1", "test")
+	_ = createNote("c1", "test")
+	_ = createNote("test", "123")
+	_ = createNote("test", "456")
+	_ = createNote("hello world", "test")
+
+	t.Run("Basic_Regex", func(t *testing.T) {
+		query, err := parser.Parse("re:hello.*world")
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.Len(t, notes, 1)
+		assert.Contains(t, notes[0].GetFieldsJSON(), "hello world")
+	})
+
+	t.Run("Field_Regex_Front", func(t *testing.T) {
+		query, err := parser.Parse("front:re:[a-c]1")
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.Len(t, notes, 3) // Should match a1, b1, c1
+		for _, n := range notes {
+			fields := n.GetFieldsJSON()
+			// Check if fields contain the expected values (JSON order and spacing may vary)
+			assert.True(t, strings.Contains(fields, `"Front":"a1"`) || strings.Contains(fields, `"Front": "a1"`) ||
+				strings.Contains(fields, `"Front":"b1"`) || strings.Contains(fields, `"Front": "b1"`) ||
+				strings.Contains(fields, `"Front":"c1"`) || strings.Contains(fields, `"Front": "c1"`), "Should contain a1, b1, or c1 in Front field")
+			assert.True(t, strings.Contains(fields, `"Back":"test"`) || strings.Contains(fields, `"Back": "test"`), "Should contain Back:test")
+		}
+	})
+
+	t.Run("Field_Regex_Back", func(t *testing.T) {
+		query, err := parser.Parse("back:re:\\d{3}")
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.Len(t, notes, 2) // Should match 123 and 456
+		for _, n := range notes {
+			fields := n.GetFieldsJSON()
+			// Check if fields contain the expected values (JSON order and spacing may vary)
+			assert.True(t, strings.Contains(fields, `"Front":"test"`) || strings.Contains(fields, `"Front": "test"`), "Should contain Front:test")
+			assert.True(t, strings.Contains(fields, `"Back":"123"`) || strings.Contains(fields, `"Back": "123"`) ||
+				strings.Contains(fields, `"Back":"456"`) || strings.Contains(fields, `"Back": "456"`), "Should contain Back:123 or Back:456")
+		}
+	})
+
+	t.Run("Invalid_Regex", func(t *testing.T) {
+		query, err := parser.Parse("re:[invalid")
+		require.NoError(t, err) // Parser should accept it
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid regex pattern")
+		assert.Nil(t, notes)
+	})
 }
 

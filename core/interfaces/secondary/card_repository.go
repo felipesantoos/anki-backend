@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
+	"github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 )
 
@@ -54,5 +55,9 @@ type ICardRepository interface {
 
 	// DeleteByDeckRecursive deletes all cards from a deck and its sub-decks
 	DeleteByDeckRecursive(ctx context.Context, userID int64, deckID int64) error
+
+	// FindByAdvancedSearch finds cards matching advanced search criteria
+	// Used for is:new, is:due, is:review, prop: filters
+	FindByAdvancedSearch(ctx context.Context, userID int64, query *search.SearchQuery) ([]*card.Card, error)
 }
 

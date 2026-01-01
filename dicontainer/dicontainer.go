@@ -18,6 +18,7 @@ import (
 	notetypeService "github.com/felipesantos/anki-backend/core/services/notetype"
 	profileService "github.com/felipesantos/anki-backend/core/services/profile"
 	reviewService "github.com/felipesantos/anki-backend/core/services/review"
+	searchService "github.com/felipesantos/anki-backend/core/services/search"
 	sessionService "github.com/felipesantos/anki-backend/core/services/session"
 	shareddeckService "github.com/felipesantos/anki-backend/core/services/shareddeck"
 	shareddeckratingService "github.com/felipesantos/anki-backend/core/services/shareddeckrating"
@@ -119,6 +120,13 @@ func GetNoteService() primary.INoteService {
 	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
 	tm := database.NewTransactionManager(dbRepo.GetDB())
 	return noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tm)
+}
+
+// GetSearchService returns a fresh instance of SearchService
+func GetSearchService() primary.ISearchService {
+	noteRepo := repositories.NewNoteRepository(dbRepo.GetDB())
+	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
+	return searchService.NewSearchService(noteRepo, cardRepo)
 }
 
 // GetUserService returns a fresh instance of UserService

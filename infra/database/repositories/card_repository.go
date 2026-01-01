@@ -5,9 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
+	"github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/infra/database/mappers"
@@ -660,6 +663,183 @@ func (r *CardRepository) DeleteByDeckRecursive(ctx context.Context, userID int64
 	}
 
 	return nil
+}
+
+// FindByAdvancedSearch finds cards matching advanced search criteria
+// Used for is:new, is:due, is:review, prop: filters
+func (r *CardRepository) FindByAdvancedSearch(ctx context.Context, userID int64, query *search.SearchQuery) ([]*card.Card, error) {
+	if query == nil {
+		return []*card.Card{}, nil
+	}
+
+	// Build dynamic SQL query
+	var conditions []string
+	var args []interface{}
+	argIndex := 1
+
+	// Base condition: ownership via deck JOIN
+	conditions = append(conditions, "d.user_id = $1")
+	args = append(args, userID)
+	argIndex++
+
+	conditions = append(conditions, "d.deleted_at IS NULL")
+
+	// Card state filters
+	for _, state := range query.States {
+		switch state {
+		case "new":
+			conditions = append(conditions, "c.state = 'new'")
+		case "review":
+			conditions = append(conditions, "c.state = 'review'")
+		case "learn":
+			conditions = append(conditions, "c.state IN ('learn', 'relearn')")
+		case "suspended":
+			conditions = append(conditions, "c.suspended = TRUE")
+		case "buried":
+			conditions = append(conditions, "c.buried = TRUE")
+		case "due":
+			// Cards that are due: due <= now and not suspended/buried
+			now := time.Now().Unix() * 1000 // Convert to milliseconds
+			conditions = append(conditions, fmt.Sprintf("c.due <= $%d AND c.suspended = FALSE AND c.buried = FALSE", argIndex))
+			args = append(args, now)
+			argIndex++
+		case "marked":
+			// Join with notes table to check marked
+			conditions = append(conditions, "EXISTS (SELECT 1 FROM notes n WHERE n.id = c.note_id AND n.marked = TRUE AND n.user_id = $1)")
+		}
+	}
+
+	// Flag filters
+	if len(query.Flags) > 0 {
+		flagConditions := make([]string, len(query.Flags))
+		for i, flag := range query.Flags {
+			flagConditions[i] = fmt.Sprintf("c.flag = $%d", argIndex)
+			args = append(args, flag)
+			argIndex++
+		}
+		conditions = append(conditions, "("+strings.Join(flagConditions, " OR ")+")")
+	}
+
+	// Property filters
+	for _, propFilter := range query.PropertyFilters {
+		switch propFilter.Property {
+		case "ivl":
+			// Interval filter
+			val, err := strconv.Atoi(propFilter.Value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid interval value: %s", propFilter.Value)
+			}
+			conditions = append(conditions, fmt.Sprintf("c.interval %s $%d", propFilter.Operator, argIndex))
+			args = append(args, val)
+			argIndex++
+		case "due":
+			// Due date filter (relative days)
+			val, err := strconv.Atoi(propFilter.Value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid due value: %s", propFilter.Value)
+			}
+			// Calculate target timestamp (val days from now, in milliseconds)
+			now := time.Now()
+			targetTime := now.AddDate(0, 0, val)
+			targetTimestamp := targetTime.Unix() * 1000
+			conditions = append(conditions, fmt.Sprintf("c.due %s $%d", propFilter.Operator, argIndex))
+			args = append(args, targetTimestamp)
+			argIndex++
+		case "lapses":
+			// Lapses filter
+			val, err := strconv.Atoi(propFilter.Value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid lapses value: %s", propFilter.Value)
+			}
+			conditions = append(conditions, fmt.Sprintf("c.lapses %s $%d", propFilter.Operator, argIndex))
+			args = append(args, val)
+			argIndex++
+		case "reps":
+			// Reps filter
+			val, err := strconv.Atoi(propFilter.Value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid reps value: %s", propFilter.Value)
+			}
+			conditions = append(conditions, fmt.Sprintf("c.reps %s $%d", propFilter.Operator, argIndex))
+			args = append(args, val)
+			argIndex++
+		}
+	}
+
+	// Build final query
+	baseQuery := `
+		SELECT c.id, c.note_id, c.card_type_id, c.deck_id, c.home_deck_id, c.due, c.interval, c.ease, 
+		       c.lapses, c.reps, c.state, c.position, c.flag, c.suspended, c.buried, 
+		       c.stability, c.difficulty, c.last_review_at, c.created_at, c.updated_at
+		FROM cards c
+		INNER JOIN decks d ON c.deck_id = d.id
+	`
+
+	whereClause := strings.Join(conditions, " AND ")
+	queryStr := baseQuery + " WHERE " + whereClause + " ORDER BY c.created_at DESC"
+
+	rows, err := r.db.QueryContext(ctx, queryStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find cards by advanced search: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanCards(rows)
+}
+
+// scanCards scans rows into card entities
+func (r *CardRepository) scanCards(rows *sql.Rows) ([]*card.Card, error) {
+	var cards []*card.Card
+	for rows.Next() {
+		var model models.CardModel
+		var homeDeckID sql.NullInt64
+		var stability sql.NullFloat64
+		var difficulty sql.NullFloat64
+		var lastReviewAt sql.NullTime
+
+		err := rows.Scan(
+			&model.ID,
+			&model.NoteID,
+			&model.CardTypeID,
+			&model.DeckID,
+			&homeDeckID,
+			&model.Due,
+			&model.Interval,
+			&model.Ease,
+			&model.Lapses,
+			&model.Reps,
+			&model.State,
+			&model.Position,
+			&model.Flag,
+			&model.Suspended,
+			&model.Buried,
+			&stability,
+			&difficulty,
+			&lastReviewAt,
+			&model.CreatedAt,
+			&model.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan card: %w", err)
+		}
+
+		model.HomeDeckID = homeDeckID
+		model.Stability = stability
+		model.Difficulty = difficulty
+		model.LastReviewAt = lastReviewAt
+
+		cardEntity, err := mappers.CardToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert card to domain: %w", err)
+		}
+		cards = append(cards, cardEntity)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating cards: %w", err)
+	}
+
+	return cards, nil
 }
 
 // Ensure CardRepository implements ICardRepository

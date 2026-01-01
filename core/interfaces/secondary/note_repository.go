@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
+	"github.com/felipesantos/anki-backend/core/domain/services/search"
 )
 
 // INoteRepository defines the interface for note data persistence
@@ -48,4 +49,8 @@ type INoteRepository interface {
 
 	// FindByGUID finds a note by GUID, filtering by userID to ensure ownership
 	FindByGUID(ctx context.Context, userID int64, guid string) (*note.Note, error)
+
+	// FindByAdvancedSearch finds notes matching advanced search criteria
+	// Combines multiple filters: deck, tags, fields, card states, properties
+	FindByAdvancedSearch(ctx context.Context, userID int64, query *search.SearchQuery, limit int, offset int) ([]*note.Note, error)
 }

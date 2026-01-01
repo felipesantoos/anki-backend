@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
+	"github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/infra/database/mappers"
 	"github.com/felipesantos/anki-backend/infra/database/models"
@@ -426,6 +428,140 @@ func (r *NoteRepository) FindBySearch(ctx context.Context, userID int64, searchT
 	rows, err := r.db.QueryContext(ctx, query, userID, searchText, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find notes by search: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanNotes(rows)
+}
+
+// FindByAdvancedSearch finds notes matching advanced search criteria
+// Combines multiple filters: deck, tags, fields, card states, properties
+func (r *NoteRepository) FindByAdvancedSearch(ctx context.Context, userID int64, query *search.SearchQuery, limit int, offset int) ([]*note.Note, error) {
+	if query == nil {
+		return []*note.Note{}, nil
+	}
+
+	// Build dynamic SQL query
+	var conditions []string
+	var args []interface{}
+	argIndex := 1
+
+	// Base conditions
+	conditions = append(conditions, fmt.Sprintf("n.user_id = $%d", argIndex))
+	args = append(args, userID)
+	argIndex++
+
+	conditions = append(conditions, "n.deleted_at IS NULL")
+
+	// Deck filters
+	if len(query.DecksInclude) > 0 {
+		// Multiple decks with OR logic
+		deckConditions := make([]string, len(query.DecksInclude))
+		for i, deckName := range query.DecksInclude {
+			deckConditions[i] = fmt.Sprintf("EXISTS (SELECT 1 FROM cards c JOIN decks d ON c.deck_id = d.id WHERE c.note_id = n.id AND d.user_id = $%d AND d.name = $%d)", argIndex, argIndex+1)
+			args = append(args, userID, deckName)
+			argIndex += 2
+		}
+		conditions = append(conditions, "("+strings.Join(deckConditions, " OR ")+")")
+	}
+	if len(query.DecksExclude) > 0 {
+		for _, deckName := range query.DecksExclude {
+			conditions = append(conditions, fmt.Sprintf("NOT EXISTS (SELECT 1 FROM cards c JOIN decks d ON c.deck_id = d.id WHERE c.note_id = n.id AND d.user_id = $%d AND d.name = $%d)", argIndex, argIndex+1))
+			args = append(args, userID, deckName)
+			argIndex += 2
+		}
+	}
+
+	// Tag filters
+	if len(query.TagsInclude) > 0 {
+		conditions = append(conditions, fmt.Sprintf("n.tags && $%d::TEXT[]", argIndex))
+		args = append(args, pq.Array(query.TagsInclude))
+		argIndex++
+	}
+	if len(query.TagsExclude) > 0 {
+		for _, tag := range query.TagsExclude {
+			conditions = append(conditions, fmt.Sprintf("NOT ($%d::TEXT = ANY(n.tags))", argIndex))
+			args = append(args, tag)
+			argIndex++
+		}
+	}
+
+	// Field searches (front:, back:, field:name:)
+	for fieldName, searchText := range query.FieldSearches {
+		// Escape search text for ILIKE
+		escapedText := strings.ReplaceAll(searchText, "%", "\\%")
+		escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
+		conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE key = $%d AND value ILIKE $%d)", argIndex, argIndex+1))
+		args = append(args, fieldName, "%"+escapedText+"%")
+		argIndex += 2
+	}
+
+	// Text searches (general text in all fields)
+	for _, textSearch := range query.TextSearches {
+		if textSearch.IsNegated {
+			continue // Handle negation separately if needed
+		}
+
+		if textSearch.IsExact {
+			// Exact phrase search
+			escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")
+			escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
+			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
+			args = append(args, "%"+escapedText+"%")
+			argIndex++
+		} else if textSearch.IsWildcard {
+			// Wildcard search - convert * to % and _ to _
+			wildcardText := strings.ReplaceAll(textSearch.Text, "*", "%")
+			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
+			args = append(args, wildcardText)
+			argIndex++
+		} else if textSearch.IsRegex {
+			// Regex search - use PostgreSQL ~ operator
+			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ~ $%d)", argIndex))
+			args = append(args, textSearch.Text)
+			argIndex++
+		} else {
+			// Regular text search
+			escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")
+			escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
+			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
+			args = append(args, "%"+escapedText+"%")
+			argIndex++
+		}
+	}
+
+	// State filters (is:marked) - need to check note.marked
+	for _, state := range query.States {
+		if state == "marked" {
+			conditions = append(conditions, "n.marked = TRUE")
+		}
+	}
+
+	// Build final query
+	baseQuery := `
+		SELECT DISTINCT n.id, n.user_id, n.guid, n.note_type_id, n.fields_json, n.tags, n.marked, n.created_at, n.updated_at, n.deleted_at
+		FROM notes n
+	`
+	
+	// Add JOINs if needed for deck filters
+	needsCardJoin := len(query.DecksInclude) > 0 || len(query.DecksExclude) > 0
+	if needsCardJoin {
+		baseQuery = `
+			SELECT DISTINCT n.id, n.user_id, n.guid, n.note_type_id, n.fields_json, n.tags, n.marked, n.created_at, n.updated_at, n.deleted_at
+			FROM notes n
+		`
+	}
+
+	whereClause := strings.Join(conditions, " AND ")
+	queryStr := baseQuery + " WHERE " + whereClause + " ORDER BY n.created_at DESC"
+
+	// Add pagination
+	queryStr += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, queryStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find notes by advanced search: %w", err)
 	}
 	defer rows.Close()
 

@@ -518,39 +518,94 @@ func (r *NoteRepository) FindByAdvancedSearch(ctx context.Context, userID int64,
 			continue // Handle negation separately if needed
 		}
 
-		if textSearch.IsExact {
-			// Exact phrase search
-			escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")
-			escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
-			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
-			args = append(args, "%"+escapedText+"%")
-			argIndex++
-		} else if textSearch.IsWildcard {
-			// Wildcard search - convert * to % and _ to _
-			wildcardText := strings.ReplaceAll(textSearch.Text, "*", "%")
-			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
-			args = append(args, wildcardText)
-			argIndex++
-		} else if textSearch.IsRegex {
-			// Regex search - use PostgreSQL ~ operator
-			if textSearch.Field != "" {
-				// Field-specific regex search - use LOWER for case-insensitive key matching
-				conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE LOWER(key) = LOWER($%d) AND value ~ $%d)", argIndex, argIndex+1))
+		// Handle field-specific searches (when textSearch.Field is set)
+		if textSearch.Field != "" {
+			if textSearch.IsExact {
+				// Exact phrase search in specific field
+				escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")
+				escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
+				if textSearch.IsNoCombining {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE LOWER(key) = LOWER($%d) AND unaccent(LOWER(value)) ILIKE LOWER($%d))", argIndex, argIndex+1))
+				} else {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE key = $%d AND value ILIKE $%d)", argIndex, argIndex+1))
+				}
+				args = append(args, textSearch.Field, "%"+escapedText+"%")
+				argIndex += 2
+			} else if textSearch.IsWildcard {
+				// Wildcard search in specific field
+				wildcardText := strings.ReplaceAll(textSearch.Text, "*", "%")
+				if textSearch.IsNoCombining {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE LOWER(key) = LOWER($%d) AND unaccent(LOWER(value)) ILIKE LOWER($%d))", argIndex, argIndex+1))
+				} else {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE key = $%d AND value ILIKE $%d)", argIndex, argIndex+1))
+				}
+				args = append(args, textSearch.Field, wildcardText)
+				argIndex += 2
+			} else if textSearch.IsRegex {
+				// Field-specific regex search
+				if textSearch.IsNoCombining {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE LOWER(key) = LOWER($%d) AND unaccent(LOWER(value)) ~ LOWER($%d))", argIndex, argIndex+1))
+				} else {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE LOWER(key) = LOWER($%d) AND value ~ $%d)", argIndex, argIndex+1))
+				}
 				args = append(args, textSearch.Field, textSearch.Text)
 				argIndex += 2
 			} else {
-				// General regex search (all fields)
-				conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ~ $%d)", argIndex))
-				args = append(args, textSearch.Text)
-				argIndex++
+				// Regular text search in specific field
+				escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")
+				escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
+				if textSearch.IsNoCombining {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE LOWER(key) = LOWER($%d) AND unaccent(LOWER(value)) ILIKE LOWER($%d))", argIndex, argIndex+1))
+				} else {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE key = $%d AND value ILIKE $%d)", argIndex, argIndex+1))
+				}
+				args = append(args, textSearch.Field, "%"+escapedText+"%")
+				argIndex += 2
 			}
 		} else {
-			// Regular text search
-			escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")
-			escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
-			conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
-			args = append(args, "%"+escapedText+"%")
-			argIndex++
+			// General text searches (all fields)
+			if textSearch.IsExact {
+				// Exact phrase search
+				escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")
+				escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
+				if textSearch.IsNoCombining {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE unaccent(LOWER(value)) ILIKE LOWER($%d))", argIndex))
+				} else {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
+				}
+				args = append(args, "%"+escapedText+"%")
+				argIndex++
+			} else if textSearch.IsWildcard {
+				// Wildcard search - convert * to % and _ to _
+				wildcardText := strings.ReplaceAll(textSearch.Text, "*", "%")
+				if textSearch.IsNoCombining {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE unaccent(LOWER(value)) ILIKE LOWER($%d))", argIndex))
+				} else {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
+				}
+				args = append(args, wildcardText)
+				argIndex++
+			} else if textSearch.IsRegex {
+				// General regex search (all fields)
+				if textSearch.IsNoCombining {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE unaccent(LOWER(value)) ~ LOWER($%d))", argIndex))
+				} else {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ~ $%d)", argIndex))
+				}
+				args = append(args, textSearch.Text)
+				argIndex++
+			} else {
+				// Regular text search
+				escapedText := strings.ReplaceAll(textSearch.Text, "%", "\\%")
+				escapedText = strings.ReplaceAll(escapedText, "_", "\\_")
+				if textSearch.IsNoCombining {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE unaccent(LOWER(value)) ILIKE LOWER($%d))", argIndex))
+				} else {
+					conditions = append(conditions, fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_each_text(n.fields_json) WHERE value ILIKE $%d)", argIndex))
+				}
+				args = append(args, "%"+escapedText+"%")
+				argIndex++
+			}
 		}
 	}
 

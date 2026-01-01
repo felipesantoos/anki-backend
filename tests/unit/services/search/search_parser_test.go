@@ -158,5 +158,89 @@ func TestParser_Parse(t *testing.T) {
 		assert.Len(t, query.TagsExclude, 1)
 		assert.Equal(t, "hello", query.FieldSearches["front"])
 	})
+
+	t.Run("No combining search - basic", func(t *testing.T) {
+		query, err := parser.Parse("nc:uber")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsNoCombining)
+		assert.Equal(t, "uber", query.TextSearches[0].Text)
+		assert.False(t, query.TextSearches[0].IsNegated)
+	})
+
+	t.Run("No combining search - exact phrase", func(t *testing.T) {
+		query, err := parser.Parse(`nc:"exact phrase"`)
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsNoCombining)
+		assert.True(t, query.TextSearches[0].IsExact)
+		assert.Equal(t, "exact phrase", query.TextSearches[0].Text)
+	})
+
+	t.Run("No combining search - negated", func(t *testing.T) {
+		query, err := parser.Parse("-nc:cafe")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsNoCombining)
+		assert.True(t, query.TextSearches[0].IsNegated)
+		assert.Equal(t, "cafe", query.TextSearches[0].Text)
+	})
+
+	t.Run("No combining search - field search front", func(t *testing.T) {
+		query, err := parser.Parse("front:nc:cafe")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsNoCombining)
+		assert.Equal(t, "cafe", query.TextSearches[0].Text)
+		assert.Equal(t, "front", query.TextSearches[0].Field)
+		assert.Empty(t, query.FieldSearches)
+	})
+
+	t.Run("No combining search - field search back", func(t *testing.T) {
+		query, err := parser.Parse("back:nc:acao")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsNoCombining)
+		assert.Equal(t, "acao", query.TextSearches[0].Text)
+		assert.Equal(t, "back", query.TextSearches[0].Field)
+		assert.Empty(t, query.FieldSearches)
+	})
+
+	t.Run("No combining search - generic field", func(t *testing.T) {
+		query, err := parser.Parse("field:name:nc:texto")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsNoCombining)
+		assert.Equal(t, "texto", query.TextSearches[0].Text)
+		assert.Equal(t, "name", query.TextSearches[0].Field)
+		assert.Empty(t, query.FieldSearches)
+	})
+
+	t.Run("No combining search - with wildcard", func(t *testing.T) {
+		query, err := parser.Parse("nc:cafe*")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsNoCombining)
+		assert.True(t, query.TextSearches[0].IsWildcard)
+		assert.Equal(t, "cafe*", query.TextSearches[0].Text)
+	})
+
+	t.Run("No combining search - complex query", func(t *testing.T) {
+		query, err := parser.Parse("deck:Default nc:cafe tag:vocabulary")
+		assert.NoError(t, err)
+		assert.NotNil(t, query)
+		assert.Len(t, query.DecksInclude, 1)
+		assert.Len(t, query.TagsInclude, 1)
+		assert.Len(t, query.TextSearches, 1)
+		assert.True(t, query.TextSearches[0].IsNoCombining)
+		assert.Equal(t, "cafe", query.TextSearches[0].Text)
+	})
 }
 

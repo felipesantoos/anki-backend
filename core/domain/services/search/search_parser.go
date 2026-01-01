@@ -55,18 +55,17 @@ func (p *Parser) tokenize(query string) []string {
 	for i, r := range query {
 		if r == '"' {
 			if inQuotes {
-				// End of quoted string
-				if current.Len() > 0 {
-					tokens = append(tokens, `"`+current.String()+`"`)
-					current.Reset()
-				}
-				inQuotes = false
-			} else {
-				// Start of quoted string
+				// End of quoted string - include the quote and add to current token
+				current.WriteRune(r)
 				if current.Len() > 0 {
 					tokens = append(tokens, current.String())
 					current.Reset()
 				}
+				inQuotes = false
+			} else {
+				// Start of quoted string - check if current token has a prefix (nc:, re:, etc.)
+				// If so, keep it as part of the same token
+				current.WriteRune(r)
 				inQuotes = true
 			}
 		} else if r == ' ' && !inQuotes {
@@ -134,9 +133,18 @@ func (p *Parser) processToken(token string, sq *SearchQuery) error {
 
 	if strings.HasPrefix(token, "nc:") {
 		text := strings.TrimPrefix(token, "nc:")
+		// Check if text is a quoted string (exact phrase)
+		isExact := strings.HasPrefix(text, `"`) && strings.HasSuffix(text, `"`)
+		if isExact {
+			text = strings.Trim(text, `"`)
+		}
+		// Check if text contains wildcards
+		isWildcard := strings.Contains(text, "*") || strings.Contains(text, "_")
 		sq.TextSearches = append(sq.TextSearches, TextSearch{
 			Text:          text,
 			IsNoCombining: true,
+			IsExact:       isExact,
+			IsWildcard:    isWildcard,
 			IsNegated:     isNegated,
 		})
 		return nil
@@ -249,6 +257,17 @@ func (p *Parser) processFieldToken(token string, isNegated bool, sq *SearchQuery
 			})
 			return nil
 		}
+		// Check if value starts with "nc:" for no-combining (accent-insensitive) search
+		if strings.HasPrefix(value, "nc:") {
+			text := strings.TrimPrefix(value, "nc:")
+			sq.TextSearches = append(sq.TextSearches, TextSearch{
+				Text:          text,
+				IsNoCombining: true,
+				Field:         field,
+				IsNegated:     isNegated,
+			})
+			return nil
+		}
 		sq.FieldSearches[field] = value
 
 	default:
@@ -269,6 +288,17 @@ func (p *Parser) processFieldToken(token string, isNegated bool, sq *SearchQuery
 				})
 				return nil
 			}
+			// Check if fieldValue starts with "nc:" for no-combining (accent-insensitive) search
+			if strings.HasPrefix(fieldValue, "nc:") {
+				text := strings.TrimPrefix(fieldValue, "nc:")
+				sq.TextSearches = append(sq.TextSearches, TextSearch{
+					Text:          text,
+					IsNoCombining: true,
+					Field:         fieldName,
+					IsNegated:     isNegated,
+				})
+				return nil
+			}
 			sq.FieldSearches[fieldName] = fieldValue
 		} else {
 			// Check if value starts with "re:" for regex search
@@ -279,6 +309,17 @@ func (p *Parser) processFieldToken(token string, isNegated bool, sq *SearchQuery
 					IsRegex:   true,
 					Field:     field,
 					IsNegated: isNegated,
+				})
+				return nil
+			}
+			// Check if value starts with "nc:" for no-combining (accent-insensitive) search
+			if strings.HasPrefix(value, "nc:") {
+				text := strings.TrimPrefix(value, "nc:")
+				sq.TextSearches = append(sq.TextSearches, TextSearch{
+					Text:          text,
+					IsNoCombining: true,
+					Field:         field,
+					IsNegated:     isNegated,
 				})
 				return nil
 			}

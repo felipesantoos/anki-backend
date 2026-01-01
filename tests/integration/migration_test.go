@@ -192,7 +192,7 @@ func ensureMigrationsUp(t *testing.T, m *migrate.Migrate, db *sql.DB) {
 	version, dirty, err = m.Version()
 	require.NoError(t, err, "Should get migration version after up")
 	assert.False(t, dirty, "Database should not be in dirty state after up")
-	assert.Equal(t, uint(1), version, "Migration version should be 1")
+	assert.Equal(t, uint(2), version, "Migration version should be 2")
 }
 
 func TestMigration_Up(t *testing.T) {
@@ -202,12 +202,12 @@ func TestMigration_Up(t *testing.T) {
 	m, mCleanup := getMigrator(t, db.DB)
 	defer mCleanup()
 
-	// Ensure we start fresh - go down one step if at version 1
+	// Ensure we start fresh - go down to version 0 if at any version
 	version, dirty, err := m.Version()
 	if err == nil && version > 0 {
-		err = m.Steps(-1)
+		err = m.Steps(-int(version))
 		if err != nil && err != migrate.ErrNilVersion {
-			require.NoError(t, err, "Steps(-1) should succeed or return ErrNilVersion")
+			require.NoError(t, err, "Steps should succeed or return ErrNilVersion")
 		}
 	}
 
@@ -220,7 +220,7 @@ func TestMigration_Up(t *testing.T) {
 	// Verify migration version
 	version, dirty, err = m.Version()
 	require.NoError(t, err, "Should get migration version")
-	assert.Equal(t, uint(1), version, "Migration version should be 1")
+	assert.Equal(t, uint(2), version, "Migration version should be 2")
 	assert.False(t, dirty, "Database should not be in dirty state")
 }
 
@@ -263,9 +263,9 @@ func TestMigration_TablesCreated(t *testing.T) {
 
 	// Verify schema_migrations table has initial data
 	var count int
-	err = db.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = 1").Scan(&count)
+	err = db.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = 2").Scan(&count)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count, "schema_migrations should have version 1 entry")
+	assert.Equal(t, 1, count, "schema_migrations should have version 2 entry")
 }
 
 func TestMigration_EnumTypesCreated(t *testing.T) {
@@ -506,9 +506,12 @@ func TestMigration_Down(t *testing.T) {
 	require.NoError(t, err)
 	assert.Greater(t, tableCount, 0, "Should have tables before down")
 
-	// Run migration down one step (from version 1 to version 0)
-	err = m.Steps(-1)
-	require.NoError(t, err, "Migration down one step should succeed")
+	// Run migration down to version 0 (from version 2)
+	currentVersion, _, _ := m.Version()
+	if currentVersion > 0 {
+		err = m.Steps(-int(currentVersion))
+		require.NoError(t, err, "Migration down should succeed")
+	}
 
 	// Verify migration version is reset
 	version, dirty, err := m.Version()
@@ -542,10 +545,10 @@ func TestMigration_UpDownUp(t *testing.T) {
 	// Start fresh - ensure we're at version 0
 	version, _, err := m.Version()
 	if err == nil && version > 0 {
-		// If we're at version 1, go down one step
-		err = m.Steps(-1)
+		// Go down to version 0
+		err = m.Steps(-int(version))
 		if err != nil && err != migrate.ErrNilVersion {
-			require.NoError(t, err, "Steps(-1) should succeed or return ErrNilVersion")
+			require.NoError(t, err, "Steps should succeed or return ErrNilVersion")
 		}
 	}
 
@@ -554,19 +557,22 @@ func TestMigration_UpDownUp(t *testing.T) {
 
 	version1, dirty1, err := m.Version()
 	require.NoError(t, err)
-	assert.Equal(t, uint(1), version1, "Version should be 1 after first up")
+	assert.Equal(t, uint(2), version1, "Version should be 2 after first up")
 	assert.False(t, dirty1, "Database should not be dirty after first up")
 
-	// Down one step (from version 1 to version 0)
-	err = m.Steps(-1)
-	require.NoError(t, err, "Migration down one step should succeed")
+	// Down to version 0 (from version 2)
+	currentVersion, _, _ := m.Version()
+	if currentVersion > 0 {
+		err = m.Steps(-int(currentVersion))
+		require.NoError(t, err, "Migration down should succeed")
+	}
 
 	// Second up (should work fine)
 	ensureMigrationsUp(t, m, db.DB)
 
 	version2, dirty2, err := m.Version()
 	require.NoError(t, err)
-	assert.Equal(t, uint(1), version2, "Version should be 1 after second up")
+	assert.Equal(t, uint(2), version2, "Version should be 2 after second up")
 	assert.False(t, dirty2, "Database should not be dirty after second up")
 
 	// Verify tables exist after second up

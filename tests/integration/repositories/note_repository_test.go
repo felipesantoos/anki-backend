@@ -485,3 +485,179 @@ func TestNoteRepository_FindByAdvancedSearch_Regex(t *testing.T) {
 	})
 }
 
+func TestNoteRepository_FindByAdvancedSearch_NoCombining(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+	parser := searchdomain.NewParser()
+
+	userID, _ := createTestUser(t, ctx, userRepo, "note_nocombining_search")
+
+	// Create note type with Front and Back fields
+	noteType, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID, noteType)
+	require.NoError(t, err)
+	noteTypeID := noteType.GetID()
+
+	// Create test notes with accented text
+	counter := 0
+	createNote := func(front, back string) int64 {
+		counter++
+		guid, err := valueobjects.NewGUID(fmt.Sprintf("550e8400-e29b-41d4-a716-44665544%04d", counter))
+		require.NoError(t, err)
+
+		noteEntity, err := note.NewBuilder().
+			WithID(0).
+			WithUserID(userID).
+			WithGUID(guid).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(fmt.Sprintf(`{"Front":"%s","Back":"%s"}`, front, back)).
+			WithTags([]string{}).
+			WithMarked(false).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+
+		err = noteRepo.Save(ctx, userID, noteEntity)
+		require.NoError(t, err)
+		return noteEntity.GetID()
+	}
+
+	// Create notes with accented characters
+	_ = createNote("café", "coffee")
+	_ = createNote("ação", "action")
+	_ = createNote("über", "over")
+	_ = createNote("naïve", "naive")
+	_ = createNote("résumé", "resume")
+	_ = createNote("São Paulo", "city")
+
+	t.Run("Basic_NoCombining", func(t *testing.T) {
+		query, err := parser.Parse("nc:cafe")
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(notes), 1, "Should find at least one note with 'café'")
+		found := false
+		for _, n := range notes {
+			if strings.Contains(n.GetFieldsJSON(), "café") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Should find note with 'café'")
+	})
+
+	t.Run("NoCombining_Field_Front", func(t *testing.T) {
+		query, err := parser.Parse("front:nc:acao")
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(notes), 1, "Should find at least one note with 'ação' in Front")
+		found := false
+		for _, n := range notes {
+			if strings.Contains(n.GetFieldsJSON(), "ação") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Should find note with 'ação' in Front field")
+	})
+
+	t.Run("NoCombining_Field_Back", func(t *testing.T) {
+		query, err := parser.Parse("back:nc:coffee")
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(notes), 1, "Should find at least one note with 'coffee' in Back")
+	})
+
+	t.Run("NoCombining_With_Wildcard", func(t *testing.T) {
+		query, err := parser.Parse("nc:uber*")
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(notes), 1, "Should find at least one note with 'über'")
+		found := false
+		for _, n := range notes {
+			if strings.Contains(n.GetFieldsJSON(), "über") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Should find note with 'über'")
+	})
+
+	t.Run("NoCombining_Exact_Phrase", func(t *testing.T) {
+		query, err := parser.Parse(`nc:"Sao Paulo"`)
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(notes), 1, "Should find at least one note with 'São Paulo'")
+		found := false
+		for _, n := range notes {
+			if strings.Contains(n.GetFieldsJSON(), "São Paulo") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Should find note with 'São Paulo'")
+	})
+
+	t.Run("NoCombining_With_Tag", func(t *testing.T) {
+		// Create a note with tag
+		guid, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655449999")
+		require.NoError(t, err)
+
+		noteEntity, err := note.NewBuilder().
+			WithID(0).
+			WithUserID(userID).
+			WithGUID(guid).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"résumé","Back":"document"}`).
+			WithTags([]string{"vocabulary"}).
+			WithMarked(false).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+
+		err = noteRepo.Save(ctx, userID, noteEntity)
+		require.NoError(t, err)
+
+		query, err := parser.Parse("nc:resume tag:vocabulary")
+		require.NoError(t, err)
+
+		notes, err := noteRepo.FindByAdvancedSearch(ctx, userID, query, 100, 0)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(notes), 1, "Should find note with 'résumé' and tag 'vocabulary'")
+		found := false
+		for _, n := range notes {
+			if strings.Contains(n.GetFieldsJSON(), "résumé") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Should find note with 'résumé'")
+	})
+}
+

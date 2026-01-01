@@ -871,4 +871,144 @@ func TestSearch_Regex(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &errorRes)
 		assert.Contains(t, errorRes["message"].(string), "invalid regex", "Error message should mention invalid regex")
 	})
+
+	t.Run("NoCombining_Basic", func(t *testing.T) {
+		// Create notes with accented text
+		createNoteReq := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "café", "Back": "coffee"}`,
+			Tags:       []string{},
+		}
+		b, _ := json.Marshal(createNoteReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+
+		createNoteReq = request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "ação", "Back": "action"}`,
+			Tags:       []string{},
+		}
+		b, _ = json.Marshal(createNoteReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+
+		// Search with nc: prefix
+		searchReq := request.AdvancedSearchRequest{
+			Query:  "nc:cafe",
+			Type:   "notes",
+			Limit:  100,
+			Offset: 0,
+		}
+		b, _ = json.Marshal(searchReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/search/advanced", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchRes response.SearchResult
+		json.Unmarshal(rec.Body.Bytes(), &searchRes)
+		assert.GreaterOrEqual(t, searchRes.Total, 1, "Should find at least one note matching 'café' with 'nc:cafe'")
+	})
+
+	t.Run("NoCombining_Field_Search", func(t *testing.T) {
+		searchReq := request.AdvancedSearchRequest{
+			Query:  "front:nc:acao",
+			Type:   "notes",
+			Limit:  100,
+			Offset: 0,
+		}
+		b, _ := json.Marshal(searchReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/search/advanced", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchRes response.SearchResult
+		json.Unmarshal(rec.Body.Bytes(), &searchRes)
+		assert.GreaterOrEqual(t, searchRes.Total, 1, "Should find at least one note with 'ação' in Front field using 'front:nc:acao'")
+	})
+
+	t.Run("NoCombining_With_Wildcard", func(t *testing.T) {
+		// Create note with über
+		createNoteReq := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "über", "Back": "over"}`,
+			Tags:       []string{},
+		}
+		b, _ := json.Marshal(createNoteReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+
+		searchReq := request.AdvancedSearchRequest{
+			Query:  "nc:uber*",
+			Type:   "notes",
+			Limit:  100,
+			Offset: 0,
+		}
+		b, _ = json.Marshal(searchReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/search/advanced", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchRes response.SearchResult
+		json.Unmarshal(rec.Body.Bytes(), &searchRes)
+		assert.GreaterOrEqual(t, searchRes.Total, 1, "Should find at least one note with 'über' using 'nc:uber*'")
+	})
+
+	t.Run("NoCombining_Exact_Phrase", func(t *testing.T) {
+		// Create note with São Paulo
+		createNoteReq := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "São Paulo", "Back": "city"}`,
+			Tags:       []string{},
+		}
+		b, _ := json.Marshal(createNoteReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+
+		searchReq := request.AdvancedSearchRequest{
+			Query:  `nc:"Sao Paulo"`,
+			Type:   "notes",
+			Limit:  100,
+			Offset: 0,
+		}
+		b, _ = json.Marshal(searchReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/search/advanced", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var searchRes response.SearchResult
+		json.Unmarshal(rec.Body.Bytes(), &searchRes)
+		assert.GreaterOrEqual(t, searchRes.Total, 1, "Should find at least one note with 'São Paulo' using 'nc:\"Sao Paulo\"'")
+	})
 }

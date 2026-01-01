@@ -28,5 +28,8 @@ type INoteService interface {
 
 	// RemoveTag removes a tag from a note
 	RemoveTag(ctx context.Context, userID int64, id int64, tag string) error
+
+	// Copy creates a copy of an existing note
+	Copy(ctx context.Context, userID int64, noteID int64, deckID *int64, copyTags bool, copyMedia bool) (*note.Note, error)
 }
 

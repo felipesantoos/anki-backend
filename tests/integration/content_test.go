@@ -55,6 +55,7 @@ func TestContent_Integration(t *testing.T) {
 	router := routes.NewRouter(e, cfg, jwtSvc, redisRepo)
 	router.RegisterAuthRoutes()
 	router.RegisterContentRoutes()
+	router.RegisterStudyRoutes() // Needed for deck creation in copy note tests
 
 	// Register and login
 	loginRes := registerAndLogin(t, e, "content@example.com", "password123")
@@ -718,7 +719,150 @@ func TestContent_Integration(t *testing.T) {
 		var cardCountAfter int
 		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountAfter)
 		require.NoError(t, err)
-		assert.Equal(t, 0, cardCountAfter, "All cards should be deleted when note is deleted")
+		assert.Equal(t, 0, cardCountAfter, "All cards should be deleted after note deletion")
+
+		// Copy Note - Success
+		// First, create a new note to copy
+		createNoteReq2 = request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "Copy Test Front", "Back": "Copy Test Back"}`,
+			Tags:       []string{"copy-test", "integration"},
+		}
+		b, _ = json.Marshal(createNoteReq2)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var noteToCopy response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &noteToCopy)
+		noteToCopyID := noteToCopy.ID
+
+		// Copy note with all options
+		copyReq := request.CopyNoteRequest{
+			DeckID:    nil, // Use same deck
+			CopyTags:  true,
+			CopyMedia: true,
+		}
+		b, _ = json.Marshal(copyReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/"+strconv.FormatInt(noteToCopyID, 10)+"/copy", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var copiedNoteRes response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &copiedNoteRes)
+		assert.NotEqual(t, noteToCopyID, copiedNoteRes.ID, "Copy should have different ID")
+		assert.NotEqual(t, noteToCopy.GUID, copiedNoteRes.GUID, "Copy should have different GUID")
+		// Compare JSON fields (order may vary, so parse and compare)
+		var originalFields, copiedFields map[string]interface{}
+		json.Unmarshal([]byte(noteToCopy.FieldsJSON), &originalFields)
+		json.Unmarshal([]byte(copiedNoteRes.FieldsJSON), &copiedFields)
+		assert.Equal(t, originalFields, copiedFields, "Fields should be copied")
+		assert.Equal(t, noteToCopy.Tags, copiedNoteRes.Tags, "Tags should be copied")
+		assert.Equal(t, noteToCopy.NoteTypeID, copiedNoteRes.NoteTypeID, "NoteType should be copied")
+
+		// Copy note without tags
+		copyReqNoTags := request.CopyNoteRequest{
+			DeckID:    nil,
+			CopyTags:  false,
+			CopyMedia: false,
+		}
+		b, _ = json.Marshal(copyReqNoTags)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/"+strconv.FormatInt(noteToCopyID, 10)+"/copy", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var copiedNoteNoTags response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &copiedNoteNoTags)
+		assert.Empty(t, copiedNoteNoTags.Tags, "Tags should not be copied")
+
+		// Copy note to different deck
+		// Create another deck
+		createDeckReq := request.CreateDeckRequest{
+			Name: "Copy Target Deck",
+		}
+		b, _ = json.Marshal(createDeckReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("Failed to create deck: status %d, body: %s", rec.Code, rec.Body.String())
+		}
+		var targetDeck response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &targetDeck)
+		targetDeckID := targetDeck.ID
+		require.NotZero(t, targetDeckID, "Deck ID should not be zero")
+
+		copyReqDiffDeck := request.CopyNoteRequest{
+			DeckID:    &targetDeckID,
+			CopyTags:  true,
+			CopyMedia: true,
+		}
+		b, _ = json.Marshal(copyReqDiffDeck)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/"+strconv.FormatInt(noteToCopyID, 10)+"/copy", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("Failed to copy note: status %d, body: %s, noteID: %d", rec.Code, rec.Body.String(), noteToCopyID)
+		}
+		var copiedNoteDiffDeck response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &copiedNoteDiffDeck)
+		require.NotZero(t, copiedNoteDiffDeck.ID, "Copied note ID should not be zero")
+
+		// Verify cards are in the new deck
+		var cardDeckID int64
+		err = db.DB.QueryRow("SELECT deck_id FROM cards WHERE note_id = $1 LIMIT 1", copiedNoteDiffDeck.ID).Scan(&cardDeckID)
+		require.NoError(t, err, "Failed to query card deck_id for copied note")
+		assert.Equal(t, targetDeckID, cardDeckID, "Cards should be in the specified deck")
+
+		// Copy Note - Not Found
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/999999/copy", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		// Copy Note - Invalid Deck
+		invalidDeckID := int64(999999)
+		copyReqInvalidDeck := request.CopyNoteRequest{
+			DeckID:    &invalidDeckID,
+			CopyTags:  true,
+			CopyMedia: true,
+		}
+		b, _ = json.Marshal(copyReqInvalidDeck)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/"+strconv.FormatInt(noteToCopyID, 10)+"/copy", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "Should return 404 for invalid deck")
+
+		// Copy Note - Unauthorized
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/"+strconv.FormatInt(noteToCopyID, 10)+"/copy", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		// No Authorization header
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, "Should return 401 without auth")
+
+		// Copy Note - Cross-User Isolation
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/"+strconv.FormatInt(noteToCopyID, 10)+"/copy", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to copy User A's note")
 	})
 }
 

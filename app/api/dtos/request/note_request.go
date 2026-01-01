@@ -40,3 +40,15 @@ type ListNotesRequest struct {
 	Offset     int      `query:"offset"`
 }
 
+// CopyNoteRequest represents the request payload to copy a note
+type CopyNoteRequest struct {
+	// Optional deck ID (if not provided, uses original note's deck)
+	DeckID *int64 `json:"deck_id" example:"1"`
+
+	// Whether to copy tags from original note
+	CopyTags bool `json:"copy_tags" example:"true"`
+
+	// Whether to copy media from original note (future feature)
+	CopyMedia bool `json:"copy_media" example:"true"`
+}
+

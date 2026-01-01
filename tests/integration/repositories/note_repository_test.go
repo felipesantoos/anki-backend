@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -10,11 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	deckEntity "github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
 	searchdomain "github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
+	noteService "github.com/felipesantos/anki-backend/core/services/note"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
+	"github.com/felipesantos/anki-backend/pkg/database"
 	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
@@ -658,6 +662,198 @@ func TestNoteRepository_FindByAdvancedSearch_NoCombining(t *testing.T) {
 			}
 		}
 		assert.True(t, found, "Should find note with 'résumé'")
+	})
+}
+
+func TestNoteService_Copy(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	cardRepo := repositories.NewCardRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "note_copy_service")
+
+	// Create note type
+	noteType, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"},{"name":"Card 2"}]`). // 2 card types
+		WithTemplatesJSON(`[{"name":"Template 1"},{"name":"Template 2"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID, noteType)
+	require.NoError(t, err)
+	noteTypeID := noteType.GetID()
+
+	// Create deck
+	defaultDeckID, err := deckRepo.CreateDefaultDeck(ctx, userID)
+	require.NoError(t, err)
+	deckID := defaultDeckID
+
+	// Create original note with service
+	tm := database.NewTransactionManager(db.DB)
+	service := noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tm)
+	originalNote, err := service.Create(ctx, userID, noteTypeID, deckID, `{"Front":"Original Question","Back":"Original Answer"}`, []string{"tag1", "tag2"})
+	require.NoError(t, err)
+	originalNoteID := originalNote.GetID()
+
+	// Mark original note
+	originalNote.Mark()
+	err = noteRepo.Update(ctx, userID, originalNoteID, originalNote)
+	require.NoError(t, err)
+
+	t.Run("Success with all options", func(t *testing.T) {
+		copiedNote, err := service.Copy(ctx, userID, originalNoteID, nil, true, true)
+		require.NoError(t, err)
+		assert.NotNil(t, copiedNote)
+		assert.NotEqual(t, originalNoteID, copiedNote.GetID(), "Copy should have different ID")
+		assert.NotEqual(t, originalNote.GetGUID().Value(), copiedNote.GetGUID().Value(), "Copy should have different GUID")
+		assert.Equal(t, originalNote.GetNoteTypeID(), copiedNote.GetNoteTypeID())
+		// Compare JSON fields (order may vary, so parse and compare)
+		var originalFields, copiedFields map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(originalNote.GetFieldsJSON()), &originalFields))
+		require.NoError(t, json.Unmarshal([]byte(copiedNote.GetFieldsJSON()), &copiedFields))
+		assert.Equal(t, originalFields, copiedFields, "Fields should be copied")
+		assert.Equal(t, originalNote.GetTags(), copiedNote.GetTags(), "Tags should be copied")
+		assert.False(t, copiedNote.GetMarked(), "Copy should not inherit marked status")
+
+		// Verify cards were created
+		cards, err := cardRepo.FindByNoteID(ctx, userID, copiedNote.GetID())
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(cards), "Should create 2 cards (one for each card type)")
+		for _, c := range cards {
+			assert.Equal(t, deckID, c.GetDeckID(), "Cards should be in same deck as original")
+		}
+	})
+
+	t.Run("Success without tags", func(t *testing.T) {
+		copiedNote, err := service.Copy(ctx, userID, originalNoteID, nil, false, false)
+		require.NoError(t, err)
+		assert.NotNil(t, copiedNote)
+		assert.Empty(t, copiedNote.GetTags(), "Tags should not be copied")
+		// Compare JSON fields (order may vary, so parse and compare)
+		var originalFields, copiedFields map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(originalNote.GetFieldsJSON()), &originalFields))
+		require.NoError(t, json.Unmarshal([]byte(copiedNote.GetFieldsJSON()), &copiedFields))
+		assert.Equal(t, originalFields, copiedFields, "Fields should still be copied")
+	})
+
+	t.Run("Success with different deck", func(t *testing.T) {
+		// Create another deck with a different name
+		deck2Entity, err := deckEntity.NewBuilder().
+			WithUserID(userID).
+			WithName("Test Deck 2").
+			WithOptionsJSON("{}").
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+		err = deckRepo.Save(ctx, userID, deck2Entity)
+		require.NoError(t, err)
+		deck2ID := deck2Entity.GetID()
+
+		copiedNote, err := service.Copy(ctx, userID, originalNoteID, &deck2ID, true, true)
+		require.NoError(t, err)
+		assert.NotNil(t, copiedNote)
+
+		// Verify cards are in the new deck
+		cards, err := cardRepo.FindByNoteID(ctx, userID, copiedNote.GetID())
+		require.NoError(t, err)
+		for _, c := range cards {
+			assert.Equal(t, deck2ID, c.GetDeckID(), "Cards should be in the specified deck")
+		}
+	})
+
+	t.Run("Success same deck", func(t *testing.T) {
+		copiedNote, err := service.Copy(ctx, userID, originalNoteID, nil, true, true)
+		require.NoError(t, err)
+		assert.NotNil(t, copiedNote)
+
+		// Verify cards are in the same deck as original
+		cards, err := cardRepo.FindByNoteID(ctx, userID, copiedNote.GetID())
+		require.NoError(t, err)
+		for _, c := range cards {
+			assert.Equal(t, deckID, c.GetDeckID(), "Cards should be in same deck as original when deckID is nil")
+		}
+	})
+
+	t.Run("Generates new cards", func(t *testing.T) {
+		copiedNote, err := service.Copy(ctx, userID, originalNoteID, nil, true, true)
+		require.NoError(t, err)
+
+		// Get original cards
+		originalCards, err := cardRepo.FindByNoteID(ctx, userID, originalNoteID)
+		require.NoError(t, err)
+
+		// Get copied cards
+		copiedCards, err := cardRepo.FindByNoteID(ctx, userID, copiedNote.GetID())
+		require.NoError(t, err)
+
+		assert.Equal(t, len(originalCards), len(copiedCards), "Should have same number of cards")
+		for _, copiedCard := range copiedCards {
+			assert.Equal(t, copiedNote.GetID(), copiedCard.GetNoteID(), "Card should reference copied note")
+			assert.NotEqual(t, originalNoteID, copiedCard.GetNoteID(), "Card should not reference original note")
+		}
+	})
+
+	t.Run("New GUID", func(t *testing.T) {
+		copiedNote, err := service.Copy(ctx, userID, originalNoteID, nil, true, true)
+		require.NoError(t, err)
+		assert.NotEqual(t, originalNote.GetGUID().Value(), copiedNote.GetGUID().Value(), "Copy should have new GUID")
+	})
+
+	t.Run("Cross-user isolation", func(t *testing.T) {
+		// Create another user
+		userID2, _ := createTestUser(t, ctx, userRepo, "note_copy_user2")
+
+		// Try to copy User A's note as User B
+		_, err := service.Copy(ctx, userID2, originalNoteID, nil, true, true)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not found", "Should not find note from other user")
+	})
+
+	t.Run("Original note unchanged", func(t *testing.T) {
+		// Get original note before copy
+		originalBefore, err := noteRepo.FindByID(ctx, userID, originalNoteID)
+		require.NoError(t, err)
+
+		// Copy note
+		_, err = service.Copy(ctx, userID, originalNoteID, nil, true, true)
+		require.NoError(t, err)
+
+		// Get original note after copy
+		originalAfter, err := noteRepo.FindByID(ctx, userID, originalNoteID)
+		require.NoError(t, err)
+
+		// Verify original note is unchanged
+		assert.Equal(t, originalBefore.GetID(), originalAfter.GetID())
+		assert.Equal(t, originalBefore.GetGUID().Value(), originalAfter.GetGUID().Value())
+		assert.Equal(t, originalBefore.GetFieldsJSON(), originalAfter.GetFieldsJSON())
+		assert.Equal(t, originalBefore.GetTags(), originalAfter.GetTags())
+	})
+
+	t.Run("Note not found", func(t *testing.T) {
+		_, err := service.Copy(ctx, userID, 999999, nil, true, true)
+		assert.Error(t, err)
+		// Service converts ownership.ErrResourceNotFound to "note not found"
+		assert.Contains(t, err.Error(), "note not found")
+	})
+
+	t.Run("Deck not found", func(t *testing.T) {
+		invalidDeckID := int64(999999)
+		_, err := service.Copy(ctx, userID, originalNoteID, &invalidDeckID, true, true)
+		assert.Error(t, err)
+		// Service converts ownership.ErrResourceNotFound to "deck not found"
+		assert.Contains(t, err.Error(), "deck not found")
 	})
 }
 

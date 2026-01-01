@@ -39,5 +39,8 @@ func (r *Router) RegisterContentRoutes() {
 	// Note Tags
 	notes.POST("/:id/tags", noteHandler.AddTag)
 	notes.DELETE("/:id/tags/:tag", noteHandler.RemoveTag)
+
+	// Note Copy
+	notes.POST("/:id/copy", noteHandler.Copy)
 }
 

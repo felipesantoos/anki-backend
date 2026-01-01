@@ -207,6 +207,34 @@ func (h *NoteHandler) RemoveTag(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// Copy handles POST /api/v1/notes/:id/copy
+// @Summary Copy a note
+// @Tags notes
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Note ID"
+// @Param request body request.CopyNoteRequest true "Copy request"
+// @Success 201 {object} response.NoteResponse
+// @Router /api/v1/notes/{id}/copy [post]
+func (h *NoteHandler) Copy(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	var req request.CopyNoteRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	n, err := h.service.Copy(ctx, userID, id, req.DeckID, req.CopyTags, req.CopyMedia)
+	if err != nil {
+		return handleNoteError(err)
+	}
+
+	return c.JSON(http.StatusCreated, mappers.ToNoteResponse(n))
+}
+
 func handleNoteError(err error) error {
 	if err == nil {
 		return nil

@@ -2,6 +2,7 @@ package note
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/pkg/database"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 	"github.com/google/uuid"
 )
 
@@ -225,5 +227,125 @@ func (s *NoteService) RemoveTag(ctx context.Context, userID int64, id int64, tag
 
 	existing.RemoveTag(tag)
 	return s.noteRepo.Update(ctx, userID, id, existing)
+}
+
+// Copy creates a copy of an existing note
+func (s *NoteService) Copy(ctx context.Context, userID int64, noteID int64, deckID *int64, copyTags bool, copyMedia bool) (*note.Note, error) {
+	var copiedNote *note.Note
+
+	err := s.tm.WithTransaction(ctx, func(txCtx context.Context) error {
+		// 1. Find original note (validate ownership)
+		originalNote, err := s.noteRepo.FindByID(txCtx, userID, noteID)
+		if err != nil {
+			// Convert ownership.ErrResourceNotFound to a more specific error message
+			if errors.Is(err, ownership.ErrResourceNotFound) {
+				return fmt.Errorf("note not found")
+			}
+			return err
+		}
+		if originalNote == nil {
+			return fmt.Errorf("note not found")
+		}
+
+		// 2. Determine target deck
+		var targetDeckID int64
+		if deckID != nil {
+			// Validate provided deck ownership
+			d, err := s.deckRepo.FindByID(txCtx, userID, *deckID)
+			if err != nil {
+				// Convert ownership.ErrResourceNotFound to a more specific error message
+				if errors.Is(err, ownership.ErrResourceNotFound) {
+					return fmt.Errorf("deck not found")
+				}
+				return err
+			}
+			if d == nil {
+				return fmt.Errorf("deck not found")
+			}
+			targetDeckID = *deckID
+		} else {
+			// Use original note's deck (get from first card)
+			cards, err := s.cardRepo.FindByNoteID(txCtx, userID, noteID)
+			if err != nil {
+				return err
+			}
+			if len(cards) == 0 {
+				return fmt.Errorf("note has no cards, cannot determine deck")
+			}
+			targetDeckID = cards[0].GetDeckID()
+		}
+
+		// 3. Get NoteType for card generation
+		nt, err := s.noteTypeRepo.FindByID(txCtx, userID, originalNote.GetNoteTypeID())
+		if err != nil {
+			return err
+		}
+		if nt == nil {
+			return fmt.Errorf("note type not found")
+		}
+
+		// 4. Prepare tags for copy
+		tags := []string{} // Initialize as empty slice (PostgreSQL doesn't accept null for tags)
+		if copyTags {
+			tags = make([]string, len(originalNote.GetTags()))
+			copy(tags, originalNote.GetTags())
+		}
+
+		// 5. Create new note entity
+		guid, _ := valueobjects.NewGUID(uuid.New().String()) // Generate new GUID
+		now := time.Now()
+		copiedNote, err = note.NewBuilder().
+			WithUserID(userID).
+			WithGUID(guid).
+			WithNoteTypeID(originalNote.GetNoteTypeID()).
+			WithFieldsJSON(originalNote.GetFieldsJSON()).
+			WithTags(tags).
+			WithMarked(false). // Copy does not inherit marked status
+			WithCreatedAt(now).
+			WithUpdatedAt(now).
+			Build()
+		if err != nil {
+			return err
+		}
+
+		// 6. Save new note
+		if err := s.noteRepo.Save(txCtx, userID, copiedNote); err != nil {
+			return err
+		}
+
+		// 7. Generate Cards based on NoteType (same logic as Create)
+		cardTypeCount := nt.GetCardTypeCount()
+		for i := 0; i < cardTypeCount; i++ {
+			cardEntity, err := card.NewBuilder().
+				WithNoteID(copiedNote.GetID()).
+				WithCardTypeID(i).
+				WithDeckID(targetDeckID).
+				WithDue(now.Unix() * 1000). // New cards due now
+				WithEase(2500).             // Default ease 250%
+				WithState(valueobjects.CardStateNew).
+				WithCreatedAt(now).
+				WithUpdatedAt(now).
+				Build()
+			if err != nil {
+				return err
+			}
+
+			if err := s.cardRepo.Save(txCtx, userID, cardEntity); err != nil {
+				return err
+			}
+		}
+
+		// 8. Handle media copying (placeholder for future implementation)
+		// TODO: If copyMedia is true, parse fieldsJSON, extract media references,
+		// copy media files via storage service, and update references in new note
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return copiedNote, nil
 }
 

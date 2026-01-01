@@ -261,6 +261,222 @@ func TestNoteService_FindAll(t *testing.T) {
 	})
 }
 
+func TestNoteService_Copy(t *testing.T) {
+	mockNoteRepo := new(MockNoteRepository)
+	mockCardRepo := new(MockCardRepository)
+	mockNoteTypeRepo := new(MockNoteTypeRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+	originalNoteID := int64(100)
+	noteTypeID := int64(10)
+	originalDeckID := int64(20)
+	targetDeckID := int64(30)
+
+	t.Run("Success with all options", func(t *testing.T) {
+		// Setup original note
+		originalNote, _ := note.NewBuilder().
+			WithID(originalNoteID).
+			WithUserID(userID).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"Q", "Back":"A"}`).
+			WithTags([]string{"tag1", "tag2"}).
+			Build()
+
+		// Setup note type
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithCardTypesJSON("[{}, {}]"). // 2 card types
+			Build()
+
+		// Setup deck
+		d, _ := deck.NewBuilder().WithID(targetDeckID).WithUserID(userID).WithName("Target Deck").Build()
+
+		// Setup original cards
+		originalCard, _ := card.NewBuilder().
+			WithNoteID(originalNoteID).
+			WithDeckID(originalDeckID).
+			Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(originalNote, nil).Once()
+		mockDeckRepo.On("FindByID", mock.Anything, userID, targetDeckID).Return(d, nil).Once()
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+		mockNoteRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*note.Note")).Return(nil).Run(func(args mock.Arguments) {
+			n := args.Get(2).(*note.Note)
+			n.SetID(200) // Set ID so card generation works
+		}).Once()
+		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Twice()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, &targetDeckID, true, true)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, int64(200), result.GetID())
+		assert.Equal(t, noteTypeID, result.GetNoteTypeID())
+		assert.Equal(t, `{"Front":"Q", "Back":"A"}`, result.GetFieldsJSON())
+		assert.Equal(t, []string{"tag1", "tag2"}, result.GetTags())
+		assert.False(t, result.GetMarked()) // Should not inherit marked status
+		mockNoteRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockNoteTypeRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Success with custom deck", func(t *testing.T) {
+		originalNote, _ := note.NewBuilder().
+			WithID(originalNoteID).
+			WithUserID(userID).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"Q"}`).
+			WithTags([]string{"tag1"}).
+			Build()
+
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithCardTypesJSON("[{}]"). // 1 card type
+			Build()
+
+		d, _ := deck.NewBuilder().WithID(targetDeckID).WithUserID(userID).WithName("Target Deck").Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(originalNote, nil).Once()
+		mockDeckRepo.On("FindByID", mock.Anything, userID, targetDeckID).Return(d, nil).Once()
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+		mockNoteRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*note.Note")).Return(nil).Run(func(args mock.Arguments) {
+			n := args.Get(2).(*note.Note)
+			n.SetID(201)
+		}).Once()
+		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, &targetDeckID, false, false)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Empty(t, result.GetTags()) // Should not copy tags
+		mockNoteRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Success without tags", func(t *testing.T) {
+		originalNote, _ := note.NewBuilder().
+			WithID(originalNoteID).
+			WithUserID(userID).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"Q"}`).
+			WithTags([]string{"tag1", "tag2"}).
+			Build()
+
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithCardTypesJSON("[{}]").
+			Build()
+
+		originalCard, _ := card.NewBuilder().
+			WithNoteID(originalNoteID).
+			WithDeckID(originalDeckID).
+			Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(originalNote, nil).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, originalNoteID).Return([]*card.Card{originalCard}, nil).Once()
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+		mockNoteRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*note.Note")).Return(nil).Run(func(args mock.Arguments) {
+			n := args.Get(2).(*note.Note)
+			n.SetID(202)
+		}).Once()
+		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, nil, false, false)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Empty(t, result.GetTags()) // Should not copy tags when copyTags is false
+		mockNoteRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Note not found", func(t *testing.T) {
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(nil, nil).Once()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, nil, true, true)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "note not found")
+		assert.Nil(t, result)
+		mockNoteRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Deck not found", func(t *testing.T) {
+		originalNote, _ := note.NewBuilder().
+			WithID(originalNoteID).
+			WithUserID(userID).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"Q"}`).
+			Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(originalNote, nil).Once()
+		mockDeckRepo.On("FindByID", mock.Anything, userID, targetDeckID).Return(nil, nil).Once()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, &targetDeckID, true, true)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "deck not found")
+		assert.Nil(t, result)
+		mockNoteRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Note has no cards", func(t *testing.T) {
+		originalNote, _ := note.NewBuilder().
+			WithID(originalNoteID).
+			WithUserID(userID).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"Q"}`).
+			Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(originalNote, nil).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, originalNoteID).Return([]*card.Card{}, nil).Once()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, nil, true, true)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "note has no cards")
+		assert.Nil(t, result)
+		mockNoteRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Cross-user isolation", func(t *testing.T) {
+		otherUserID := int64(999)
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(nil, nil).Once()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, nil, true, true)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "note not found")
+		assert.Nil(t, result)
+		mockNoteRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+}
+
 func TestNoteService_FindByID(t *testing.T) {
 	mockNoteRepo := new(MockNoteRepository)
 	mockCardRepo := new(MockCardRepository)

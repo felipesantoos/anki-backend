@@ -857,3 +857,125 @@ func TestNoteService_Copy(t *testing.T) {
 	})
 }
 
+func TestNoteRepository_FindDuplicatesByField(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	cardRepo := repositories.NewCardRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "find_duplicates_user")
+
+	// Create note type
+	noteType, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID, noteType)
+	require.NoError(t, err)
+	noteTypeID := noteType.GetID()
+
+	// Create deck
+	defaultDeckID, err := deckRepo.CreateDefaultDeck(ctx, userID)
+	require.NoError(t, err)
+	deckID := defaultDeckID
+
+	// Create service for creating notes
+	tm := database.NewTransactionManager(db.DB)
+	service := noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tm)
+
+	// Create duplicate notes (3 notes with "Hello" in Front field)
+	note1, err := service.Create(ctx, userID, noteTypeID, deckID, `{"Front":"Hello","Back":"World1"}`, []string{})
+	require.NoError(t, err)
+
+	note2, err := service.Create(ctx, userID, noteTypeID, deckID, `{"Front":"Hello","Back":"Different"}`, []string{})
+	require.NoError(t, err)
+
+	note3, err := service.Create(ctx, userID, noteTypeID, deckID, `{"Front":"Goodbye","Back":"World2"}`, []string{})
+	require.NoError(t, err)
+
+	note4, err := service.Create(ctx, userID, noteTypeID, deckID, `{"Front":"Hello","Back":"Another"}`, []string{})
+	require.NoError(t, err)
+
+	t.Run("Success find duplicates by field", func(t *testing.T) {
+		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, &noteTypeID, "Front")
+		require.NoError(t, err)
+		assert.Len(t, groups, 1, "Should find one duplicate group")
+		assert.Equal(t, "Hello", groups[0].FieldValue)
+		assert.Len(t, groups[0].Notes, 3, "Should have 3 notes with 'Hello' in Front field")
+		
+		// Verify note IDs
+		noteIDs := make(map[int64]bool)
+		for _, n := range groups[0].Notes {
+			noteIDs[n.ID] = true
+		}
+		assert.True(t, noteIDs[note1.GetID()])
+		assert.True(t, noteIDs[note2.GetID()])
+		assert.True(t, noteIDs[note4.GetID()])
+		assert.False(t, noteIDs[note3.GetID()])
+	})
+
+	t.Run("Success no duplicates found", func(t *testing.T) {
+		// All Back values are unique (World1, Different, World2, Another), so no duplicates should be found
+		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, &noteTypeID, "Back")
+		require.NoError(t, err)
+		assert.Empty(t, groups, "Should find no duplicates in Back field")
+	})
+
+	t.Run("Success without note type filter", func(t *testing.T) {
+		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, nil, "Front")
+		require.NoError(t, err)
+		assert.Len(t, groups, 1, "Should find one duplicate group even without note type filter")
+	})
+
+	t.Run("Cross-user isolation", func(t *testing.T) {
+		userID2, _ := createTestUser(t, ctx, userRepo, "find_duplicates_user2")
+		
+		// Create note for user 2 with same field value
+		noteType2, err := notetype.NewBuilder().
+			WithID(0).
+			WithUserID(userID2).
+			WithName("Basic").
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithCardTypesJSON(`[{"name":"Card 1"}]`).
+			WithTemplatesJSON(`[{"name":"Template 1"}]`).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+		err = noteTypeRepo.Save(ctx, userID2, noteType2)
+		require.NoError(t, err)
+
+		defaultDeckID2, err := deckRepo.CreateDefaultDeck(ctx, userID2)
+		require.NoError(t, err)
+
+		_, err = service.Create(ctx, userID2, noteType2.GetID(), defaultDeckID2, `{"Front":"Hello","Back":"World"}`, []string{})
+		require.NoError(t, err)
+
+		// User 1 should not see User 2's duplicates
+		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, nil, "Front")
+		require.NoError(t, err)
+		// Should still only find 3 notes (from user 1), not 4
+		if len(groups) > 0 {
+			assert.LessOrEqual(t, len(groups[0].Notes), 3, "Should not include User 2's notes")
+		}
+	})
+
+	t.Run("Empty field name", func(t *testing.T) {
+		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, nil, "")
+		require.NoError(t, err)
+		assert.Empty(t, groups)
+	})
+}
+

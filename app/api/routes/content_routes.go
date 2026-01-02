@@ -30,6 +30,10 @@ func (r *Router) RegisterContentRoutes() {
 
 	// Notes
 	notes := v1.Group("/notes")
+	
+	// Note Find Duplicates (must be before all other routes to avoid route conflicts)
+	notes.POST("/find-duplicates", noteHandler.FindDuplicates)
+	
 	notes.POST("", noteHandler.Create)
 	notes.GET("", noteHandler.FindAll)
 	notes.GET("/:id", noteHandler.FindByID)

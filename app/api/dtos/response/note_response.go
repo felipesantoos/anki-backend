@@ -26,3 +26,36 @@ type NoteResponse struct {
 	UpdatedAt time.Time `json:"updated_at" example:"2024-01-15T10:30:00Z"`
 }
 
+// FindDuplicatesResponse represents the response payload for finding duplicates
+type FindDuplicatesResponse struct {
+	// List of duplicate groups
+	Duplicates []DuplicateGroup `json:"duplicates"`
+
+	// Total number of duplicate groups found
+	Total int `json:"total_duplicates" example:"1"`
+}
+
+// DuplicateGroup represents a group of duplicate notes with the same field value
+type DuplicateGroup struct {
+	// The field value that is duplicated
+	FirstField string `json:"first_field" example:"Hello"`
+
+	// List of notes with this field value
+	Notes []DuplicateNoteInfo `json:"notes"`
+}
+
+// DuplicateNoteInfo contains basic information about a duplicate note
+type DuplicateNoteInfo struct {
+	// Note ID
+	ID int64 `json:"id" example:"1"`
+
+	// Note GUID
+	GUID string `json:"guid" example:"550e8400-e29b-41d4-a716-446655440000"`
+
+	// Deck ID where the note's cards are located
+	DeckID int64 `json:"deck_id" example:"1"`
+
+	// Timestamp when the note was created
+	CreatedAt time.Time `json:"created_at" example:"2024-01-15T10:30:00Z"`
+}
+

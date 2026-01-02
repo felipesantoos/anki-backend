@@ -3,12 +3,14 @@ package services
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
 	noteSvc "github.com/felipesantos/anki-backend/core/services/note"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -474,6 +476,122 @@ func TestNoteService_Copy(t *testing.T) {
 		assert.Nil(t, result)
 		mockNoteRepo.AssertExpectations(t)
 		mockTM.AssertExpectations(t)
+	})
+}
+
+func TestNoteService_FindDuplicates(t *testing.T) {
+	mockNoteRepo := new(MockNoteRepository)
+	mockCardRepo := new(MockCardRepository)
+	mockNoteTypeRepo := new(MockNoteTypeRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+	fieldName := "Front"
+	noteTypeID := int64(10)
+
+	t.Run("Success with note type filter", func(t *testing.T) {
+		// Setup note type
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			Build()
+
+		// Setup duplicate groups
+		groups := []*note.DuplicateGroup{
+			{
+				FieldValue: "Hello",
+				Notes: []*note.DuplicateNoteInfo{
+					{ID: 1, GUID: "guid1", DeckID: 20, CreatedAt: time.Now()},
+					{ID: 2, GUID: "guid2", DeckID: 20, CreatedAt: time.Now()},
+				},
+			},
+		}
+
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+		mockNoteRepo.On("FindDuplicatesByField", mock.Anything, userID, &noteTypeID, fieldName).Return(groups, nil).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, &noteTypeID, fieldName)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.Total)
+		assert.Len(t, result.Duplicates, 1)
+		assert.Equal(t, "Hello", result.Duplicates[0].FieldValue)
+		assert.Len(t, result.Duplicates[0].Notes, 2)
+		mockNoteRepo.AssertExpectations(t)
+		mockNoteTypeRepo.AssertExpectations(t)
+	})
+
+	t.Run("Success without note type filter", func(t *testing.T) {
+		groups := []*note.DuplicateGroup{
+			{
+				FieldValue: "World",
+				Notes: []*note.DuplicateNoteInfo{
+					{ID: 3, GUID: "guid3", DeckID: 21, CreatedAt: time.Now()},
+					{ID: 4, GUID: "guid4", DeckID: 21, CreatedAt: time.Now()},
+				},
+			},
+		}
+
+		mockNoteRepo.On("FindDuplicatesByField", mock.Anything, userID, (*int64)(nil), fieldName).Return(groups, nil).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, nil, fieldName)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.Total)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Success no duplicates found", func(t *testing.T) {
+		mockNoteRepo.On("FindDuplicatesByField", mock.Anything, userID, (*int64)(nil), fieldName).Return([]*note.DuplicateGroup{}, nil).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, nil, fieldName)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 0, result.Total)
+		assert.Empty(t, result.Duplicates)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Empty field name", func(t *testing.T) {
+		result, err := service.FindDuplicates(ctx, userID, nil, "")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 0, result.Total)
+	})
+
+	t.Run("Note type not found", func(t *testing.T) {
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nil, ownership.ErrResourceNotFound).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, &noteTypeID, fieldName)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "note type not found")
+		assert.Nil(t, result)
+		mockNoteTypeRepo.AssertExpectations(t)
+	})
+
+	t.Run("Invalid field name", func(t *testing.T) {
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			Build()
+
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, &noteTypeID, "InvalidField")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "field 'InvalidField' not found")
+		assert.Nil(t, result)
+		mockNoteTypeRepo.AssertExpectations(t)
 	})
 }
 

@@ -235,6 +235,32 @@ func (h *NoteHandler) Copy(c echo.Context) error {
 	return c.JSON(http.StatusCreated, mappers.ToNoteResponse(n))
 }
 
+// FindDuplicates handles POST /api/v1/notes/find-duplicates
+// @Summary Find duplicate notes
+// @Tags notes
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body request.FindDuplicatesRequest true "Find duplicates request"
+// @Success 200 {object} response.FindDuplicatesResponse
+// @Router /api/v1/notes/find-duplicates [post]
+func (h *NoteHandler) FindDuplicates(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	var req request.FindDuplicatesRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	result, err := h.service.FindDuplicates(ctx, userID, req.NoteTypeID, req.FieldName)
+	if err != nil {
+		return handleNoteError(err)
+	}
+
+	return c.JSON(http.StatusOK, mappers.ToFindDuplicatesResponse(result))
+}
+
 func handleNoteError(err error) error {
 	if err == nil {
 		return nil

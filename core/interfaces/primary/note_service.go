@@ -31,5 +31,8 @@ type INoteService interface {
 
 	// Copy creates a copy of an existing note
 	Copy(ctx context.Context, userID int64, noteID int64, deckID *int64, copyTags bool, copyMedia bool) (*note.Note, error)
+
+	// FindDuplicates finds duplicate notes based on a field value
+	FindDuplicates(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) (*note.DuplicateResult, error)
 }
 

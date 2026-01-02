@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -645,6 +646,145 @@ func (r *NoteRepository) FindByAdvancedSearch(ctx context.Context, userID int64,
 	defer rows.Close()
 
 	return r.scanNotes(rows)
+}
+
+// FindDuplicatesByField finds duplicate notes grouped by field value
+func (r *NoteRepository) FindDuplicatesByField(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) ([]*note.DuplicateGroup, error) {
+	if fieldName == "" {
+		return []*note.DuplicateGroup{}, nil
+	}
+
+	// Build query with optional note_type_id filter
+	var query string
+	var args []interface{}
+
+	if noteTypeID != nil {
+		query = `
+			SELECT 
+				jsonb_extract_path_text(fields_json, $3) as field_value,
+				array_to_json(array_agg(
+					json_build_object(
+						'id', id,
+						'guid', guid,
+						'created_at', created_at
+					) ORDER BY created_at
+				))::text as notes_data
+			FROM notes
+			WHERE user_id = $1
+			  AND deleted_at IS NULL
+			  AND note_type_id = $2
+			  AND jsonb_extract_path_text(fields_json, $3) IS NOT NULL
+			  AND jsonb_extract_path_text(fields_json, $3) != ''
+			GROUP BY field_value
+			HAVING COUNT(*) > 1
+			ORDER BY field_value
+		`
+		args = []interface{}{userID, *noteTypeID, fieldName}
+	} else {
+		query = `
+			SELECT 
+				jsonb_extract_path_text(fields_json, $2) as field_value,
+				array_to_json(array_agg(
+					json_build_object(
+						'id', id,
+						'guid', guid,
+						'created_at', created_at
+					) ORDER BY created_at
+				))::text as notes_data
+			FROM notes
+			WHERE user_id = $1
+			  AND deleted_at IS NULL
+			  AND jsonb_extract_path_text(fields_json, $2) IS NOT NULL
+			  AND jsonb_extract_path_text(fields_json, $2) != ''
+			GROUP BY field_value
+			HAVING COUNT(*) > 1
+			ORDER BY field_value
+		`
+		args = []interface{}{userID, fieldName}
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find duplicates by field: %w", err)
+	}
+	defer rows.Close()
+
+	var groups []*note.DuplicateGroup
+	for rows.Next() {
+		var fieldValue string
+		var notesJSON string
+
+		if err := rows.Scan(&fieldValue, &notesJSON); err != nil {
+			return nil, fmt.Errorf("failed to scan duplicate group: %w", err)
+		}
+
+		// Parse notes JSON array
+		var notesData []struct {
+			ID        int64     `json:"id"`
+			GUID      string    `json:"guid"`
+			CreatedAt time.Time `json:"created_at"`
+		}
+
+		if err := json.Unmarshal([]byte(notesJSON), &notesData); err != nil {
+			return nil, fmt.Errorf("failed to parse notes data: %w", err)
+		}
+
+		// Get deck IDs for each note
+		noteIDs := make([]int64, len(notesData))
+		for i, nd := range notesData {
+			noteIDs[i] = nd.ID
+		}
+
+		// Query deck IDs from cards
+		deckQuery := `
+			SELECT DISTINCT ON (note_id) note_id, deck_id
+			FROM cards
+			WHERE note_id = ANY($1)
+			ORDER BY note_id, deck_id
+		`
+		deckRows, err := r.db.QueryContext(ctx, deckQuery, pq.Array(noteIDs))
+		if err != nil {
+			return nil, fmt.Errorf("failed to query deck IDs: %w", err)
+		}
+
+		deckMap := make(map[int64]int64)
+		for deckRows.Next() {
+			var noteID, deckID int64
+			if err := deckRows.Scan(&noteID, &deckID); err != nil {
+				deckRows.Close()
+				return nil, fmt.Errorf("failed to scan deck ID: %w", err)
+			}
+			deckMap[noteID] = deckID
+		}
+		deckRows.Close()
+
+		// Build duplicate note info list
+		duplicateNotes := make([]*note.DuplicateNoteInfo, len(notesData))
+		for i, nd := range notesData {
+			deckID := int64(0) // Default if no card found
+			if d, ok := deckMap[nd.ID]; ok {
+				deckID = d
+			}
+
+			duplicateNotes[i] = &note.DuplicateNoteInfo{
+				ID:        nd.ID,
+				GUID:      nd.GUID,
+				DeckID:    deckID,
+				CreatedAt: nd.CreatedAt,
+			}
+		}
+
+		groups = append(groups, &note.DuplicateGroup{
+			FieldValue: fieldValue,
+			Notes:      duplicateNotes,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating duplicate groups: %w", err)
+	}
+
+	return groups, nil
 }
 
 // Ensure NoteRepository implements INoteRepository

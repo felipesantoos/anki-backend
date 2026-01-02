@@ -43,12 +43,21 @@ type ListNotesRequest struct {
 // CopyNoteRequest represents the request payload to copy a note
 type CopyNoteRequest struct {
 	// Optional deck ID (if not provided, uses original note's deck)
-	DeckID *int64 `json:"deck_id" example:"1"`
+	DeckID *int64 `json:"deck_id" example:"1" validate:"omitempty,gt=0"`
 
 	// Whether to copy tags from original note
 	CopyTags bool `json:"copy_tags" example:"true"`
 
 	// Whether to copy media from original note (future feature)
 	CopyMedia bool `json:"copy_media" example:"true"`
+}
+
+// FindDuplicatesRequest represents the request payload to find duplicate notes
+type FindDuplicatesRequest struct {
+	// Optional note type ID (if not provided, searches across all note types)
+	NoteTypeID *int64 `json:"note_type_id" example:"1" validate:"omitempty,gt=0"`
+
+	// Field name to search for duplicates (required)
+	FieldName string `json:"field_name" example:"Front" validate:"required"`
 }
 

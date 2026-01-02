@@ -2,12 +2,14 @@ package note
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
+	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
@@ -347,5 +349,68 @@ func (s *NoteService) Copy(ctx context.Context, userID int64, noteID int64, deck
 	}
 
 	return copiedNote, nil
+}
+
+// FindDuplicates finds duplicate notes based on a field value
+func (s *NoteService) FindDuplicates(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) (*note.DuplicateResult, error) {
+	if fieldName == "" {
+		return &note.DuplicateResult{
+			Duplicates: []*note.DuplicateGroup{},
+			Total:      0,
+		}, nil
+	}
+
+	// If noteTypeID is provided, validate ownership and field name
+	if noteTypeID != nil {
+		nt, err := s.noteTypeRepo.FindByID(ctx, userID, *noteTypeID)
+		if err != nil {
+			if errors.Is(err, ownership.ErrResourceNotFound) {
+				return nil, fmt.Errorf("note type not found")
+			}
+			return nil, err
+		}
+		if nt == nil {
+			return nil, fmt.Errorf("note type not found")
+		}
+
+		// Validate field name exists in note type
+		if err := s.validateFieldName(nt, fieldName); err != nil {
+			return nil, err
+		}
+	}
+
+	// Find duplicates via repository
+	groups, err := s.noteRepo.FindDuplicatesByField(ctx, userID, noteTypeID, fieldName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &note.DuplicateResult{
+		Duplicates: groups,
+		Total:      len(groups),
+	}, nil
+}
+
+// validateFieldName validates that a field name exists in the note type
+func (s *NoteService) validateFieldName(nt *notetype.NoteType, fieldName string) error {
+	if nt.GetFieldsJSON() == "" {
+		return fmt.Errorf("note type has no fields defined")
+	}
+
+	var fields []map[string]interface{}
+	if err := json.Unmarshal([]byte(nt.GetFieldsJSON()), &fields); err != nil {
+		return fmt.Errorf("invalid note type fields JSON: %w", err)
+	}
+
+	for _, field := range fields {
+		// Check if field has "name" key
+		if nameValue, exists := field["name"]; exists {
+			if name, ok := nameValue.(string); ok && name == fieldName {
+				return nil // Field found
+			}
+		}
+	}
+
+	return fmt.Errorf("field '%s' not found in note type", fieldName)
 }
 

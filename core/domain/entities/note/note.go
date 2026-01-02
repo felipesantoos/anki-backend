@@ -196,3 +196,23 @@ type NoteFilters struct {
 	Offset     int
 }
 
+// DuplicateGroup represents a group of duplicate notes with the same field value
+type DuplicateGroup struct {
+	FieldValue string
+	Notes      []*DuplicateNoteInfo
+}
+
+// DuplicateNoteInfo contains basic information about a duplicate note
+type DuplicateNoteInfo struct {
+	ID        int64
+	GUID      string
+	DeckID    int64
+	CreatedAt time.Time
+}
+
+// DuplicateResult contains the result of a duplicate search
+type DuplicateResult struct {
+	Duplicates []*DuplicateGroup
+	Total      int
+}
+

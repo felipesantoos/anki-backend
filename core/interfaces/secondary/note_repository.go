@@ -53,4 +53,8 @@ type INoteRepository interface {
 	// FindByAdvancedSearch finds notes matching advanced search criteria
 	// Combines multiple filters: deck, tags, fields, card states, properties
 	FindByAdvancedSearch(ctx context.Context, userID int64, query *search.SearchQuery, limit int, offset int) ([]*note.Note, error)
+
+	// FindDuplicatesByField finds duplicate notes grouped by field value
+	// Returns groups of notes that have the same value for the specified field
+	FindDuplicatesByField(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) ([]*note.DuplicateGroup, error)
 }

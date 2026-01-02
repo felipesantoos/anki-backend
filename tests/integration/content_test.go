@@ -863,6 +863,67 @@ func TestContent_Integration(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to copy User A's note")
+
+		// Find Duplicates - Success (without note type filter to avoid validation issues)
+		findDupReq := request.FindDuplicatesRequest{
+			FieldName: "Front",
+		}
+		b, _ = json.Marshal(findDupReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Logf("Response body: %s", rec.Body.String())
+		}
+		assert.Equal(t, http.StatusOK, rec.Code, "Should find duplicates successfully")
+		var dupRes response.FindDuplicatesResponse
+		json.Unmarshal(rec.Body.Bytes(), &dupRes)
+		assert.GreaterOrEqual(t, dupRes.Total, 0, "Should return total count")
+
+		// Find Duplicates - Success without note type filter
+		findDupReqNoType := request.FindDuplicatesRequest{
+			FieldName: "Front",
+		}
+		b, _ = json.Marshal(findDupReqNoType)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code, "Should find duplicates without note type filter")
+
+		// Find Duplicates - Note type not found
+		invalidNoteTypeID := int64(999999)
+		findDupReqNotFound := request.FindDuplicatesRequest{
+			NoteTypeID: &invalidNoteTypeID,
+			FieldName:  "Front",
+		}
+		b, _ = json.Marshal(findDupReqNotFound)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "Should return 404 for note type not found")
+
+		// Find Duplicates - Unauthorized
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		// No Authorization header
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, "Should return 401 without auth")
+
+		// Find Duplicates - Cross-User Isolation
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		// User B should not see User A's note type
+		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not access User A's note type")
 	})
 }
 

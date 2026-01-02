@@ -30,3 +30,35 @@ func ToNoteResponseList(notes []*note.Note) []*response.NoteResponse {
 	return res
 }
 
+// ToFindDuplicatesResponse converts a DuplicateResult domain entity to a FindDuplicatesResponse DTO
+func ToFindDuplicatesResponse(result *note.DuplicateResult) *response.FindDuplicatesResponse {
+	if result == nil {
+		return &response.FindDuplicatesResponse{
+			Duplicates: []response.DuplicateGroup{},
+			Total:      0,
+		}
+	}
+
+	groups := make([]response.DuplicateGroup, len(result.Duplicates))
+	for i, group := range result.Duplicates {
+		notes := make([]response.DuplicateNoteInfo, len(group.Notes))
+		for j, n := range group.Notes {
+			notes[j] = response.DuplicateNoteInfo{
+				ID:        n.ID,
+				GUID:      n.GUID,
+				DeckID:    n.DeckID,
+				CreatedAt: n.CreatedAt,
+			}
+		}
+		groups[i] = response.DuplicateGroup{
+			FirstField: group.FieldValue,
+			Notes:      notes,
+		}
+	}
+
+	return &response.FindDuplicatesResponse{
+		Duplicates: groups,
+		Total:      result.Total,
+	}
+}
+

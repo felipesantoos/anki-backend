@@ -55,9 +55,12 @@ type CopyNoteRequest struct {
 // FindDuplicatesRequest represents the request payload to find duplicate notes
 type FindDuplicatesRequest struct {
 	// Optional note type ID (if not provided, searches across all note types)
+	// If provided and field_name is empty, automatically uses the first field of the note type
 	NoteTypeID *int64 `json:"note_type_id" example:"1" validate:"omitempty,gt=0"`
 
-	// Field name to search for duplicates (required)
-	FieldName string `json:"field_name" example:"Front" validate:"required"`
+	// Field name to search for duplicates (optional)
+	// If note_type_id is provided and field_name is empty, the first field of the note type will be used automatically
+	// If note_type_id is not provided, field_name is required
+	FieldName string `json:"field_name" example:"Front" validate:"omitempty"`
 }
 

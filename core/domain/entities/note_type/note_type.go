@@ -2,6 +2,7 @@ package notetype
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -126,5 +127,40 @@ func (nt *NoteType) GetCardTypeCount() int {
 	}
 
 	return len(cardTypes)
+}
+
+// GetFirstFieldName returns the name of the first field in the note type
+// Returns error if fields array is empty or invalid
+func (nt *NoteType) GetFirstFieldName() (string, error) {
+	if nt.fieldsJSON == "" {
+		return "", fmt.Errorf("note type has no fields defined")
+	}
+
+	var fields []map[string]interface{}
+	if err := json.Unmarshal([]byte(nt.fieldsJSON), &fields); err != nil {
+		return "", fmt.Errorf("invalid note type fields JSON: %w", err)
+	}
+
+	if len(fields) == 0 {
+		return "", fmt.Errorf("note type has no fields defined")
+	}
+
+	// Get first field (index 0)
+	firstField := fields[0]
+	nameValue, exists := firstField["name"]
+	if !exists {
+		return "", fmt.Errorf("first field has no name property")
+	}
+
+	name, ok := nameValue.(string)
+	if !ok {
+		return "", fmt.Errorf("first field name is not a string")
+	}
+
+	if name == "" {
+		return "", fmt.Errorf("first field name is empty")
+	}
+
+	return name, nil
 }
 

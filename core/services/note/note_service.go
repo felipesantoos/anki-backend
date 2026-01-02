@@ -352,15 +352,9 @@ func (s *NoteService) Copy(ctx context.Context, userID int64, noteID int64, deck
 }
 
 // FindDuplicates finds duplicate notes based on a field value
+// If fieldName is empty and noteTypeID is provided, automatically uses the first field of the note type
 func (s *NoteService) FindDuplicates(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) (*note.DuplicateResult, error) {
-	if fieldName == "" {
-		return &note.DuplicateResult{
-			Duplicates: []*note.DuplicateGroup{},
-			Total:      0,
-		}, nil
-	}
-
-	// If noteTypeID is provided, validate ownership and field name
+	// If noteTypeID is provided, we can automatically detect the first field
 	if noteTypeID != nil {
 		nt, err := s.noteTypeRepo.FindByID(ctx, userID, *noteTypeID)
 		if err != nil {
@@ -373,9 +367,26 @@ func (s *NoteService) FindDuplicates(ctx context.Context, userID int64, noteType
 			return nil, fmt.Errorf("note type not found")
 		}
 
-		// Validate field name exists in note type
-		if err := s.validateFieldName(nt, fieldName); err != nil {
-			return nil, err
+		// If fieldName is empty, automatically extract first field from note type
+		if fieldName == "" {
+			var err error
+			fieldName, err = nt.GetFirstFieldName()
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// Validate field name exists in note type
+			if err := s.validateFieldName(nt, fieldName); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// If noteTypeID is not provided and fieldName is empty, return empty result
+		if fieldName == "" {
+			return &note.DuplicateResult{
+				Duplicates: []*note.DuplicateGroup{},
+				Total:      0,
+			}, nil
 		}
 	}
 

@@ -237,6 +237,7 @@ func (h *NoteHandler) Copy(c echo.Context) error {
 
 // FindDuplicates handles POST /api/v1/notes/find-duplicates
 // @Summary Find duplicate notes
+// @Description Find duplicate notes based on a field value. If note_type_id is provided and field_name is empty, automatically uses the first field of the note type.
 // @Tags notes
 // @Accept json
 // @Produce json

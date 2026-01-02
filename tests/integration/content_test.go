@@ -924,6 +924,78 @@ func TestContent_Integration(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		// User B should not see User A's note type
 		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not access User A's note type")
+
+		// Find Duplicates - Success with automatic first field detection (fieldName omitted)
+		// First, create a note type with a known first field
+		var autoNoteTypeID int64
+		err = db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Auto First Field Test', '[{\"name\":\"Question\"},{\"name\":\"Answer\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&autoNoteTypeID)
+		require.NoError(t, err)
+
+		// Create duplicate notes with same "Question" field value
+		var noteID1, noteID2 int64
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, guid, note_type_id, fields_json) VALUES ($1, gen_random_uuid()::text, $2, '{\"Question\":\"Same Question\",\"Answer\":\"Answer 1\"}') RETURNING id", loginRes.User.ID, autoNoteTypeID).Scan(&noteID1)
+		require.NoError(t, err)
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, guid, note_type_id, fields_json) VALUES ($1, gen_random_uuid()::text, $2, '{\"Question\":\"Same Question\",\"Answer\":\"Answer 2\"}') RETURNING id", loginRes.User.ID, autoNoteTypeID).Scan(&noteID2)
+		require.NoError(t, err)
+
+		// Test automatic first field detection (fieldName omitted)
+		findDupAutoReq := request.FindDuplicatesRequest{
+			NoteTypeID: &autoNoteTypeID,
+			// FieldName is omitted - should automatically use "Question" (first field)
+		}
+		b, _ = json.Marshal(findDupAutoReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code, "Should find duplicates with automatic first field detection")
+		var dupAutoRes response.FindDuplicatesResponse
+		json.Unmarshal(rec.Body.Bytes(), &dupAutoRes)
+		assert.GreaterOrEqual(t, dupAutoRes.Total, 0, "Should return total count")
+
+		// Find Duplicates - Success with automatic first field detection (fieldName empty string)
+		findDupAutoEmptyReq := request.FindDuplicatesRequest{
+			NoteTypeID: &autoNoteTypeID,
+			FieldName:  "", // Empty string - should automatically use first field
+		}
+		b, _ = json.Marshal(findDupAutoEmptyReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code, "Should find duplicates with automatic first field detection (empty fieldName)")
+
+		// Find Duplicates - Error when note type has no fields
+		var emptyFieldsNoteTypeID int64
+		err = db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Empty Fields Test', '[]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&emptyFieldsNoteTypeID)
+		require.NoError(t, err)
+
+		findDupEmptyFieldsReq := request.FindDuplicatesRequest{
+			NoteTypeID: &emptyFieldsNoteTypeID,
+			// FieldName omitted - should fail because note type has no fields
+		}
+		b, _ = json.Marshal(findDupEmptyFieldsReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 when note type has no fields")
+
+		// Find Duplicates - Backward compatibility (explicit fieldName still works)
+		findDupExplicitReq := request.FindDuplicatesRequest{
+			NoteTypeID: &autoNoteTypeID,
+			FieldName:  "Answer", // Explicit field name - should use this instead of first field
+		}
+		b, _ = json.Marshal(findDupExplicitReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code, "Should find duplicates with explicit field name (backward compatibility)")
 	})
 }
 

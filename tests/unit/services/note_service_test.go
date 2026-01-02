@@ -593,6 +593,126 @@ func TestNoteService_FindDuplicates(t *testing.T) {
 		assert.Nil(t, result)
 		mockNoteTypeRepo.AssertExpectations(t)
 	})
+
+	t.Run("Success with automatic first field detection", func(t *testing.T) {
+		// Setup note type with first field "Front"
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			Build()
+
+		// Setup duplicate groups
+		groups := []*note.DuplicateGroup{
+			{
+				FieldValue: "Hello",
+				Notes: []*note.DuplicateNoteInfo{
+					{ID: 1, GUID: "guid1", DeckID: 20, CreatedAt: time.Now()},
+					{ID: 2, GUID: "guid2", DeckID: 20, CreatedAt: time.Now()},
+				},
+			},
+		}
+
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+		// Should use "Front" (first field) automatically
+		mockNoteRepo.On("FindDuplicatesByField", mock.Anything, userID, &noteTypeID, "Front").Return(groups, nil).Once()
+
+		// Call with empty fieldName - should automatically use first field
+		result, err := service.FindDuplicates(ctx, userID, &noteTypeID, "")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.Total)
+		assert.Len(t, result.Duplicates, 1)
+		assert.Equal(t, "Hello", result.Duplicates[0].FieldValue)
+		mockNoteRepo.AssertExpectations(t)
+		mockNoteTypeRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error when note type has no fields", func(t *testing.T) {
+		// Setup note type with empty fields
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[]`).
+			Build()
+
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, &noteTypeID, "")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "note type has no fields defined")
+		assert.Nil(t, result)
+		mockNoteTypeRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error when note type fields JSON is invalid", func(t *testing.T) {
+		// Setup note type with invalid fields JSON
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`invalid json`).
+			Build()
+
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, &noteTypeID, "")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid note type fields JSON")
+		assert.Nil(t, result)
+		mockNoteTypeRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error when first field has no name property", func(t *testing.T) {
+		// Setup note type with first field missing name
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"ord":0},{"name":"Back"}]`).
+			Build()
+
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, &noteTypeID, "")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "first field has no name property")
+		assert.Nil(t, result)
+		mockNoteTypeRepo.AssertExpectations(t)
+	})
+
+	t.Run("Backward compatibility - explicit field name still works", func(t *testing.T) {
+		// Setup note type
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			Build()
+
+		// Setup duplicate groups
+		groups := []*note.DuplicateGroup{
+			{
+				FieldValue: "World",
+				Notes: []*note.DuplicateNoteInfo{
+					{ID: 3, GUID: "guid3", DeckID: 21, CreatedAt: time.Now()},
+				},
+			},
+		}
+
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+		// Should use explicit field name "Back" instead of first field "Front"
+		mockNoteRepo.On("FindDuplicatesByField", mock.Anything, userID, &noteTypeID, "Back").Return(groups, nil).Once()
+
+		result, err := service.FindDuplicates(ctx, userID, &noteTypeID, "Back")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.Total)
+		mockNoteRepo.AssertExpectations(t)
+		mockNoteTypeRepo.AssertExpectations(t)
+	})
 }
 
 func TestNoteService_FindByID(t *testing.T) {

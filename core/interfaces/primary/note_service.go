@@ -34,5 +34,9 @@ type INoteService interface {
 
 	// FindDuplicates finds duplicate notes based on a field value
 	FindDuplicates(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) (*note.DuplicateResult, error)
+
+	// FindDuplicatesByGUID finds duplicate notes based on GUID value
+	// Returns groups of notes that have the same GUID (useful for data integrity checks)
+	FindDuplicatesByGUID(ctx context.Context, userID int64) (*note.DuplicateResult, error)
 }
 

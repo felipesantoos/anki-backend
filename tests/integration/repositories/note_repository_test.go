@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/felipesantos/anki-backend/core/domain/entities/card"
 	deckEntity "github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
@@ -976,6 +977,184 @@ func TestNoteRepository_FindDuplicatesByField(t *testing.T) {
 		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, nil, "")
 		require.NoError(t, err)
 		assert.Empty(t, groups)
+	})
+}
+
+func TestNoteRepository_FindDuplicatesByGUID(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	cardRepo := repositories.NewCardRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "find_duplicates_guid_user")
+
+	// Create note type
+	noteType, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID, noteType)
+	require.NoError(t, err)
+	noteTypeID := noteType.GetID()
+
+	// Create deck
+	defaultDeckID, err := deckRepo.CreateDefaultDeck(ctx, userID)
+	require.NoError(t, err)
+	deckID := defaultDeckID
+
+	// Create notes with unique GUIDs (normal scenario - no duplicates)
+	// Note: The database has a UNIQUE constraint on GUID, so we cannot create actual duplicates
+	// This test verifies the method works correctly when there are no duplicates
+	guid1, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	require.NoError(t, err)
+	guid2, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440001")
+	require.NoError(t, err)
+
+	// Create note 1
+	note1, err := note.NewBuilder().
+		WithUserID(userID).
+		WithGUID(guid1).
+		WithNoteTypeID(noteTypeID).
+		WithFieldsJSON(`{"Front":"Note 1","Back":"Back 1"}`).
+		WithTags([]string{}).
+		Build()
+	require.NoError(t, err)
+	err = noteRepo.Save(ctx, userID, note1)
+	require.NoError(t, err)
+	note1ID := note1.GetID()
+
+	// Create card for note 1
+	card1, err := card.NewBuilder().
+		WithID(0).
+		WithNoteID(note1ID).
+		WithCardTypeID(1).
+		WithDeckID(deckID).
+		WithDue(time.Now().Unix() * 1000).
+		WithInterval(86400).
+		WithEase(2500).
+		WithLapses(0).
+		WithReps(0).
+		WithState(valueobjects.CardStateNew).
+		WithPosition(0).
+		WithFlag(0).
+		WithSuspended(false).
+		WithBuried(false).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = cardRepo.Save(ctx, userID, card1)
+	require.NoError(t, err)
+
+	// Create note 2 with different GUID
+	note2, err := note.NewBuilder().
+		WithUserID(userID).
+		WithGUID(guid2).
+		WithNoteTypeID(noteTypeID).
+		WithFieldsJSON(`{"Front":"Note 2","Back":"Back 2"}`).
+		WithTags([]string{}).
+		Build()
+	require.NoError(t, err)
+	err = noteRepo.Save(ctx, userID, note2)
+	require.NoError(t, err)
+	note2ID := note2.GetID()
+
+	// Create card for note 2
+	card2, err := card.NewBuilder().
+		WithID(0).
+		WithNoteID(note2ID).
+		WithCardTypeID(1).
+		WithDeckID(deckID).
+		WithDue(time.Now().Unix() * 1000).
+		WithInterval(86400).
+		WithEase(2500).
+		WithLapses(0).
+		WithReps(0).
+		WithState(valueobjects.CardStateNew).
+		WithPosition(0).
+		WithFlag(0).
+		WithSuspended(false).
+		WithBuried(false).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = cardRepo.Save(ctx, userID, card2)
+	require.NoError(t, err)
+
+	t.Run("Success no duplicates found (normal scenario)", func(t *testing.T) {
+		// In normal operation, GUIDs are unique, so no duplicates should be found
+		groups, err := noteRepo.FindDuplicatesByGUID(ctx, userID)
+		require.NoError(t, err)
+		assert.Empty(t, groups, "Should find no duplicates when all GUIDs are unique")
+	})
+
+	t.Run("Success no duplicates found", func(t *testing.T) {
+		// Create a new user with no duplicate GUIDs
+		userID2, _ := createTestUser(t, ctx, userRepo, "find_duplicates_guid_user2")
+		
+		groups, err := noteRepo.FindDuplicatesByGUID(ctx, userID2)
+		require.NoError(t, err)
+		assert.Empty(t, groups, "Should find no duplicates for user with no duplicate GUIDs")
+	})
+
+	t.Run("Cross-user isolation", func(t *testing.T) {
+		userID2, _ := createTestUser(t, ctx, userRepo, "find_duplicates_guid_user3")
+		
+		// Create note for user 2 with unique GUID
+		guid4, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440002")
+		require.NoError(t, err)
+		
+		noteType2, err := notetype.NewBuilder().
+			WithID(0).
+			WithUserID(userID2).
+			WithName("Basic").
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithCardTypesJSON(`[{"name":"Card 1"}]`).
+			WithTemplatesJSON(`[{"name":"Template 1"}]`).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+		err = noteTypeRepo.Save(ctx, userID2, noteType2)
+		require.NoError(t, err)
+
+		_, err = deckRepo.CreateDefaultDeck(ctx, userID2)
+		require.NoError(t, err)
+
+		note4, err := note.NewBuilder().
+			WithUserID(userID2).
+			WithGUID(guid4).
+			WithNoteTypeID(noteType2.GetID()).
+			WithFieldsJSON(`{"Front":"Note 4","Back":"Back 4"}`).
+			WithTags([]string{}).
+			Build()
+		require.NoError(t, err)
+		err = noteRepo.Save(ctx, userID2, note4)
+		require.NoError(t, err)
+
+		// User 1 should not see User 2's notes
+		groups, err := noteRepo.FindDuplicatesByGUID(ctx, userID)
+		require.NoError(t, err)
+		// User 1 should not see any duplicates (all GUIDs are unique)
+		assert.Empty(t, groups, "User 1 should not see User 2's notes")
+		
+		// User 2 should also not see duplicates
+		groups2, err := noteRepo.FindDuplicatesByGUID(ctx, userID2)
+		require.NoError(t, err)
+		assert.Empty(t, groups2, "User 2 should not see duplicates either")
 	})
 }
 

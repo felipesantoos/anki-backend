@@ -402,6 +402,20 @@ func (s *NoteService) FindDuplicates(ctx context.Context, userID int64, noteType
 	}, nil
 }
 
+// FindDuplicatesByGUID finds duplicate notes based on GUID value
+func (s *NoteService) FindDuplicatesByGUID(ctx context.Context, userID int64) (*note.DuplicateResult, error) {
+	// Find duplicates via repository
+	groups, err := s.noteRepo.FindDuplicatesByGUID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &note.DuplicateResult{
+		Duplicates: groups,
+		Total:      len(groups),
+	}, nil
+}
+
 // validateFieldName validates that a field name exists in the note type
 func (s *NoteService) validateFieldName(nt *notetype.NoteType, fieldName string) error {
 	if nt.GetFieldsJSON() == "" {

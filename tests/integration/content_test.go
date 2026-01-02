@@ -997,6 +997,70 @@ func TestContent_Integration(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code, "Should find duplicates with explicit field name (backward compatibility)")
 	})
+
+	// Find Duplicates by GUID - Success (no duplicates found in normal scenario)
+	// Note: The database has a UNIQUE constraint on GUID, so we cannot create actual duplicates
+	// This test verifies the method works correctly when there are no duplicates (normal scenario)
+	guid1 := "550e8400-e29b-41d4-a716-446655440000"
+	guid2 := "550e8400-e29b-41d4-a716-446655440001"
+	var noteID1, noteID2 int64
+	err = db.DB.QueryRow("INSERT INTO notes (user_id, guid, note_type_id, fields_json, tags) VALUES ($1, $2, $3, '{\"Front\":\"Note 1\",\"Back\":\"Back 1\"}', '{}') RETURNING id", loginRes.User.ID, guid1, noteTypeID).Scan(&noteID1)
+	require.NoError(t, err)
+	err = db.DB.QueryRow("INSERT INTO notes (user_id, guid, note_type_id, fields_json, tags) VALUES ($1, $2, $3, '{\"Front\":\"Note 2\",\"Back\":\"Back 2\"}', '{}') RETURNING id", loginRes.User.ID, guid2, noteTypeID).Scan(&noteID2)
+	require.NoError(t, err)
+
+	findDupGUIDReq := request.FindDuplicatesRequest{
+		UseGUID: true,
+	}
+	b, _ := json.Marshal(findDupGUIDReq)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code, "Should return OK when searching for duplicates by GUID")
+	var dupGUIDRes response.FindDuplicatesResponse
+	json.Unmarshal(rec.Body.Bytes(), &dupGUIDRes)
+	// In normal operation, GUIDs are unique, so no duplicates should be found
+	assert.Equal(t, 0, dupGUIDRes.Total, "Should find no duplicates when all GUIDs are unique")
+
+	// Find Duplicates by GUID - No duplicates found
+	// Create a new user with no duplicate GUIDs
+	loginRes2 := registerAndLogin(t, e, "find_duplicates_guid_user2@example.com", "password123")
+	token2 := loginRes2.AccessToken
+
+	findDupGUIDReq2 := request.FindDuplicatesRequest{
+		UseGUID: true,
+	}
+	b2, _ := json.Marshal(findDupGUIDReq2)
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b2))
+	req2.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req2.Header.Set("Authorization", "Bearer "+token2)
+	rec2 := httptest.NewRecorder()
+	e.ServeHTTP(rec2, req2)
+	assert.Equal(t, http.StatusOK, rec2.Code, "Should return OK even when no duplicates found")
+	var dupGUIDRes2 response.FindDuplicatesResponse
+	json.Unmarshal(rec2.Body.Bytes(), &dupGUIDRes2)
+	assert.Equal(t, 0, dupGUIDRes2.Total, "Should return 0 duplicates for user with no duplicate GUIDs")
+
+	// Find Duplicates by GUID - Cross-User Isolation
+	req3 := httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b2))
+	req3.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req3.Header.Set("Authorization", "Bearer "+token2)
+	rec3 := httptest.NewRecorder()
+	e.ServeHTTP(rec3, req3)
+	// User 2 should not see User 1's duplicates
+	var dupGUIDRes3 response.FindDuplicatesResponse
+	json.Unmarshal(rec3.Body.Bytes(), &dupGUIDRes3)
+	assert.Equal(t, 0, dupGUIDRes3.Total, "User 2 should not see User 1's duplicate GUIDs")
+
+	// Find Duplicates by GUID - Unauthorized
+	req4 := httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b2))
+	req4.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	// No Authorization header
+	rec4 := httptest.NewRecorder()
+	e.ServeHTTP(rec4, req4)
+	assert.Equal(t, http.StatusUnauthorized, rec4.Code, "Should return 401 without auth")
 }
 
 func TestSearch_Regex(t *testing.T) {

@@ -62,5 +62,9 @@ type FindDuplicatesRequest struct {
 	// If note_type_id is provided and field_name is empty, the first field of the note type will be used automatically
 	// If note_type_id is not provided, field_name is required
 	FieldName string `json:"field_name" example:"Front" validate:"omitempty"`
+
+	// Use GUID for duplicate detection instead of field value
+	// If true, finds duplicates based on GUID value (ignores field_name and note_type_id)
+	UseGUID bool `json:"use_guid" example:"false"`
 }
 

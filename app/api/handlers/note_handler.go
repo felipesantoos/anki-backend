@@ -237,7 +237,7 @@ func (h *NoteHandler) Copy(c echo.Context) error {
 
 // FindDuplicates handles POST /api/v1/notes/find-duplicates
 // @Summary Find duplicate notes
-// @Description Find duplicate notes based on a field value. If note_type_id is provided and field_name is empty, automatically uses the first field of the note type.
+// @Description Find duplicate notes based on a field value or GUID. If use_guid is true, finds duplicates by GUID value (ignores field_name and note_type_id). If use_guid is false and note_type_id is provided with empty field_name, automatically uses the first field of the note type.
 // @Tags notes
 // @Accept json
 // @Produce json
@@ -254,7 +254,17 @@ func (h *NoteHandler) FindDuplicates(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	result, err := h.service.FindDuplicates(ctx, userID, req.NoteTypeID, req.FieldName)
+	var result *note.DuplicateResult
+	var err error
+
+	// If UseGUID is true, use GUID-based detection
+	if req.UseGUID {
+		result, err = h.service.FindDuplicatesByGUID(ctx, userID)
+	} else {
+		// Otherwise, use field-based detection
+		result, err = h.service.FindDuplicates(ctx, userID, req.NoteTypeID, req.FieldName)
+	}
+
 	if err != nil {
 		return handleNoteError(err)
 	}

@@ -57,4 +57,8 @@ type INoteRepository interface {
 	// FindDuplicatesByField finds duplicate notes grouped by field value
 	// Returns groups of notes that have the same value for the specified field
 	FindDuplicatesByField(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) ([]*note.DuplicateGroup, error)
+
+	// FindDuplicatesByGUID finds duplicate notes grouped by GUID value
+	// Returns groups of notes that have the same GUID (should not happen in normal operation, but useful for data integrity checks)
+	FindDuplicatesByGUID(ctx context.Context, userID int64) ([]*note.DuplicateGroup, error)
 }

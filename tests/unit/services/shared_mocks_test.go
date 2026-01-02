@@ -146,6 +146,9 @@ func (m *MockNoteRepository) FindBySearch(ctx context.Context, uid int64, s stri
 func (m *MockNoteRepository) FindDuplicatesByField(ctx context.Context, uid int64, ntid *int64, fn string) ([]*note.DuplicateGroup, error) {
 	args := m.Called(ctx, uid, ntid, fn); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.DuplicateGroup), args.Error(1)
 }
+func (m *MockNoteRepository) FindDuplicatesByGUID(ctx context.Context, uid int64) ([]*note.DuplicateGroup, error) {
+	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.DuplicateGroup), args.Error(1)
+}
 
 // MockCardRepository
 type MockCardRepository struct{ mock.Mock }

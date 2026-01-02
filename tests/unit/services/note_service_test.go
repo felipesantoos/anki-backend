@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -712,6 +713,95 @@ func TestNoteService_FindDuplicates(t *testing.T) {
 		assert.Equal(t, 1, result.Total)
 		mockNoteRepo.AssertExpectations(t)
 		mockNoteTypeRepo.AssertExpectations(t)
+	})
+}
+
+func TestNoteService_FindDuplicatesByGUID(t *testing.T) {
+	mockNoteRepo := new(MockNoteRepository)
+	mockCardRepo := new(MockCardRepository)
+	mockNoteTypeRepo := new(MockNoteTypeRepository)
+	mockDeckRepo := new(MockDeckRepository)
+	mockTM := new(MockTransactionManager)
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+
+	t.Run("Success with duplicates found", func(t *testing.T) {
+		// Setup duplicate groups with same GUID
+		groups := []*note.DuplicateGroup{
+			{
+				FieldValue: "550e8400-e29b-41d4-a716-446655440000",
+				Notes: []*note.DuplicateNoteInfo{
+					{ID: 1, GUID: "550e8400-e29b-41d4-a716-446655440000", DeckID: 20, CreatedAt: time.Now()},
+					{ID: 2, GUID: "550e8400-e29b-41d4-a716-446655440000", DeckID: 21, CreatedAt: time.Now()},
+				},
+			},
+		}
+
+		mockNoteRepo.On("FindDuplicatesByGUID", mock.Anything, userID).Return(groups, nil).Once()
+
+		result, err := service.FindDuplicatesByGUID(ctx, userID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 1, result.Total)
+		assert.Len(t, result.Duplicates, 1)
+		assert.Equal(t, "550e8400-e29b-41d4-a716-446655440000", result.Duplicates[0].FieldValue)
+		assert.Len(t, result.Duplicates[0].Notes, 2)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Success no duplicates found", func(t *testing.T) {
+		mockNoteRepo.On("FindDuplicatesByGUID", mock.Anything, userID).Return([]*note.DuplicateGroup{}, nil).Once()
+
+		result, err := service.FindDuplicatesByGUID(ctx, userID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 0, result.Total)
+		assert.Empty(t, result.Duplicates)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Repository error", func(t *testing.T) {
+		expectedErr := fmt.Errorf("database error")
+		mockNoteRepo.On("FindDuplicatesByGUID", mock.Anything, userID).Return(nil, expectedErr).Once()
+
+		result, err := service.FindDuplicatesByGUID(ctx, userID)
+
+		assert.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+		assert.Nil(t, result)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Multiple duplicate groups", func(t *testing.T) {
+		groups := []*note.DuplicateGroup{
+			{
+				FieldValue: "guid1",
+				Notes: []*note.DuplicateNoteInfo{
+					{ID: 1, GUID: "guid1", DeckID: 20, CreatedAt: time.Now()},
+					{ID: 2, GUID: "guid1", DeckID: 21, CreatedAt: time.Now()},
+				},
+			},
+			{
+				FieldValue: "guid2",
+				Notes: []*note.DuplicateNoteInfo{
+					{ID: 3, GUID: "guid2", DeckID: 22, CreatedAt: time.Now()},
+					{ID: 4, GUID: "guid2", DeckID: 23, CreatedAt: time.Now()},
+				},
+			},
+		}
+
+		mockNoteRepo.On("FindDuplicatesByGUID", mock.Anything, userID).Return(groups, nil).Once()
+
+		result, err := service.FindDuplicatesByGUID(ctx, userID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, 2, result.Total)
+		assert.Len(t, result.Duplicates, 2)
+		mockNoteRepo.AssertExpectations(t)
 	})
 }
 

@@ -1001,6 +1001,14 @@ func TestContent_Integration(t *testing.T) {
 	// Find Duplicates by GUID - Success (no duplicates found in normal scenario)
 	// Note: The database has a UNIQUE constraint on GUID, so we cannot create actual duplicates
 	// This test verifies the method works correctly when there are no duplicates (normal scenario)
+	// Use the noteTypeID from the NoteTypes subtest (scope level)
+	// If it's not set, create a new one
+	if noteTypeID == 0 {
+		var newNoteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'GUID Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&newNoteTypeID)
+		require.NoError(t, err)
+		noteTypeID = newNoteTypeID
+	}
 	guid1 := "550e8400-e29b-41d4-a716-446655440000"
 	guid2 := "550e8400-e29b-41d4-a716-446655440001"
 	var noteID1, noteID2 int64
@@ -1061,6 +1069,89 @@ func TestContent_Integration(t *testing.T) {
 	rec4 := httptest.NewRecorder()
 	e.ServeHTTP(rec4, req4)
 	assert.Equal(t, http.StatusUnauthorized, rec4.Code, "Should return 401 without auth")
+
+	// Find Duplicates - Edge Cases
+	t.Run("Notes with no cards (deck_id = 0)", func(t *testing.T) {
+		// Create a note type for this test
+		var edgeCaseNoteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Edge Case Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&edgeCaseNoteTypeID)
+		require.NoError(t, err)
+		
+		// Create a note without any cards
+		var noteIDNoCard int64
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, guid, note_type_id, fields_json, tags) VALUES ($1, gen_random_uuid()::text, $2, '{\"Front\":\"NoCardTest\"}', '{}') RETURNING id", loginRes.User.ID, edgeCaseNoteTypeID).Scan(&noteIDNoCard)
+		require.NoError(t, err)
+
+		// Create another note with the same field value to create a duplicate
+		var noteIDNoCard2 int64
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, guid, note_type_id, fields_json, tags) VALUES ($1, gen_random_uuid()::text, $2, '{\"Front\":\"NoCardTest\"}', '{}') RETURNING id", loginRes.User.ID, edgeCaseNoteTypeID).Scan(&noteIDNoCard2)
+		require.NoError(t, err)
+
+		findDupReq := request.FindDuplicatesRequest{
+			NoteTypeID: &edgeCaseNoteTypeID,
+			FieldName:  "Front",
+		}
+		b, _ := json.Marshal(findDupReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Logf("Response body: %s", rec.Body.String())
+		}
+		assert.Equal(t, http.StatusOK, rec.Code, "Should handle notes with no cards")
+		var res response.FindDuplicatesResponse
+		json.Unmarshal(rec.Body.Bytes(), &res)
+		// If there are duplicates, verify deck_id is 0 for notes without cards
+		for _, group := range res.Duplicates {
+			for _, noteInfo := range group.Notes {
+				if noteInfo.ID == noteIDNoCard || noteInfo.ID == noteIDNoCard2 {
+					assert.Equal(t, int64(0), noteInfo.DeckID, "Note without cards should have deck_id = 0")
+				}
+			}
+		}
+	})
+
+	t.Run("SQL injection attempt in field_name", func(t *testing.T) {
+		// Attempt SQL injection in field_name
+		maliciousFieldName := "Front'; DROP TABLE notes; --"
+		findDupReq := request.FindDuplicatesRequest{
+			NoteTypeID: &noteTypeID,
+			FieldName:  maliciousFieldName,
+		}
+		b, _ := json.Marshal(findDupReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		// Should either return 400 (validation error) or 404 (field not found) or 200 with empty results
+		// The important thing is that it doesn't execute SQL injection
+		assert.True(t, rec.Code == http.StatusOK || rec.Code == http.StatusBadRequest || rec.Code == http.StatusNotFound, "Should not execute SQL injection, got code: %d", rec.Code)
+		// Verify table still exists by querying it
+		var count int
+		err := db.DB.QueryRow("SELECT COUNT(*) FROM notes WHERE user_id = $1", loginRes.User.ID).Scan(&count)
+		require.NoError(t, err, "Table should still exist after SQL injection attempt")
+	})
+
+	t.Run("Invalid JSON in fields_json", func(t *testing.T) {
+		// Test that the query handles missing fields gracefully
+		// The field "NonExistentField" doesn't exist in the note type, so it should return 400
+		findDupReq := request.FindDuplicatesRequest{
+			NoteTypeID: &noteTypeID,
+			FieldName:  "NonExistentField",
+		}
+		b, _ := json.Marshal(findDupReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/find-duplicates", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		// Should return 400 because field doesn't exist in note type
+		// Or 404 if note type validation happens first
+		assert.True(t, rec.Code == http.StatusBadRequest || rec.Code == http.StatusNotFound, "Should return 400 or 404 for invalid field name, got: %d", rec.Code)
+	})
 }
 
 func TestSearch_Regex(t *testing.T) {

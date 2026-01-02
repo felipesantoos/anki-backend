@@ -252,6 +252,30 @@ func (m *MockNoteService) RemoveTag(ctx context.Context, userID int64, id int64,
 	return args.Error(0)
 }
 
+func (m *MockNoteService) Copy(ctx context.Context, userID int64, noteID int64, deckID *int64, copyTags bool, copyMedia bool) (*note.Note, error) {
+	args := m.Called(ctx, userID, noteID, deckID, copyTags, copyMedia)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*note.Note), args.Error(1)
+}
+
+func (m *MockNoteService) FindDuplicates(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) (*note.DuplicateResult, error) {
+	args := m.Called(ctx, userID, noteTypeID, fieldName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*note.DuplicateResult), args.Error(1)
+}
+
+func (m *MockNoteService) FindDuplicatesByGUID(ctx context.Context, userID int64) (*note.DuplicateResult, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*note.DuplicateResult), args.Error(1)
+}
+
 // MockNoteTypeService is a mock implementation of INoteTypeService
 type MockNoteTypeService struct {
 	mock.Mock

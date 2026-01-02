@@ -37,8 +37,8 @@ type FindDuplicatesResponse struct {
 
 // DuplicateGroup represents a group of duplicate notes with the same field value
 type DuplicateGroup struct {
-	// The field value that is duplicated
-	FirstField string `json:"first_field" example:"Hello"`
+	// The field value that is duplicated (field value for field-based detection, GUID for GUID-based detection)
+	FieldValue string `json:"field_value" example:"Hello"`
 
 	// List of notes with this field value
 	Notes []DuplicateNoteInfo `json:"notes"`

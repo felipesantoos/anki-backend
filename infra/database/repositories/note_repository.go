@@ -648,7 +648,12 @@ func (r *NoteRepository) FindByAdvancedSearch(ctx context.Context, userID int64,
 	return r.scanNotes(rows)
 }
 
-// FindDuplicatesByField finds duplicate notes grouped by field value
+// FindDuplicatesByField finds duplicate notes grouped by field value.
+// Searches for notes that have the same value for the specified field within the user's notes.
+// If noteTypeID is provided, only searches within notes of that type.
+// All queries filter by userID to ensure ownership validation.
+// Returns groups of duplicate notes, each containing the field value and associated note information including deck IDs.
+// Only returns groups with more than one note (HAVING COUNT(*) > 1).
 func (r *NoteRepository) FindDuplicatesByField(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) ([]*note.DuplicateGroup, error) {
 	if fieldName == "" {
 		return []*note.DuplicateGroup{}, nil
@@ -735,14 +740,15 @@ func (r *NoteRepository) FindDuplicatesByField(ctx context.Context, userID int64
 			noteIDs[i] = nd.ID
 		}
 
-		// Query deck IDs from cards
+		// Query deck IDs from cards, ensuring deck ownership
 		deckQuery := `
-			SELECT DISTINCT ON (note_id) note_id, deck_id
-			FROM cards
-			WHERE note_id = ANY($1)
-			ORDER BY note_id, deck_id
+			SELECT DISTINCT ON (c.note_id) c.note_id, c.deck_id
+			FROM cards c
+			JOIN decks d ON c.deck_id = d.id
+			WHERE c.note_id = ANY($1) AND d.user_id = $2
+			ORDER BY c.note_id, c.deck_id
 		`
-		deckRows, err := r.db.QueryContext(ctx, deckQuery, pq.Array(noteIDs))
+		deckRows, err := r.db.QueryContext(ctx, deckQuery, pq.Array(noteIDs), userID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query deck IDs: %w", err)
 		}
@@ -787,7 +793,12 @@ func (r *NoteRepository) FindDuplicatesByField(ctx context.Context, userID int64
 	return groups, nil
 }
 
-// FindDuplicatesByGUID finds duplicate notes grouped by GUID value
+// FindDuplicatesByGUID finds duplicate notes grouped by GUID value.
+// Searches for notes that have the same GUID within the user's notes.
+// All queries filter by userID to ensure ownership validation, including deck ownership validation.
+// Returns groups of duplicate notes, each containing the GUID value and associated note information including deck IDs.
+// Only returns groups with more than one note (HAVING COUNT(*) > 1).
+// Note: In normal operation, GUIDs should be unique, so this method is primarily useful for detecting data integrity issues.
 func (r *NoteRepository) FindDuplicatesByGUID(ctx context.Context, userID int64) ([]*note.DuplicateGroup, error) {
 	query := `
 		SELECT 
@@ -841,14 +852,15 @@ func (r *NoteRepository) FindDuplicatesByGUID(ctx context.Context, userID int64)
 			noteIDs[i] = nd.ID
 		}
 
-		// Query deck IDs from cards
+		// Query deck IDs from cards, ensuring deck ownership
 		deckQuery := `
-			SELECT DISTINCT ON (note_id) note_id, deck_id
-			FROM cards
-			WHERE note_id = ANY($1)
-			ORDER BY note_id, deck_id
+			SELECT DISTINCT ON (c.note_id) c.note_id, c.deck_id
+			FROM cards c
+			JOIN decks d ON c.deck_id = d.id
+			WHERE c.note_id = ANY($1) AND d.user_id = $2
+			ORDER BY c.note_id, c.deck_id
 		`
-		deckRows, err := r.db.QueryContext(ctx, deckQuery, pq.Array(noteIDs))
+		deckRows, err := r.db.QueryContext(ctx, deckQuery, pq.Array(noteIDs), userID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query deck IDs: %w", err)
 		}

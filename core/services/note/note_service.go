@@ -352,7 +352,11 @@ func (s *NoteService) Copy(ctx context.Context, userID int64, noteID int64, deck
 }
 
 // FindDuplicates finds duplicate notes based on a field value
-// If fieldName is empty and noteTypeID is provided, automatically uses the first field of the note type
+// FindDuplicates finds duplicate notes based on a field value.
+// If noteTypeID is provided and fieldName is empty, automatically uses the first field of the note type.
+// If noteTypeID is not provided and fieldName is empty, returns an empty result.
+// Returns groups of notes that have the same value for the specified field, filtered by userID to ensure ownership.
+// Each duplicate group includes the field value and a list of duplicate notes with their IDs, GUIDs, deck IDs, and creation timestamps.
 func (s *NoteService) FindDuplicates(ctx context.Context, userID int64, noteTypeID *int64, fieldName string) (*note.DuplicateResult, error) {
 	// If noteTypeID is provided, we can automatically detect the first field
 	if noteTypeID != nil {
@@ -402,7 +406,11 @@ func (s *NoteService) FindDuplicates(ctx context.Context, userID int64, noteType
 	}, nil
 }
 
-// FindDuplicatesByGUID finds duplicate notes based on GUID value
+// FindDuplicatesByGUID finds duplicate notes based on GUID value.
+// Returns groups of notes that have the same GUID (useful for data integrity checks).
+// All notes are filtered by userID to ensure ownership validation.
+// Each duplicate group includes the GUID value and a list of duplicate notes with their IDs, GUIDs, deck IDs, and creation timestamps.
+// Note: In normal operation, GUIDs should be unique, so this method is primarily useful for detecting data integrity issues.
 func (s *NoteService) FindDuplicatesByGUID(ctx context.Context, userID int64) (*note.DuplicateResult, error) {
 	// Find duplicates via repository
 	groups, err := s.noteRepo.FindDuplicatesByGUID(ctx, userID)

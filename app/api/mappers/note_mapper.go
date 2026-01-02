@@ -51,7 +51,7 @@ func ToFindDuplicatesResponse(result *note.DuplicateResult) *response.FindDuplic
 			}
 		}
 		groups[i] = response.DuplicateGroup{
-			FirstField: group.FieldValue,
+			FieldValue: group.FieldValue,
 			Notes:      notes,
 		}
 	}

@@ -258,10 +258,12 @@ func (h *NoteHandler) FindDuplicates(c echo.Context) error {
 	var err error
 
 	// If UseGUID is true, use GUID-based detection
+	// Note: When UseGUID is true, FieldName and NoteTypeID are ignored
 	if req.UseGUID {
 		result, err = h.service.FindDuplicatesByGUID(ctx, userID)
 	} else {
 		// Otherwise, use field-based detection
+		// FieldName and NoteTypeID are used for field-based duplicate detection
 		result, err = h.service.FindDuplicates(ctx, userID, req.NoteTypeID, req.FieldName)
 	}
 

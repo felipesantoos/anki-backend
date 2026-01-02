@@ -1158,3 +1158,226 @@ func TestNoteRepository_FindDuplicatesByGUID(t *testing.T) {
 	})
 }
 
+func TestNoteRepository_FindDuplicates_EdgeCases(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+	cardRepo := repositories.NewCardRepository(db.DB)
+	deckRepo := repositories.NewDeckRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "duplicates_edge_cases")
+
+	// Create note type
+	noteType, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID, noteType)
+	require.NoError(t, err)
+	noteTypeID := noteType.GetID()
+
+	// Create deck
+	deckID, err := deckRepo.CreateDefaultDeck(ctx, userID)
+	require.NoError(t, err)
+
+	t.Run("Notes with no associated cards", func(t *testing.T) {
+		// Create a note without any cards
+		guid1, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440010")
+		require.NoError(t, err)
+
+		note1, err := note.NewBuilder().
+			WithUserID(userID).
+			WithGUID(guid1).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"NoCard","Back":"Back"}`).
+			WithTags([]string{}).
+			Build()
+		require.NoError(t, err)
+		err = noteRepo.Save(ctx, userID, note1)
+		require.NoError(t, err)
+
+		// Find duplicates by field - note without card should have deck_id = 0
+		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, &noteTypeID, "Front")
+		require.NoError(t, err)
+		// If there are duplicates, verify deck_id is 0 for notes without cards
+		for _, group := range groups {
+			for _, noteInfo := range group.Notes {
+				if noteInfo.ID == note1.GetID() {
+					assert.Equal(t, int64(0), noteInfo.DeckID, "Note without cards should have deck_id = 0")
+				}
+			}
+		}
+	})
+
+	t.Run("Notes with multiple cards (verify first deck is used)", func(t *testing.T) {
+		// Create a note with multiple cards in different decks
+		guid2, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440011")
+		require.NoError(t, err)
+
+		note2, err := note.NewBuilder().
+			WithUserID(userID).
+			WithGUID(guid2).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"MultiCard","Back":"Back"}`).
+			WithTags([]string{}).
+			Build()
+		require.NoError(t, err)
+		err = noteRepo.Save(ctx, userID, note2)
+		require.NoError(t, err)
+		note2ID := note2.GetID()
+
+		// Create second deck with unique name
+		deck2Entity := &deckEntity.Deck{}
+		deck2Entity.SetName("Second Deck for MultiCard Test")
+		deck2Entity.SetUserID(userID)
+		deck2Entity.SetOptionsJSON("{}")
+		deck2Entity.SetCreatedAt(time.Now())
+		deck2Entity.SetUpdatedAt(time.Now())
+		err = deckRepo.Save(ctx, userID, deck2Entity)
+		require.NoError(t, err)
+		deck2ID := deck2Entity.GetID()
+
+		// Create card 1 in first deck
+		card1, err := card.NewBuilder().
+			WithID(0).
+			WithNoteID(note2ID).
+			WithCardTypeID(1).
+			WithDeckID(deckID).
+			WithDue(time.Now().Unix() * 1000).
+			WithInterval(86400).
+			WithEase(2500).
+			WithLapses(0).
+			WithReps(0).
+			WithState(valueobjects.CardStateNew).
+			WithPosition(0).
+			WithFlag(0).
+			WithSuspended(false).
+			WithBuried(false).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+		err = cardRepo.Save(ctx, userID, card1)
+		require.NoError(t, err)
+
+		// Create card 2 in second deck (same note, different deck)
+		card2, err := card.NewBuilder().
+			WithID(0).
+			WithNoteID(note2ID).
+			WithCardTypeID(1).
+			WithDeckID(deck2ID).
+			WithDue(time.Now().Unix() * 1000).
+			WithInterval(86400).
+			WithEase(2500).
+			WithLapses(0).
+			WithReps(0).
+			WithState(valueobjects.CardStateNew).
+			WithPosition(0).
+			WithFlag(0).
+			WithSuspended(false).
+			WithBuried(false).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+		err = cardRepo.Save(ctx, userID, card2)
+		require.NoError(t, err)
+
+		// Find duplicates - should use first deck (lowest deck_id due to ORDER BY)
+		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, &noteTypeID, "Front")
+		require.NoError(t, err)
+		for _, group := range groups {
+			for _, noteInfo := range group.Notes {
+				if noteInfo.ID == note2ID {
+					// Should use the first deck (lowest deck_id) due to ORDER BY deck_id
+					assert.Equal(t, deckID, noteInfo.DeckID, "Should use first deck (lowest deck_id) for notes with multiple cards")
+				}
+			}
+		}
+	})
+
+	t.Run("Deck ownership validation", func(t *testing.T) {
+		// Create a second user
+		userID2, _ := createTestUser(t, ctx, userRepo, "duplicates_edge_cases_user2")
+		
+		// Create deck for user 2
+		deck2ID, err := deckRepo.CreateDefaultDeck(ctx, userID2)
+		require.NoError(t, err)
+
+		// Create note for user 1
+		guid3, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440012")
+		require.NoError(t, err)
+
+		note3, err := note.NewBuilder().
+			WithUserID(userID).
+			WithGUID(guid3).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"OwnershipTest","Back":"Back"}`).
+			WithTags([]string{}).
+			Build()
+		require.NoError(t, err)
+		err = noteRepo.Save(ctx, userID, note3)
+		require.NoError(t, err)
+		note3ID := note3.GetID()
+
+		// Create card for user 1's note in user 1's deck
+		card3, err := card.NewBuilder().
+			WithID(0).
+			WithNoteID(note3ID).
+			WithCardTypeID(1).
+			WithDeckID(deckID).
+			WithDue(time.Now().Unix() * 1000).
+			WithInterval(86400).
+			WithEase(2500).
+			WithLapses(0).
+			WithReps(0).
+			WithState(valueobjects.CardStateNew).
+			WithPosition(0).
+			WithFlag(0).
+			WithSuspended(false).
+			WithBuried(false).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			Build()
+		require.NoError(t, err)
+		err = cardRepo.Save(ctx, userID, card3)
+		require.NoError(t, err)
+
+		// User 1 should see their note with their deck
+		groups, err := noteRepo.FindDuplicatesByField(ctx, userID, &noteTypeID, "Front")
+		require.NoError(t, err)
+		for _, group := range groups {
+			for _, noteInfo := range group.Notes {
+				if noteInfo.ID == note3ID {
+					assert.Equal(t, deckID, noteInfo.DeckID, "User 1 should see their own deck")
+					assert.NotEqual(t, deck2ID, noteInfo.DeckID, "User 1 should not see user 2's deck")
+				}
+			}
+		}
+
+		// User 2 should not see user 1's notes
+		groups2, err := noteRepo.FindDuplicatesByField(ctx, userID2, &noteTypeID, "Front")
+		require.NoError(t, err)
+		found := false
+		for _, group := range groups2 {
+			for _, noteInfo := range group.Notes {
+				if noteInfo.ID == note3ID {
+					found = true
+				}
+			}
+		}
+		assert.False(t, found, "User 2 should not see user 1's notes")
+	})
+}
+

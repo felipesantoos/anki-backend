@@ -10,8 +10,9 @@ import (
 func (r *Router) RegisterContentRoutes() {
 	noteService := dicontainer.GetNoteService()
 	noteTypeService := dicontainer.GetNoteTypeService()
+	exportService := dicontainer.GetExportService()
 
-	noteHandler := handlers.NewNoteHandler(noteService)
+	noteHandler := handlers.NewNoteHandler(noteService, exportService)
 	noteTypeHandler := handlers.NewNoteTypeHandler(noteTypeService)
 
 	// Auth middleware
@@ -30,6 +31,9 @@ func (r *Router) RegisterContentRoutes() {
 
 	// Notes
 	notes := v1.Group("/notes")
+	
+	// Note Export (must be before /:id routes to avoid route conflicts)
+	notes.POST("/export", noteHandler.Export)
 	
 	// Note Find Duplicates (must be before all other routes to avoid route conflicts)
 	notes.POST("/find-duplicates", noteHandler.FindDuplicates)

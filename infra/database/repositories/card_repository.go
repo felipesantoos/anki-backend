@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
 	"github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
@@ -402,6 +403,82 @@ func (r *CardRepository) FindByNoteID(ctx context.Context, userID int64, noteID 
 	rows, err := r.db.QueryContext(ctx, query, noteID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find cards by note ID: %w", err)
+	}
+	defer rows.Close()
+
+	var cards []*card.Card
+	for rows.Next() {
+		var model models.CardModel
+		var homeDeckID sql.NullInt64
+		var stability sql.NullFloat64
+		var difficulty sql.NullFloat64
+		var lastReviewAt sql.NullTime
+
+		err := rows.Scan(
+			&model.ID,
+			&model.NoteID,
+			&model.CardTypeID,
+			&model.DeckID,
+			&homeDeckID,
+			&model.Due,
+			&model.Interval,
+			&model.Ease,
+			&model.Lapses,
+			&model.Reps,
+			&model.State,
+			&model.Position,
+			&model.Flag,
+			&model.Suspended,
+			&model.Buried,
+			&stability,
+			&difficulty,
+			&lastReviewAt,
+			&model.CreatedAt,
+			&model.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan card: %w", err)
+		}
+
+		model.HomeDeckID = homeDeckID
+		model.Stability = stability
+		model.Difficulty = difficulty
+		model.LastReviewAt = lastReviewAt
+
+		cardEntity, err := mappers.CardToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert card to domain: %w", err)
+		}
+		cards = append(cards, cardEntity)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating cards: %w", err)
+	}
+
+	return cards, nil
+}
+
+// FindByNoteIDs finds all cards generated from multiple notes, validating ownership
+// Returns only cards that belong to the user's decks (filters out unauthorized cards)
+func (r *CardRepository) FindByNoteIDs(ctx context.Context, userID int64, noteIDs []int64) ([]*card.Card, error) {
+	if len(noteIDs) == 0 {
+		return []*card.Card{}, nil
+	}
+
+	query := `
+		SELECT c.id, c.note_id, c.card_type_id, c.deck_id, c.home_deck_id, c.due, c.interval,
+			c.ease, c.lapses, c.reps, c.state, c.position, c.flag, c.suspended, c.buried,
+			c.stability, c.difficulty, c.last_review_at, c.created_at, c.updated_at
+		FROM cards c
+		INNER JOIN decks d ON c.deck_id = d.id
+		WHERE c.note_id = ANY($1) AND d.user_id = $2 AND d.deleted_at IS NULL
+		ORDER BY c.created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(noteIDs), userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find cards by note IDs: %w", err)
 	}
 	defer rows.Close()
 

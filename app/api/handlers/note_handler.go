@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,13 +17,15 @@ import (
 
 // NoteHandler handles note-related HTTP requests
 type NoteHandler struct {
-	service primary.INoteService
+	service      primary.INoteService
+	exportService primary.IExportService
 }
 
 // NewNoteHandler creates a new NoteHandler instance
-func NewNoteHandler(service primary.INoteService) *NoteHandler {
+func NewNoteHandler(service primary.INoteService, exportService primary.IExportService) *NoteHandler {
 	return &NoteHandler{
-		service: service,
+		service:       service,
+		exportService: exportService,
 	}
 }
 
@@ -272,6 +275,68 @@ func (h *NoteHandler) FindDuplicates(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToFindDuplicatesResponse(result))
+}
+
+// Export handles POST /api/v1/notes/export
+// @Summary Export selected notes
+// @Description Export selected notes in the specified format (apkg or text). Optionally include media files and scheduling information.
+// @Tags notes
+// @Accept json
+// @Produce application/zip,text/plain
+// @Security BearerAuth
+// @Param request body request.ExportNotesRequest true "Export notes request"
+// @Success 200 {file} file "Export file (apkg or text)"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "Notes not found"
+// @Router /api/v1/notes/export [post]
+func (h *NoteHandler) Export(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	var req request.ExportNotesRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if len(req.NoteIDs) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "note_ids cannot be empty")
+	}
+	if len(req.NoteIDs) > 1000 {
+		return echo.NewHTTPError(http.StatusBadRequest, "note_ids cannot exceed 1000")
+	}
+	if req.Format != "apkg" && req.Format != "text" {
+		return echo.NewHTTPError(http.StatusBadRequest, "format must be 'apkg' or 'text'")
+	}
+
+	// Call export service
+	reader, size, filename, err := h.exportService.ExportNotes(
+		ctx,
+		userID,
+		req.NoteIDs,
+		req.Format,
+		req.IncludeMedia,
+		req.IncludeScheduling,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "access denied") {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Set response headers
+	contentType := "application/zip"
+	if req.Format == "text" {
+		contentType = "text/plain; charset=utf-8"
+	}
+	c.Response().Header().Set("Content-Type", contentType)
+	c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Response().Header().Set("Content-Length", strconv.FormatInt(size, 10))
+
+	// Stream file
+	return c.Stream(http.StatusOK, contentType, reader)
 }
 
 func handleNoteError(err error) error {

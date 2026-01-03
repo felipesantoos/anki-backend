@@ -53,7 +53,8 @@ func TestNoteHandler_Create(t *testing.T) {
 func TestNoteHandler_Update(t *testing.T) {
 	e := echo.New()
 	mockSvc := new(MockNoteService)
-	handler := handlers.NewNoteHandler(mockSvc)
+	mockExportSvc := new(MockExportService)
+	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc)
 	userID := int64(1)
 	noteID := int64(10)
 
@@ -86,7 +87,8 @@ func TestNoteHandler_Update(t *testing.T) {
 func TestNoteHandler_Delete(t *testing.T) {
 	e := echo.New()
 	mockSvc := new(MockNoteService)
-	handler := handlers.NewNoteHandler(mockSvc)
+	mockExportSvc := new(MockExportService)
+	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc)
 	userID := int64(1)
 	noteID := int64(10)
 
@@ -111,7 +113,8 @@ func TestNoteHandler_Delete(t *testing.T) {
 func TestNoteHandler_FindDuplicates(t *testing.T) {
 	e := echo.New()
 	mockSvc := new(MockNoteService)
-	handler := handlers.NewNoteHandler(mockSvc)
+	mockExportSvc := new(MockExportService)
+	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc)
 	userID := int64(1)
 
 	t.Run("Success with UseGUID=true", func(t *testing.T) {

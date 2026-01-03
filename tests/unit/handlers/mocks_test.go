@@ -490,6 +490,33 @@ func (m *MockBackupService) Delete(ctx context.Context, userID int64, id int64) 
 	return args.Error(0)
 }
 
+// MockExportService is a mock implementation of IExportService
+type MockExportService struct {
+	mock.Mock
+}
+
+func (m *MockExportService) ExportCollection(ctx context.Context, userID int64) (io.Reader, int64, error) {
+	args := m.Called(ctx, userID)
+	var r io.Reader
+	if args.Get(0) != nil {
+		r = args.Get(0).(io.Reader)
+	}
+	return r, int64(args.Int(1)), args.Error(2)
+}
+
+func (m *MockExportService) ExportNotes(ctx context.Context, userID int64, noteIDs []int64, format string, includeMedia, includeScheduling bool) (io.Reader, int64, string, error) {
+	args := m.Called(ctx, userID, noteIDs, format, includeMedia, includeScheduling)
+	var r io.Reader
+	if args.Get(0) != nil {
+		r = args.Get(0).(io.Reader)
+	}
+	var filename string
+	if args.Get(2) != nil {
+		filename = args.Get(2).(string)
+	}
+	return r, int64(args.Int(1)), filename, args.Error(3)
+}
+
 // MockMediaService is a mock implementation of IMediaService
 type MockMediaService struct {
 	mock.Mock

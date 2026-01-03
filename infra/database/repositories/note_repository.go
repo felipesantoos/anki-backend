@@ -175,6 +175,29 @@ func (r *NoteRepository) FindByID(ctx context.Context, userID int64, id int64) (
 	return mappers.NoteToDomain(&model)
 }
 
+// FindByIDs finds multiple notes by their IDs, filtering by userID to ensure ownership
+// Returns only notes that belong to the user (filters out unauthorized notes)
+func (r *NoteRepository) FindByIDs(ctx context.Context, userID int64, noteIDs []int64) ([]*note.Note, error) {
+	if len(noteIDs) == 0 {
+		return []*note.Note{}, nil
+	}
+
+	query := `
+		SELECT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NULL
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(noteIDs), userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find notes by IDs: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanNotes(rows)
+}
+
 // FindByUserID finds all notes for a user with pagination
 func (r *NoteRepository) FindByUserID(ctx context.Context, userID int64, limit int, offset int) ([]*note.Note, error) {
 	query := `

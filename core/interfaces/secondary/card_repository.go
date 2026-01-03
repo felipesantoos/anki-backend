@@ -40,6 +40,10 @@ type ICardRepository interface {
 	// FindByNoteID finds all cards generated from a specific note, validating ownership
 	FindByNoteID(ctx context.Context, userID int64, noteID int64) ([]*card.Card, error)
 
+	// FindByNoteIDs finds all cards generated from multiple notes, validating ownership
+	// Returns only cards that belong to the user's decks (filters out unauthorized cards)
+	FindByNoteIDs(ctx context.Context, userID int64, noteIDs []int64) ([]*card.Card, error)
+
 	// FindDueCards finds cards that are due for review in a deck
 	// dueTimestamp is the current timestamp in milliseconds
 	FindDueCards(ctx context.Context, userID int64, deckID int64, dueTimestamp int64) ([]*card.Card, error)

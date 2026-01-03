@@ -165,7 +165,9 @@ func GetExportService() primary.IExportService {
 	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
 	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
 	noteRepo := repositories.NewNoteRepository(dbRepo.GetDB())
-	return exportService.NewExportService(deckRepo, cardRepo, noteRepo)
+	noteTypeRepo := repositories.NewNoteTypeRepository(dbRepo.GetDB())
+	mediaRepo := repositories.NewMediaRepository(dbRepo.GetDB())
+	return exportService.NewExportService(deckRepo, cardRepo, noteRepo, noteTypeRepo, mediaRepo)
 }
 
 // GetStorageRepository returns a storage repository based on configuration

@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -1442,5 +1443,173 @@ func TestSearch_Regex(t *testing.T) {
 		var searchRes response.SearchResult
 		json.Unmarshal(rec.Body.Bytes(), &searchRes)
 		assert.GreaterOrEqual(t, searchRes.Total, 1, "Should find at least one note with 'São Paulo' using 'nc:\"Sao Paulo\"'")
+	})
+
+	// Export Notes
+	t.Run("Export Notes", func(t *testing.T) {
+		// Get default deck ID
+		var defaultDeckID int64
+		err := db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default' LIMIT 1", loginRes.User.ID).Scan(&defaultDeckID)
+		require.NoError(t, err)
+
+		// Create notes for export
+		var noteIDs []int64
+		for i := 0; i < 3; i++ {
+			createNoteReq := request.CreateNoteRequest{
+				NoteTypeID: noteTypeID,
+				DeckID:     defaultDeckID,
+				FieldsJSON: fmt.Sprintf(`{"Front": "Export Note %d", "Back": "Back %d"}`, i, i),
+				Tags:       []string{"export", "test"},
+			}
+			b, _ := json.Marshal(createNoteReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusCreated, rec.Code)
+			var noteRes response.NoteResponse
+			json.Unmarshal(rec.Body.Bytes(), &noteRes)
+			noteIDs = append(noteIDs, noteRes.ID)
+		}
+
+		t.Run("Success - Text format without scheduling", func(t *testing.T) {
+			exportReq := request.ExportNotesRequest{
+				NoteIDs:          noteIDs,
+				Format:           "text",
+				IncludeMedia:     false,
+				IncludeScheduling: false,
+			}
+			b, _ := json.Marshal(exportReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/export", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, "text/plain; charset=utf-8", rec.Header().Get("Content-Type"))
+			assert.Contains(t, rec.Header().Get("Content-Disposition"), "notes_export.txt")
+			assert.Greater(t, len(rec.Body.Bytes()), 0)
+			// Verify content contains expected data
+			body := rec.Body.String()
+			assert.Contains(t, body, "GUID")
+			assert.Contains(t, body, "Front")
+			assert.Contains(t, body, "Back")
+			assert.Contains(t, body, "Tags")
+		})
+
+		t.Run("Success - Text format with scheduling", func(t *testing.T) {
+			exportReq := request.ExportNotesRequest{
+				NoteIDs:          noteIDs[:1], // Only first note
+				Format:           "text",
+				IncludeMedia:     false,
+				IncludeScheduling: true,
+			}
+			b, _ := json.Marshal(exportReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/export", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, "text/plain; charset=utf-8", rec.Header().Get("Content-Type"))
+			body := rec.Body.String()
+			// Should contain card information if scheduling is included
+			assert.Contains(t, body, "GUID")
+		})
+
+		t.Run("Invalid format", func(t *testing.T) {
+			exportReq := request.ExportNotesRequest{
+				NoteIDs:          noteIDs,
+				Format:           "invalid",
+				IncludeMedia:     false,
+				IncludeScheduling: false,
+			}
+			b, _ := json.Marshal(exportReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/export", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Empty note IDs", func(t *testing.T) {
+			exportReq := request.ExportNotesRequest{
+				NoteIDs:          []int64{},
+				Format:           "text",
+				IncludeMedia:     false,
+				IncludeScheduling: false,
+			}
+			b, _ := json.Marshal(exportReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/export", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Note not found or access denied", func(t *testing.T) {
+			exportReq := request.ExportNotesRequest{
+				NoteIDs:          []int64{99999},
+				Format:           "text",
+				IncludeMedia:     false,
+				IncludeScheduling: false,
+			}
+			b, _ := json.Marshal(exportReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/export", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusNotFound, rec.Code)
+		})
+
+		t.Run("Cross-user isolation", func(t *testing.T) {
+			// Create second user
+			loginRes2 := registerAndLogin(t, e, "export_user2@example.com", "password123")
+			token2 := loginRes2.AccessToken
+
+			// User 2 tries to export User 1's notes
+			exportReq := request.ExportNotesRequest{
+				NoteIDs:          noteIDs, // User 1's notes
+				Format:           "text",
+				IncludeMedia:     false,
+				IncludeScheduling: false,
+			}
+			b, _ := json.Marshal(exportReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/export", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token2)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			// Should return 404 (notes not found or access denied)
+			assert.Equal(t, http.StatusNotFound, rec.Code)
+		})
+
+		t.Run("APKG format - Not yet implemented", func(t *testing.T) {
+			exportReq := request.ExportNotesRequest{
+				NoteIDs:          noteIDs[:1],
+				Format:           "apkg",
+				IncludeMedia:     false,
+				IncludeScheduling: false,
+			}
+			b, _ := json.Marshal(exportReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/export", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			// APKG generation requires SQLite driver which is not yet implemented
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
 	})
 }

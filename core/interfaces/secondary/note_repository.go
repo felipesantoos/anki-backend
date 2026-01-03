@@ -19,6 +19,11 @@ type INoteRepository interface {
 	// Returns the note if found and belongs to user, nil if not found, or an error
 	FindByID(ctx context.Context, userID int64, id int64) (*note.Note, error)
 
+	// FindByIDs finds multiple notes by their IDs, filtering by userID to ensure ownership
+	// Returns only notes that belong to the user (filters out unauthorized notes)
+	// Returns an empty slice if no notes are found or if all requested notes don't belong to the user
+	FindByIDs(ctx context.Context, userID int64, noteIDs []int64) ([]*note.Note, error)
+
 	// FindByUserID finds all notes for a user with pagination
 	// Returns a list of notes belonging to the user
 	FindByUserID(ctx context.Context, userID int64, limit int, offset int) ([]*note.Note, error)

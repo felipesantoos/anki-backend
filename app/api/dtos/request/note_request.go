@@ -68,3 +68,18 @@ type FindDuplicatesRequest struct {
 	UseGUID bool `json:"use_guid" example:"false"`
 }
 
+// ExportNotesRequest represents the request payload to export selected notes
+type ExportNotesRequest struct {
+	// List of note IDs to export
+	NoteIDs []int64 `json:"note_ids" example:"[1,2,3]" validate:"required,min=1,max=1000,dive,gt=0"`
+
+	// Export format: "apkg" for Anki package or "text" for plain text
+	Format string `json:"format" example:"apkg" validate:"required,oneof=apkg text"`
+
+	// Whether to include media files referenced in notes
+	IncludeMedia bool `json:"include_media" example:"true"`
+
+	// Whether to include card scheduling information
+	IncludeScheduling bool `json:"include_scheduling" example:"false"`
+}
+

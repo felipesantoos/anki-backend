@@ -119,6 +119,9 @@ func (m *MockNoteRepository) Save(ctx context.Context, uid int64, n *note.Note) 
 func (m *MockNoteRepository) FindByID(ctx context.Context, uid, id int64) (*note.Note, error) {
 	args := m.Called(ctx, uid, id); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.Note), args.Error(1)
 }
+func (m *MockNoteRepository) FindByIDs(ctx context.Context, uid int64, ids []int64) ([]*note.Note, error) {
+	args := m.Called(ctx, uid, ids); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
+}
 func (m *MockNoteRepository) FindByUserID(ctx context.Context, uid int64, l, o int) ([]*note.Note, error) {
 	args := m.Called(ctx, uid, l, o); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
 }
@@ -167,6 +170,9 @@ func (m *MockCardRepository) Exists(ctx context.Context, uid, id int64) (bool, e
 }
 func (m *MockCardRepository) FindByNoteID(ctx context.Context, uid, nid int64) ([]*card.Card, error) {
 	args := m.Called(ctx, uid, nid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*card.Card), args.Error(1)
+}
+func (m *MockCardRepository) FindByNoteIDs(ctx context.Context, uid int64, nids []int64) ([]*card.Card, error) {
+	args := m.Called(ctx, uid, nids); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*card.Card), args.Error(1)
 }
 func (m *MockCardRepository) FindDueCards(ctx context.Context, uid, did, dt int64) ([]*card.Card, error) {
 	args := m.Called(ctx, uid, did, dt); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*card.Card), args.Error(1)
@@ -537,6 +543,14 @@ func (m *MockExportService) ExportCollection(ctx context.Context, uid int64) (io
 	var r io.Reader
 	if args.Get(0) != nil { r = args.Get(0).(io.Reader) }
 	return r, int64(args.Int(1)), args.Error(2)
+}
+func (m *MockExportService) ExportNotes(ctx context.Context, uid int64, noteIDs []int64, format string, includeMedia, includeScheduling bool) (io.Reader, int64, string, error) {
+	args := m.Called(ctx, uid, noteIDs, format, includeMedia, includeScheduling)
+	var r io.Reader
+	if args.Get(0) != nil { r = args.Get(0).(io.Reader) }
+	var filename string
+	if args.Get(2) != nil { filename = args.Get(2).(string) }
+	return r, int64(args.Int(1)), filename, args.Error(3)
 }
 
 // MockJobScheduler

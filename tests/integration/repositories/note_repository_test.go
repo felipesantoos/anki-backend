@@ -1381,3 +1381,192 @@ func TestNoteRepository_FindDuplicates_EdgeCases(t *testing.T) {
 	})
 }
 
+func TestNoteRepository_FindByIDs(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+
+	userID, _ := createTestUser(t, ctx, userRepo, "note_find_by_ids")
+
+	// Create note type
+	noteType, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID, noteType)
+	require.NoError(t, err)
+	noteTypeID := noteType.GetID()
+
+	// Create multiple notes
+	var noteIDs []int64
+	for i := 0; i < 5; i++ {
+		guid, err := valueobjects.NewGUID(fmt.Sprintf("550e8400-e29b-41d4-a716-44665544%04d", i))
+		require.NoError(t, err)
+
+		noteEntity, err := note.NewBuilder().
+			WithID(0).
+			WithUserID(userID).
+			WithGUID(guid).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(fmt.Sprintf(`{"Front":"Note %d"}`, i)).
+			WithTags([]string{"test"}).
+			WithMarked(false).
+			WithCreatedAt(time.Now()).
+			WithUpdatedAt(time.Now()).
+			WithTags([]string{}).
+			Build()
+		require.NoError(t, err)
+
+		err = noteRepo.Save(ctx, userID, noteEntity)
+		require.NoError(t, err)
+		noteIDs = append(noteIDs, noteEntity.GetID())
+	}
+
+	// Test FindByIDs with all note IDs
+	notes, err := noteRepo.FindByIDs(ctx, userID, noteIDs)
+	require.NoError(t, err)
+	assert.Equal(t, 5, len(notes), "Should find all 5 notes")
+
+	// Verify all notes are returned
+	foundIDs := make(map[int64]bool)
+	for _, n := range notes {
+		foundIDs[n.GetID()] = true
+	}
+	for _, id := range noteIDs {
+		assert.True(t, foundIDs[id], "Note %d should be found", id)
+	}
+
+	// Test FindByIDs with subset of note IDs
+	subsetIDs := []int64{noteIDs[0], noteIDs[2], noteIDs[4]}
+	notesSubset, err := noteRepo.FindByIDs(ctx, userID, subsetIDs)
+	require.NoError(t, err)
+	assert.Equal(t, 3, len(notesSubset), "Should find 3 notes")
+
+	// Test FindByIDs with empty array
+	notesEmpty, err := noteRepo.FindByIDs(ctx, userID, []int64{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(notesEmpty), "Should return empty array for empty input")
+
+	// Test FindByIDs with non-existent IDs
+	nonExistentIDs := []int64{99999, 99998}
+	notesNotFound, err := noteRepo.FindByIDs(ctx, userID, nonExistentIDs)
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(notesNotFound), "Should return empty array for non-existent IDs")
+}
+
+func TestNoteRepository_FindByIDs_OwnershipValidation(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userRepo := repositories.NewUserRepository(db.DB)
+	noteRepo := repositories.NewNoteRepository(db.DB)
+	noteTypeRepo := repositories.NewNoteTypeRepository(db.DB)
+
+	// Create two users
+	userID1, _ := createTestUser(t, ctx, userRepo, "user1_find_by_ids")
+	userID2, _ := createTestUser(t, ctx, userRepo, "user2_find_by_ids")
+
+	// Create note type for user 1
+	noteType1, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID1).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID1, noteType1)
+	require.NoError(t, err)
+	noteTypeID1 := noteType1.GetID()
+
+	// Create note type for user 2
+	noteType2, err := notetype.NewBuilder().
+		WithID(0).
+		WithUserID(userID2).
+		WithName("Basic").
+		WithFieldsJSON(`[{"name":"Front"}]`).
+		WithCardTypesJSON(`[{"name":"Card 1"}]`).
+		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteTypeRepo.Save(ctx, userID2, noteType2)
+	require.NoError(t, err)
+	noteTypeID2 := noteType2.GetID()
+
+	// Create notes for user 1
+	guid1, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440001")
+	require.NoError(t, err)
+	note1, err := note.NewBuilder().
+		WithID(0).
+		WithUserID(userID1).
+		WithGUID(guid1).
+		WithNoteTypeID(noteTypeID1).
+		WithFieldsJSON(`{"Front":"User 1 Note"}`).
+		WithTags([]string{}).
+		WithMarked(false).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteRepo.Save(ctx, userID1, note1)
+	require.NoError(t, err)
+	noteID1 := note1.GetID()
+
+	// Create notes for user 2
+	guid2, err := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440002")
+	require.NoError(t, err)
+	note2, err := note.NewBuilder().
+		WithID(0).
+		WithUserID(userID2).
+		WithGUID(guid2).
+		WithNoteTypeID(noteTypeID2).
+		WithFieldsJSON(`{"Front":"User 2 Note"}`).
+		WithTags([]string{}).
+		WithMarked(false).
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now()).
+		Build()
+	require.NoError(t, err)
+	err = noteRepo.Save(ctx, userID2, note2)
+	require.NoError(t, err)
+	noteID2 := note2.GetID()
+
+	// User 1 tries to access their own note - should succeed
+	notes1, err := noteRepo.FindByIDs(ctx, userID1, []int64{noteID1})
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(notes1), "User 1 should find their own note")
+
+	// User 1 tries to access user 2's note - should be filtered out (ownership validation)
+	notes1Cross, err := noteRepo.FindByIDs(ctx, userID1, []int64{noteID2})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(notes1Cross), "User 1 should not see user 2's note")
+
+	// User 2 tries to access user 1's note - should be filtered out
+	notes2Cross, err := noteRepo.FindByIDs(ctx, userID2, []int64{noteID1})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(notes2Cross), "User 2 should not see user 1's note")
+
+	// User 1 tries to access mix of their own and user 2's notes - should only get their own
+	notes1Mixed, err := noteRepo.FindByIDs(ctx, userID1, []int64{noteID1, noteID2})
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(notes1Mixed), "User 1 should only see their own note")
+	assert.Equal(t, noteID1, notes1Mixed[0].GetID(), "Should return user 1's note")
+}
+

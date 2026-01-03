@@ -3,8 +3,10 @@ package services
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/check_database_log"
+	deletionlog "github.com/felipesantos/anki-backend/core/domain/entities/deletion_log"
 	"github.com/felipesantos/anki-backend/core/domain/entities/undo_history"
 	auditSvc "github.com/felipesantos/anki-backend/core/services/audit"
 	"github.com/stretchr/testify/assert"

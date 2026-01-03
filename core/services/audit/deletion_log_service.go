@@ -45,3 +45,22 @@ func (s *DeletionLogService) FindByUserID(ctx context.Context, userID int64) ([]
 	return s.repo.FindByUserID(ctx, userID)
 }
 
+// FindRecent finds recent deletion logs for a user within a specified time period
+func (s *DeletionLogService) FindRecent(ctx context.Context, userID int64, limit int, days int) ([]*deletionlog.DeletionLog, error) {
+	// Validate and set defaults
+	if limit <= 0 {
+		limit = 20 // Default limit
+	}
+	if limit > 100 {
+		limit = 100 // Max limit
+	}
+	if days <= 0 {
+		days = 7 // Default days
+	}
+	if days > 365 {
+		days = 365 // Max days
+	}
+
+	return s.repo.FindRecent(ctx, userID, limit, days)
+}
+

@@ -35,5 +35,11 @@ type IDeletionLogRepository interface {
 
 	// FindByObjectType finds all deletion logs of a specific object type for a user
 	FindByObjectType(ctx context.Context, userID int64, objectType string) ([]*deletionlog.DeletionLog, error)
+
+	// FindRecent finds recent deletion logs for a user within a specified time period
+	// limit: maximum number of records to return (must be > 0)
+	// days: number of days to look back (must be > 0)
+	// Returns deletion logs ordered by deleted_at DESC, limited to the specified count
+	FindRecent(ctx context.Context, userID int64, limit int, days int) ([]*deletionlog.DeletionLog, error)
 }
 

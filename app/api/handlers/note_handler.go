@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
+	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/mappers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
@@ -17,15 +19,17 @@ import (
 
 // NoteHandler handles note-related HTTP requests
 type NoteHandler struct {
-	service      primary.INoteService
-	exportService primary.IExportService
+	service           primary.INoteService
+	exportService     primary.IExportService
+	deletionLogService primary.IDeletionLogService
 }
 
 // NewNoteHandler creates a new NoteHandler instance
-func NewNoteHandler(service primary.INoteService, exportService primary.IExportService) *NoteHandler {
+func NewNoteHandler(service primary.INoteService, exportService primary.IExportService, deletionLogService primary.IDeletionLogService) *NoteHandler {
 	return &NoteHandler{
-		service:       service,
-		exportService: exportService,
+		service:           service,
+		exportService:     exportService,
+		deletionLogService: deletionLogService,
 	}
 }
 
@@ -337,6 +341,82 @@ func (h *NoteHandler) Export(c echo.Context) error {
 
 	// Stream file
 	return c.Stream(http.StatusOK, contentType, reader)
+}
+
+// GetRecentDeletions handles GET /api/v1/notes/deletions
+// @Summary Get recent deletions
+// @Description Retrieves recent deletion logs that can be recovered. Supports limit and days query parameters.
+// @Tags notes
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param limit query int false "Maximum number of deletions to return" default(20) minimum(1) maximum(100)
+// @Param days query int false "Number of days to look back" default(7) minimum(1) maximum(365)
+// @Success 200 {object} response.RecentDeletionsResponse "Recent deletions with pagination"
+// @Failure 400 {object} response.ErrorResponse "Invalid request parameters"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/notes/deletions [get]
+func (h *NoteHandler) GetRecentDeletions(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	// Parse query parameters with defaults
+	limitStr := c.QueryParam("limit")
+	daysStr := c.QueryParam("days")
+
+	limit := 20 // Default limit
+	days := 7   // Default days
+
+	if limitStr != "" {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err != nil || parsedLimit <= 0 {
+			return echo.NewHTTPError(http.StatusBadRequest, "limit must be a positive integer")
+		}
+		if parsedLimit > 100 {
+			return echo.NewHTTPError(http.StatusBadRequest, "limit cannot exceed 100")
+		}
+		limit = parsedLimit
+	}
+
+	if daysStr != "" {
+		parsedDays, err := strconv.Atoi(daysStr)
+		if err != nil || parsedDays <= 0 {
+			return echo.NewHTTPError(http.StatusBadRequest, "days must be a positive integer")
+		}
+		if parsedDays > 365 {
+			return echo.NewHTTPError(http.StatusBadRequest, "days cannot exceed 365")
+		}
+		days = parsedDays
+	}
+
+	// Call service to get recent deletions
+	logs, err := h.deletionLogService.FindRecent(ctx, userID, limit, days)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve recent deletions: %v", err))
+	}
+
+	// Convert to response DTOs
+	deletionLogResponses := mappers.ToDeletionLogResponseList(logs)
+
+	// Calculate pagination metadata
+	total := len(logs)
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	response := response.RecentDeletionsResponse{
+		Data: deletionLogResponses,
+		Pagination: response.PaginationResponse{
+			Page:       1, // Always page 1 for recent deletions
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func handleNoteError(err error) error {

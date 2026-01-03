@@ -11,8 +11,9 @@ func (r *Router) RegisterContentRoutes() {
 	noteService := dicontainer.GetNoteService()
 	noteTypeService := dicontainer.GetNoteTypeService()
 	exportService := dicontainer.GetExportService()
+	deletionLogService := dicontainer.GetDeletionLogService()
 
-	noteHandler := handlers.NewNoteHandler(noteService, exportService)
+	noteHandler := handlers.NewNoteHandler(noteService, exportService, deletionLogService)
 	noteTypeHandler := handlers.NewNoteTypeHandler(noteTypeService)
 
 	// Auth middleware
@@ -31,6 +32,9 @@ func (r *Router) RegisterContentRoutes() {
 
 	// Notes
 	notes := v1.Group("/notes")
+	
+	// Note Recent Deletions (must be before /:id routes to avoid route conflicts)
+	notes.GET("/deletions", noteHandler.GetRecentDeletions)
 	
 	// Note Export (must be before /:id routes to avoid route conflicts)
 	notes.POST("/export", noteHandler.Export)

@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"io"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/filtered_deck"
@@ -668,6 +669,14 @@ func (m *MockDeletionLogService) Create(ctx context.Context, userID int64, objec
 
 func (m *MockDeletionLogService) FindByUserID(ctx context.Context, userID int64) ([]*deletionlog.DeletionLog, error) {
 	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*deletionlog.DeletionLog), args.Error(1)
+}
+
+func (m *MockDeletionLogService) FindRecent(ctx context.Context, userID int64, limit int, days int) ([]*deletionlog.DeletionLog, error) {
+	args := m.Called(ctx, userID, limit, days)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

@@ -13,5 +13,11 @@ type IDeletionLogService interface {
 
 	// FindByUserID finds deletion logs for a user
 	FindByUserID(ctx context.Context, userID int64) ([]*deletionlog.DeletionLog, error)
+
+	// FindRecent finds recent deletion logs for a user within a specified time period
+	// limit: maximum number of records to return (default: 20, max: 100)
+	// days: number of days to look back (default: 7, max: 365)
+	// Returns deletion logs ordered by deleted_at DESC, limited to the specified count
+	FindRecent(ctx context.Context, userID int64, limit int, days int) ([]*deletionlog.DeletionLog, error)
 }
 

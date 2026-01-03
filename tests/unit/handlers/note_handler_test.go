@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
+	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/handlers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
+	deletionlog "github.com/felipesantos/anki-backend/core/domain/entities/deletion_log"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/labstack/echo/v4"
@@ -22,7 +24,9 @@ import (
 func TestNoteHandler_Create(t *testing.T) {
 	e := echo.New()
 	mockSvc := new(MockNoteService)
-	handler := handlers.NewNoteHandler(mockSvc)
+	mockExportSvc := new(MockExportService)
+	mockDeletionLogSvc := new(MockDeletionLogService)
+	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc, mockDeletionLogSvc)
 	userID := int64(1)
 
 	t.Run("Success", func(t *testing.T) {
@@ -54,7 +58,8 @@ func TestNoteHandler_Update(t *testing.T) {
 	e := echo.New()
 	mockSvc := new(MockNoteService)
 	mockExportSvc := new(MockExportService)
-	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc)
+	mockDeletionLogSvc := new(MockDeletionLogService)
+	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc, mockDeletionLogSvc)
 	userID := int64(1)
 	noteID := int64(10)
 
@@ -88,7 +93,8 @@ func TestNoteHandler_Delete(t *testing.T) {
 	e := echo.New()
 	mockSvc := new(MockNoteService)
 	mockExportSvc := new(MockExportService)
-	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc)
+	mockDeletionLogSvc := new(MockDeletionLogService)
+	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc, mockDeletionLogSvc)
 	userID := int64(1)
 	noteID := int64(10)
 
@@ -114,7 +120,8 @@ func TestNoteHandler_FindDuplicates(t *testing.T) {
 	e := echo.New()
 	mockSvc := new(MockNoteService)
 	mockExportSvc := new(MockExportService)
-	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc)
+	mockDeletionLogSvc := new(MockDeletionLogService)
+	handler := handlers.NewNoteHandler(mockSvc, mockExportSvc, mockDeletionLogSvc)
 	userID := int64(1)
 
 	t.Run("Success with UseGUID=true", func(t *testing.T) {
@@ -304,6 +311,152 @@ func TestNoteHandler_FindDuplicates(t *testing.T) {
 			assert.Equal(t, float64(0), response["total_duplicates"])
 		}
 		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestNoteHandler_GetRecentDeletions(t *testing.T) {
+	e := echo.New()
+	mockNoteSvc := new(MockNoteService)
+	mockExportSvc := new(MockExportService)
+	mockDeletionLogSvc := new(MockDeletionLogService)
+	handler := handlers.NewNoteHandler(mockNoteSvc, mockExportSvc, mockDeletionLogSvc)
+	userID := int64(1)
+
+	t.Run("Success - with default parameters", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		dl1, _ := deletionlog.NewBuilder().
+			WithID(1).
+			WithUserID(userID).
+			WithObjectType("note").
+			WithObjectID(100).
+			WithObjectData(`{"id":100,"fields":{"Front":"Test"}}`).
+			WithDeletedAt(time.Now()).
+			Build()
+
+		// Default limit: 20, default days: 7
+		mockDeletionLogSvc.On("FindRecent", mock.Anything, userID, 20, 7).Return([]*deletionlog.DeletionLog{dl1}, nil).Once()
+
+		if assert.NoError(t, handler.GetRecentDeletions(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var response response.RecentDeletionsResponse
+			json.Unmarshal(rec.Body.Bytes(), &response)
+			assert.Len(t, response.Data, 1)
+			assert.Equal(t, 1, response.Pagination.Total)
+			assert.Equal(t, 20, response.Pagination.Limit)
+		}
+		mockDeletionLogSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success - with custom limit and days", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=10&days=5", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		dl1, _ := deletionlog.NewBuilder().
+			WithID(1).
+			WithUserID(userID).
+			WithObjectType("note").
+			WithObjectID(100).
+			WithObjectData(`{"id":100}`).
+			WithDeletedAt(time.Now()).
+			Build()
+		dl2, _ := deletionlog.NewBuilder().
+			WithID(2).
+			WithUserID(userID).
+			WithObjectType("card").
+			WithObjectID(200).
+			WithObjectData(`{"id":200}`).
+			WithDeletedAt(time.Now()).
+			Build()
+
+		mockDeletionLogSvc.On("FindRecent", mock.Anything, userID, 10, 5).Return([]*deletionlog.DeletionLog{dl1, dl2}, nil).Once()
+
+		if assert.NoError(t, handler.GetRecentDeletions(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var response response.RecentDeletionsResponse
+			json.Unmarshal(rec.Body.Bytes(), &response)
+			assert.Len(t, response.Data, 2)
+			assert.Equal(t, 2, response.Pagination.Total)
+			assert.Equal(t, 10, response.Pagination.Limit)
+		}
+		mockDeletionLogSvc.AssertExpectations(t)
+	})
+
+	t.Run("Error - invalid limit", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=invalid", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.GetRecentDeletions(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusBadRequest, httpError.Code)
+		assert.Contains(t, httpError.Message, "limit must be a positive integer")
+	})
+
+	t.Run("Error - limit exceeds maximum", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=150", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.GetRecentDeletions(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusBadRequest, httpError.Code)
+		assert.Contains(t, httpError.Message, "limit cannot exceed 100")
+	})
+
+	t.Run("Error - invalid days", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?days=invalid", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.GetRecentDeletions(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusBadRequest, httpError.Code)
+		assert.Contains(t, httpError.Message, "days must be a positive integer")
+	})
+
+	t.Run("Error - days exceeds maximum", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?days=500", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.GetRecentDeletions(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusBadRequest, httpError.Code)
+		assert.Contains(t, httpError.Message, "days cannot exceed 365")
+	})
+
+	t.Run("Error - service returns error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockDeletionLogSvc.On("FindRecent", mock.Anything, userID, 20, 7).Return(nil, fmt.Errorf("database error")).Once()
+
+		err := handler.GetRecentDeletions(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusInternalServerError, httpError.Code)
+		mockDeletionLogSvc.AssertExpectations(t)
 	})
 }
 

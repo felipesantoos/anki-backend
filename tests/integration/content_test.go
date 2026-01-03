@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -1610,6 +1611,120 @@ func TestSearch_Regex(t *testing.T) {
 
 			// APKG generation requires SQLite driver which is not yet implemented
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+	})
+
+	// Recent Deletions
+	t.Run("Recent Deletions", func(t *testing.T) {
+		// Create a note and then delete it to create a deletion log
+		createNoteReq := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "Recent Deletion Test", "Back": "Back"}`,
+			Tags:       []string{"test"},
+		}
+		b, _ := json.Marshal(createNoteReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+		var noteRes response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &noteRes)
+		noteID := noteRes.ID
+
+		// Delete the note to create a deletion log
+		req = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/notes/%d", noteID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Wait a bit to ensure deletion log is created
+		time.Sleep(100 * time.Millisecond)
+
+		t.Run("Success - get recent deletions with defaults", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var response response.RecentDeletionsResponse
+			json.Unmarshal(rec.Body.Bytes(), &response)
+			assert.GreaterOrEqual(t, len(response.Data), 0)
+			assert.Equal(t, 20, response.Pagination.Limit)
+			assert.Equal(t, 1, response.Pagination.Page)
+		})
+
+		t.Run("Success - get recent deletions with custom limit and days", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=10&days=5", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var response response.RecentDeletionsResponse
+			json.Unmarshal(rec.Body.Bytes(), &response)
+			assert.GreaterOrEqual(t, len(response.Data), 0)
+			assert.Equal(t, 10, response.Pagination.Limit)
+		})
+
+		t.Run("Error - invalid limit", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=invalid", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Error - limit exceeds maximum", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=150", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Error - invalid days", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?days=invalid", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Error - days exceeds maximum", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?days=500", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Cross-user isolation - cannot see other user's deletions", func(t *testing.T) {
+			// Create another user and a deletion log for them
+			loginRes2 := registerAndLogin(t, e, "recent_deletions_user2@example.com", "password123")
+			token2 := loginRes2.AccessToken
+
+			// User 2 tries to get deletions (should only see their own, which is none)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions", nil)
+			req.Header.Set("Authorization", "Bearer "+token2)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var response response.RecentDeletionsResponse
+			json.Unmarshal(rec.Body.Bytes(), &response)
+			// User 2 should not see user 1's deletions
+			for _, dl := range response.Data {
+				assert.Equal(t, loginRes2.User.ID, dl.UserID)
+			}
 		})
 	})
 }

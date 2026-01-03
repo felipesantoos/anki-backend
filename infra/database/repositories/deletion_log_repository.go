@@ -272,6 +272,60 @@ func (r *DeletionLogRepository) FindByObjectType(ctx context.Context, userID int
 	return logs, nil
 }
 
+// FindRecent finds recent deletion logs for a user within a specified time period
+func (r *DeletionLogRepository) FindRecent(ctx context.Context, userID int64, limit int, days int) ([]*deletionlog.DeletionLog, error) {
+	if limit <= 0 {
+		limit = 20 // Default limit
+	}
+	if days <= 0 {
+		days = 7 // Default days
+	}
+
+	query := `
+		SELECT id, user_id, object_type, object_id, object_data, deleted_at
+		FROM deletions_log
+		WHERE user_id = $1 
+		  AND deleted_at >= NOW() - INTERVAL '1 day' * $2
+		ORDER BY deleted_at DESC
+		LIMIT $3
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, days, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find recent deletion logs: %w", err)
+	}
+	defer rows.Close()
+
+	deletionLogs := make([]*deletionlog.DeletionLog, 0)
+	for rows.Next() {
+		var model models.DeletionLogModel
+
+		err := rows.Scan(
+			&model.ID,
+			&model.UserID,
+			&model.ObjectType,
+			&model.ObjectID,
+			&model.ObjectData,
+			&model.DeletedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan deletion log: %w", err)
+		}
+
+		deletionLogEntity, err := mappers.DeletionLogToDomain(&model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert deletion log to domain: %w", err)
+		}
+		deletionLogs = append(deletionLogs, deletionLogEntity)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating deletion logs: %w", err)
+	}
+
+	return deletionLogs, nil
+}
+
 // Ensure DeletionLogRepository implements IDeletionLogRepository
 var _ secondary.IDeletionLogRepository = (*DeletionLogRepository)(nil)
 

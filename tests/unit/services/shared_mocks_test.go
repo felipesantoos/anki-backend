@@ -449,6 +449,9 @@ func (m *MockDeletionLogRepository) Exists(ctx context.Context, uid, id int64) (
 	args := m.Called(ctx, uid, id)
 	return args.Bool(0), args.Error(1)
 }
+func (m *MockDeletionLogRepository) FindRecent(ctx context.Context, uid int64, limit, days int) ([]*deletionlog.DeletionLog, error) {
+	args := m.Called(ctx, uid, limit, days); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*deletionlog.DeletionLog), args.Error(1)
+}
 
 // MockUndoHistoryRepository
 type MockUndoHistoryRepository struct{ mock.Mock }

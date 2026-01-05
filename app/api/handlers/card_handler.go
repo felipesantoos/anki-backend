@@ -181,6 +181,11 @@ func (h *CardHandler) SetFlag(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	if err := h.service.SetFlag(ctx, userID, id, req.Flag); err != nil {
 		return err
 	}

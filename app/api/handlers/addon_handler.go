@@ -41,6 +41,11 @@ func (h *AddOnHandler) Install(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	a, err := h.service.Install(ctx, userID, req.Code, req.Name, req.Version, req.ConfigJSON)
 	if err != nil {
 		c.Logger().Errorf("Install add-on error: %v", err)
@@ -87,6 +92,11 @@ func (h *AddOnHandler) UpdateConfig(c echo.Context) error {
 	var req request.UpdateAddOnConfigRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	a, err := h.service.UpdateConfig(ctx, userID, code, req.ConfigJSON)

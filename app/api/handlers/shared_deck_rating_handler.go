@@ -42,6 +42,11 @@ func (h *SharedDeckRatingHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	r, err := h.service.Create(ctx, userID, req.SharedDeckID, req.Rating, req.Comment)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -87,6 +92,11 @@ func (h *SharedDeckRatingHandler) Update(c echo.Context) error {
 	var req request.UpdateSharedDeckRatingRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	r, err := h.service.Update(ctx, userID, id, req.Rating, req.Comment)

@@ -42,6 +42,11 @@ func (h *SharedDeckHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	sd, err := h.service.Create(ctx, userID, req.Name, req.Description, req.Category, req.PackagePath, req.PackageSize, req.Tags)
 	if err != nil {
 		c.Logger().Errorf("Create shared deck error: %v", err)
@@ -114,6 +119,11 @@ func (h *SharedDeckHandler) Update(c echo.Context) error {
 	var req request.UpdateSharedDeckRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	sd, err := h.service.Update(ctx, userID, id, req.Name, req.Description, req.Category, req.IsPublic, req.Tags)

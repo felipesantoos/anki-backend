@@ -42,6 +42,11 @@ func (h *ProfileHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	p, err := h.service.Create(ctx, userID, req.Name)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -110,6 +115,11 @@ func (h *ProfileHandler) Update(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	p, err := h.service.Update(ctx, userID, id, req.Name)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -154,6 +164,11 @@ func (h *ProfileHandler) EnableSync(c echo.Context) error {
 	var req request.EnableSyncRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	if err := h.service.EnableSync(ctx, userID, id, req.Username); err != nil {

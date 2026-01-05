@@ -42,6 +42,11 @@ func (h *NoteTypeHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	nt, err := h.service.Create(ctx, userID, req.Name, req.FieldsJSON, req.CardTypesJSON, req.TemplatesJSON)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -115,6 +120,11 @@ func (h *NoteTypeHandler) Update(c echo.Context) error {
 	var req request.UpdateNoteTypeRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	nt, err := h.service.Update(ctx, userID, id, req.Name, req.FieldsJSON, req.CardTypesJSON, req.TemplatesJSON)

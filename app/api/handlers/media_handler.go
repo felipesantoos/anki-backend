@@ -42,6 +42,11 @@ func (h *MediaHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	m, err := h.service.Create(ctx, userID, req.Filename, req.Hash, req.Size, req.MimeType, req.StoragePath)
 	if err != nil {
 		return err

@@ -44,6 +44,81 @@ func TestNoteTypeHandler_Create(t *testing.T) {
 		}
 		mockSvc.AssertExpectations(t)
 	})
+
+	t.Run("Validation Errors", func(t *testing.T) {
+		e := echo.New()
+		e.Validator = middlewares.NewCustomValidator()
+		mockSvc := new(MockNoteTypeService)
+		handler := handlers.NewNoteTypeHandler(mockSvc)
+
+		tests := []struct {
+			name    string
+			reqBody map[string]interface{}
+			wantCode int
+		}{
+			{
+				name: "missing name",
+				reqBody: map[string]interface{}{
+					"fields_json":      `[{"name": "Front"}]`,
+					"card_types_json":  `[{"name": "Card 1"}]`,
+					"templates_json":   `[]`,
+				},
+				wantCode: http.StatusBadRequest,
+			},
+			{
+				name: "missing fields_json",
+				reqBody: map[string]interface{}{
+					"name":            "Test",
+					"card_types_json": `[{"name": "Card 1"}]`,
+					"templates_json":  `[]`,
+				},
+				wantCode: http.StatusBadRequest,
+			},
+			{
+				name: "missing card_types_json",
+				reqBody: map[string]interface{}{
+					"name":           "Test",
+					"fields_json":    `[{"name": "Front"}]`,
+					"templates_json": `[]`,
+				},
+				wantCode: http.StatusBadRequest,
+			},
+			{
+				name: "missing templates_json",
+				reqBody: map[string]interface{}{
+					"name":           "Test",
+					"fields_json":    `[{"name": "Front"}]`,
+					"card_types_json": `[{"name": "Card 1"}]`,
+				},
+				wantCode: http.StatusBadRequest,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				jsonBody, _ := json.Marshal(tt.reqBody)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(jsonBody))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				rec := httptest.NewRecorder()
+				c := e.NewContext(req, rec)
+				c.Set(middlewares.UserIDContextKey, userID)
+
+				err := handler.Create(c)
+
+				if err == nil {
+					t.Fatalf("Create() expected error, got nil")
+				}
+
+				if httpErr, ok := err.(*echo.HTTPError); ok {
+					if httpErr.Code != tt.wantCode {
+						t.Errorf("Create() status code = %d, want %d", httpErr.Code, tt.wantCode)
+					}
+				} else {
+					t.Errorf("Create() error type = %T, want *echo.HTTPError", err)
+				}
+			})
+		}
+	})
 }
 
 func TestNoteTypeHandler_FindAll(t *testing.T) {

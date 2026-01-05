@@ -49,9 +49,9 @@ func (h *AuthHandler) Register(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate request
-	if err := validateRegisterRequest(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	// Call service
@@ -64,30 +64,6 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	resp := mappers.ToRegisterResponse(user)
 
 	return c.JSON(http.StatusCreated, resp)
-}
-
-// validateRegisterRequest validates the register request
-func validateRegisterRequest(req *request.RegisterRequest) error {
-	// Validate email
-	if strings.TrimSpace(req.Email) == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "Email is required")
-	}
-
-	// Validate password
-	if strings.TrimSpace(req.Password) == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "Password is required")
-	}
-
-	if len(req.Password) < 8 {
-		return echo.NewHTTPError(http.StatusBadRequest, "Password must have at least 8 characters")
-	}
-
-	// Validate password confirmation
-	if req.Password != req.PasswordConfirm {
-		return echo.NewHTTPError(http.StatusBadRequest, "Password confirmation does not match")
-	}
-
-	return nil
 }
 
 // handleRegisterError handles errors from the auth service and converts them to appropriate HTTP errors
@@ -125,9 +101,9 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate request
-	if err := validateLoginRequest(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	// Extract IP address and user agent from request
@@ -167,9 +143,9 @@ func (h *AuthHandler) RefreshToken(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate request
-	if req.RefreshToken == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "refresh_token is required")
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	// Call service
@@ -225,25 +201,6 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Logged out successfully"})
-}
-
-// validateLoginRequest validates the login request
-func validateLoginRequest(req *request.LoginRequest) error {
-	var errors []string
-
-	if req.Email == "" {
-		errors = append(errors, "email is required")
-	}
-
-	if req.Password == "" {
-		errors = append(errors, "password is required")
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("%s", strings.Join(errors, ", "))
-	}
-
-	return nil
 }
 
 // handleLoginError handles errors from the login service and converts them to appropriate HTTP errors
@@ -334,9 +291,9 @@ func (h *AuthHandler) ResendVerificationEmail(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate request
-	if err := validateResendVerificationRequest(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	// Call service
@@ -348,13 +305,6 @@ func (h *AuthHandler) ResendVerificationEmail(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"message": "Verification email sent successfully",
 	})
-}
-
-func validateResendVerificationRequest(req *request.ResendVerificationRequest) error {
-	if req.Email == "" {
-		return fmt.Errorf("email is required")
-	}
-	return nil
 }
 
 func handleVerifyEmailError(err error) *echo.HTTPError {

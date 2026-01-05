@@ -45,7 +45,12 @@ func (h *SearchHandler) SearchAdvanced(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate request
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
+	// Additional validation
 	if req.Query == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "Query is required")
 	}

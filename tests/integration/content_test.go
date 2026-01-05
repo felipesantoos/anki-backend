@@ -1161,6 +1161,103 @@ func TestContent_Integration(t *testing.T) {
 		// Or 404 if note type validation happens first
 		assert.True(t, rec.Code == http.StatusBadRequest || rec.Code == http.StatusNotFound, "Should return 400 or 404 for invalid field name, got: %d", rec.Code)
 	})
+
+	t.Run("Validation - Missing Required Fields", func(t *testing.T) {
+		// Test Create Note with missing required fields
+		t.Run("Create Note - missing note_type_id", func(t *testing.T) {
+			createNoteReq := request.CreateNoteRequest{
+				// NoteTypeID missing
+				DeckID:     1,
+				FieldsJSON: `{"Front": "Test"}`,
+			}
+			b, _ := json.Marshal(createNoteReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for missing note_type_id")
+			assert.Contains(t, rec.Body.String(), "required", "Error message should mention required field")
+		})
+
+		t.Run("Create Note - missing deck_id", func(t *testing.T) {
+			var noteTypeID int64
+			err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Validation Test', '[]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+			require.NoError(t, err)
+
+			createNoteReq := request.CreateNoteRequest{
+				NoteTypeID: noteTypeID,
+				// DeckID missing
+				FieldsJSON: `{"Front": "Test"}`,
+			}
+			b, _ := json.Marshal(createNoteReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for missing deck_id")
+			assert.Contains(t, rec.Body.String(), "required", "Error message should mention required field")
+		})
+
+		t.Run("Create Note - missing fields_json", func(t *testing.T) {
+			var noteTypeID int64
+			err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Validation Test 2', '[]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+			require.NoError(t, err)
+
+			var defaultDeckID int64
+			err = db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default'", loginRes.User.ID).Scan(&defaultDeckID)
+			require.NoError(t, err)
+
+			createNoteReq := request.CreateNoteRequest{
+				NoteTypeID: noteTypeID,
+				DeckID:     defaultDeckID,
+				// FieldsJSON missing
+			}
+			b, _ := json.Marshal(createNoteReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for missing fields_json")
+			assert.Contains(t, rec.Body.String(), "required", "Error message should mention required field")
+		})
+
+		t.Run("Create Deck - missing name", func(t *testing.T) {
+			createDeckReq := request.CreateDeckRequest{
+				// Name missing
+			}
+			b, _ := json.Marshal(createDeckReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for missing name")
+			assert.Contains(t, rec.Body.String(), "required", "Error message should mention required field")
+		})
+
+		t.Run("Create Note Type - missing required fields", func(t *testing.T) {
+			createNoteTypeReq := request.CreateNoteTypeRequest{
+				Name: "Test",
+				// FieldsJSON, CardTypesJSON, TemplatesJSON missing
+			}
+			b, _ := json.Marshal(createNoteTypeReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for missing required fields")
+			assert.Contains(t, rec.Body.String(), "required", "Error message should mention required field")
+		})
+	})
 }
 
 func TestSearch_Regex(t *testing.T) {

@@ -52,6 +52,71 @@ func TestNoteHandler_Create(t *testing.T) {
 		}
 		mockSvc.AssertExpectations(t)
 	})
+
+	t.Run("Validation Errors", func(t *testing.T) {
+		e := echo.New()
+		e.Validator = middlewares.NewCustomValidator()
+		mockSvc := new(MockNoteService)
+		mockExportSvc := new(MockExportService)
+		mockDeletionLogSvc := new(MockDeletionLogService)
+		handler := handlers.NewNoteHandler(mockSvc, mockExportSvc, mockDeletionLogSvc)
+
+		tests := []struct {
+			name    string
+			reqBody map[string]interface{}
+			wantCode int
+		}{
+			{
+				name: "missing note_type_id",
+				reqBody: map[string]interface{}{
+					"deck_id":     1,
+					"fields_json": `{"Front": "test"}`,
+				},
+				wantCode: http.StatusBadRequest,
+			},
+			{
+				name: "missing deck_id",
+				reqBody: map[string]interface{}{
+					"note_type_id": 1,
+					"fields_json":  `{"Front": "test"}`,
+				},
+				wantCode: http.StatusBadRequest,
+			},
+			{
+				name: "missing fields_json",
+				reqBody: map[string]interface{}{
+					"note_type_id": 1,
+					"deck_id":      1,
+				},
+				wantCode: http.StatusBadRequest,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				jsonBody, _ := json.Marshal(tt.reqBody)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(jsonBody))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				rec := httptest.NewRecorder()
+				c := e.NewContext(req, rec)
+				c.Set(middlewares.UserIDContextKey, userID)
+
+				err := handler.Create(c)
+
+				if err == nil {
+					t.Fatalf("Create() expected error, got nil")
+				}
+
+				if httpErr, ok := err.(*echo.HTTPError); ok {
+					if httpErr.Code != tt.wantCode {
+						t.Errorf("Create() status code = %d, want %d", httpErr.Code, tt.wantCode)
+					}
+				} else {
+					t.Errorf("Create() error type = %T, want *echo.HTTPError", err)
+				}
+			})
+		}
+	})
 }
 
 func TestNoteHandler_Update(t *testing.T) {

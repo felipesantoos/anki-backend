@@ -42,6 +42,11 @@ func (h *FilteredDeckHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	fd, err := h.service.Create(ctx, userID, req.Name, req.SearchFilter, req.Limit, req.OrderBy, req.Reschedule)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -87,6 +92,11 @@ func (h *FilteredDeckHandler) Update(c echo.Context) error {
 	var req request.UpdateFilteredDeckRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	fd, err := h.service.Update(ctx, userID, id, req.Name, req.SearchFilter, req.Limit, req.OrderBy, req.Reschedule)

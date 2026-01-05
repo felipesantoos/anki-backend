@@ -4,6 +4,6 @@ package request
 // @Description Request payload for resending email verification
 type ResendVerificationRequest struct {
 	// Email address to resend verification email to
-	Email string `json:"email" binding:"required" example:"user@example.com"`
+	Email string `json:"email" validate:"required,email" example:"user@example.com"`
 }
 

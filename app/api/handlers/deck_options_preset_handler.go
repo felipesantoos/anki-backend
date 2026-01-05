@@ -46,6 +46,11 @@ func (h *DeckOptionsPresetHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	p, err := h.service.Create(ctx, userID, req.Name, req.OptionsJSON)
 	if err != nil {
 		return err
@@ -94,6 +99,11 @@ func (h *DeckOptionsPresetHandler) Update(c echo.Context) error {
 	var req request.UpdateDeckOptionsPresetRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	p, err := h.service.Update(ctx, userID, id, req.Name, req.OptionsJSON)
@@ -147,6 +157,11 @@ func (h *DeckOptionsPresetHandler) ApplyToDecks(c echo.Context) error {
 	var req request.ApplyDeckOptionsPresetRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	if err := h.service.ApplyToDecks(ctx, userID, id, req.DeckIDs); err != nil {

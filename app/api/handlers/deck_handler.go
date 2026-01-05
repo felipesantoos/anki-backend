@@ -52,6 +52,11 @@ func (h *DeckHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	d, err := h.deckService.Create(ctx, userID, req.Name, req.ParentID, req.OptionsJSON)
 	if err != nil {
 		return handleDeckError(err)
@@ -131,6 +136,11 @@ func (h *DeckHandler) Update(c echo.Context) error {
 	var req request.UpdateDeckRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	d, err := h.deckService.Update(ctx, userID, id, req.Name, req.ParentID, req.OptionsJSON)
@@ -252,15 +262,9 @@ func (h *DeckHandler) Delete(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate request
-	if req.Action == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "action is required")
-	}
-	if req.Action != request.ActionDeleteCards && req.Action != request.ActionMoveToDefault && req.Action != request.ActionMoveToDeck {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid action")
-	}
-	if req.Action == request.ActionMoveToDeck && req.TargetDeckID == nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "target_deck_id is required for 'move_to_deck' action")
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	action := deck.DeleteAction(req.Action)

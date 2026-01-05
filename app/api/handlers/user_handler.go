@@ -60,6 +60,11 @@ func (h *UserHandler) Update(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	u, err := h.service.Update(ctx, userID, req.Email)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

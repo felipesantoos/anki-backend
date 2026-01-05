@@ -45,6 +45,39 @@ func TestDeckHandler_Create(t *testing.T) {
 		}
 		mockSvc.AssertExpectations(t)
 	})
+
+	t.Run("Validation Errors", func(t *testing.T) {
+		e := echo.New()
+		e.Validator = middlewares.NewCustomValidator()
+		mockSvc := new(MockDeckService)
+		handler := handlers.NewDeckHandler(mockSvc)
+
+		t.Run("missing name", func(t *testing.T) {
+			reqBody := request.CreateDeckRequest{
+				// Name missing
+			}
+			body, _ := json.Marshal(reqBody)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(body))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.Set(middlewares.UserIDContextKey, userID)
+
+			err := handler.Create(c)
+
+			if err == nil {
+				t.Fatalf("Create() expected error, got nil")
+			}
+
+			if httpErr, ok := err.(*echo.HTTPError); ok {
+				if httpErr.Code != http.StatusBadRequest {
+					t.Errorf("Create() status code = %d, want %d", httpErr.Code, http.StatusBadRequest)
+				}
+			} else {
+				t.Errorf("Create() error type = %T, want *echo.HTTPError", err)
+			}
+		})
+	})
 }
 
 func TestDeckHandler_FindByID(t *testing.T) {

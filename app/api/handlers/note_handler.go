@@ -54,6 +54,11 @@ func (h *NoteHandler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	n, err := h.service.Create(ctx, userID, req.NoteTypeID, req.DeckID, req.FieldsJSON, req.Tags)
 	if err != nil {
 		return handleNoteError(err)
@@ -143,6 +148,11 @@ func (h *NoteHandler) Update(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	n, err := h.service.Update(ctx, userID, id, req.FieldsJSON, req.Tags)
 	if err != nil {
 		return handleNoteError(err)
@@ -187,6 +197,11 @@ func (h *NoteHandler) AddTag(c echo.Context) error {
 	var req request.AddTagRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	if err := h.service.AddTag(ctx, userID, id, req.Tag); err != nil {
@@ -237,6 +252,11 @@ func (h *NoteHandler) Copy(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
 	n, err := h.service.Copy(ctx, userID, id, req.DeckID, req.CopyTags, req.CopyMedia)
 	if err != nil {
 		return handleNoteError(err)
@@ -262,6 +282,11 @@ func (h *NoteHandler) FindDuplicates(c echo.Context) error {
 	var req request.FindDuplicatesRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	var result *note.DuplicateResult
@@ -306,15 +331,9 @@ func (h *NoteHandler) Export(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate request
-	if len(req.NoteIDs) == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "note_ids cannot be empty")
-	}
-	if len(req.NoteIDs) > 1000 {
-		return echo.NewHTTPError(http.StatusBadRequest, "note_ids cannot exceed 1000")
-	}
-	if req.Format != "apkg" && req.Format != "text" {
-		return echo.NewHTTPError(http.StatusBadRequest, "format must be 'apkg' or 'text'")
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	// Call export service

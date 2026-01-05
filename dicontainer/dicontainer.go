@@ -202,7 +202,9 @@ func GetSharedDeckRatingService() primary.ISharedDeckRatingService {
 // GetDeletionLogService returns a fresh instance of DeletionLogService
 func GetDeletionLogService() primary.IDeletionLogService {
 	deletionLogRepo := repositories.NewDeletionLogRepository(dbRepo.GetDB())
-	return auditService.NewDeletionLogService(deletionLogRepo)
+	noteService := GetNoteService()
+	noteRepo := repositories.NewNoteRepository(dbRepo.GetDB())
+	return auditService.NewDeletionLogService(deletionLogRepo, noteService, noteRepo)
 }
 
 // GetUndoHistoryService returns a fresh instance of UndoHistoryService

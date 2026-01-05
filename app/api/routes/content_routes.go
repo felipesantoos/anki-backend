@@ -36,6 +36,9 @@ func (r *Router) RegisterContentRoutes() {
 	// Note Recent Deletions (must be before /:id routes to avoid route conflicts)
 	notes.GET("/deletions", noteHandler.GetRecentDeletions)
 	
+	// Note Restore Deletion (must be before /:id routes to avoid route conflicts)
+	notes.POST("/deletions/:id/restore", noteHandler.RestoreDeletion)
+	
 	// Note Export (must be before /:id routes to avoid route conflicts)
 	notes.POST("/export", noteHandler.Export)
 	

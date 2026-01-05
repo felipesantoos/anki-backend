@@ -1727,4 +1727,279 @@ func TestSearch_Regex(t *testing.T) {
 			}
 		})
 	})
+
+	// Restore Deletion
+	t.Run("Restore Deletion", func(t *testing.T) {
+		// Create a note and then delete it to create a deletion log
+		createNoteReq := request.CreateNoteRequest{
+			NoteTypeID: noteTypeID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front": "Restore Test Note", "Back": "Back content"}`,
+			Tags:       []string{"restore", "test"},
+		}
+		b, _ := json.Marshal(createNoteReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+		var noteRes response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &noteRes)
+		originalNoteID := noteRes.ID
+		originalGUID := noteRes.GUID
+
+		// Delete the note to create a deletion log
+		req = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/notes/%d", originalNoteID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Wait a bit to ensure deletion log is created
+		time.Sleep(100 * time.Millisecond)
+
+		// Get deletion log ID
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=1", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var deletionsRes response.RecentDeletionsResponse
+		json.Unmarshal(rec.Body.Bytes(), &deletionsRes)
+		require.Greater(t, len(deletionsRes.Data), 0, "Should have at least one deletion log")
+		deletionLogID := deletionsRes.Data[0].ID
+
+		t.Run("Success - restore deleted note", func(t *testing.T) {
+			restoreReq := request.RestoreDeletionRequest{
+				DeckID: defaultDeckID,
+			}
+			b, _ := json.Marshal(restoreReq)
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var restoreRes response.RestoreDeletionResponse
+			json.Unmarshal(rec.Body.Bytes(), &restoreRes)
+			assert.Greater(t, restoreRes.ID, int64(0))
+			assert.Equal(t, originalGUID, restoreRes.GUID, "Restored note should have original GUID")
+			assert.Equal(t, "Note restored successfully", restoreRes.Message)
+
+			// Verify the note was actually restored by fetching it
+			req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/notes/%d", restoreRes.ID), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var restoredNoteRes response.NoteResponse
+			json.Unmarshal(rec.Body.Bytes(), &restoredNoteRes)
+			assert.Equal(t, restoreRes.ID, restoredNoteRes.ID)
+			assert.Equal(t, originalGUID, restoredNoteRes.GUID)
+			// Parse and compare JSON fields (order-independent)
+			var expectedFields, actualFields map[string]interface{}
+			json.Unmarshal([]byte(`{"Front": "Restore Test Note", "Back": "Back content"}`), &expectedFields)
+			json.Unmarshal([]byte(restoredNoteRes.FieldsJSON), &actualFields)
+			assert.Equal(t, expectedFields, actualFields)
+			assert.Contains(t, restoredNoteRes.Tags, "restore")
+			assert.Contains(t, restoredNoteRes.Tags, "test")
+		})
+
+		t.Run("Error - invalid deletion log ID", func(t *testing.T) {
+			restoreReq := request.RestoreDeletionRequest{
+				DeckID: defaultDeckID,
+			}
+			b, _ := json.Marshal(restoreReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/deletions/invalid/restore", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Error - deletion log not found", func(t *testing.T) {
+			restoreReq := request.RestoreDeletionRequest{
+				DeckID: defaultDeckID,
+			}
+			b, _ := json.Marshal(restoreReq)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/deletions/99999/restore", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusNotFound, rec.Code)
+		})
+
+		t.Run("Error - invalid request body", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader([]byte("invalid json")))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Error - missing deck_id", func(t *testing.T) {
+			restoreReq := request.RestoreDeletionRequest{
+				DeckID: 0,
+			}
+			b, _ := json.Marshal(restoreReq)
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Error - invalid deck_id", func(t *testing.T) {
+			// Create a new note and delete it to get a fresh deletion log
+			createNoteReq2 := request.CreateNoteRequest{
+				NoteTypeID: noteTypeID,
+				DeckID:     defaultDeckID,
+				FieldsJSON: `{"Front": "Invalid Deck Test", "Back": "Back"}`,
+				Tags:       []string{"test"},
+			}
+			b2, _ := json.Marshal(createNoteReq2)
+			req2 := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b2))
+			req2.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req2.Header.Set("Authorization", "Bearer "+token)
+			rec2 := httptest.NewRecorder()
+			e.ServeHTTP(rec2, req2)
+			require.Equal(t, http.StatusCreated, rec2.Code)
+			var noteRes2 response.NoteResponse
+			json.Unmarshal(rec2.Body.Bytes(), &noteRes2)
+			noteID2 := noteRes2.ID
+
+			// Delete the note
+			req2 = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/notes/%d", noteID2), nil)
+			req2.Header.Set("Authorization", "Bearer "+token)
+			rec2 = httptest.NewRecorder()
+			e.ServeHTTP(rec2, req2)
+			require.Equal(t, http.StatusNoContent, rec2.Code)
+
+			time.Sleep(100 * time.Millisecond)
+
+			// Get deletion log ID
+			req2 = httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=1", nil)
+			req2.Header.Set("Authorization", "Bearer "+token)
+			rec2 = httptest.NewRecorder()
+			e.ServeHTTP(rec2, req2)
+			require.Equal(t, http.StatusOK, rec2.Code)
+			var deletionsRes2 response.RecentDeletionsResponse
+			json.Unmarshal(rec2.Body.Bytes(), &deletionsRes2)
+			require.Greater(t, len(deletionsRes2.Data), 0)
+			freshDeletionLogID := deletionsRes2.Data[0].ID
+
+			// Now try to restore with invalid deck_id
+			restoreReq := request.RestoreDeletionRequest{
+				DeckID: 99999, // Non-existent deck
+			}
+			b, _ := json.Marshal(restoreReq)
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", freshDeletionLogID), bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Cross-user isolation - cannot restore another user's deletion", func(t *testing.T) {
+			// Create another user
+			loginRes2 := registerAndLogin(t, e, "restore_deletion_user2@example.com", "password123")
+			token2 := loginRes2.AccessToken
+
+			// User 2 tries to restore user 1's deletion log
+			restoreReq := request.RestoreDeletionRequest{
+				DeckID: defaultDeckID,
+			}
+			b, _ := json.Marshal(restoreReq)
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token2)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusNotFound, rec.Code, "User 2 should not be able to restore user 1's deletion")
+		})
+
+		t.Run("Error - already restored (GUID conflict)", func(t *testing.T) {
+			// Create a new deletion log by creating and deleting another note
+			createNoteReq2 := request.CreateNoteRequest{
+				NoteTypeID: noteTypeID,
+				DeckID:     defaultDeckID,
+				FieldsJSON: `{"Front": "Second Restore Test", "Back": "Back"}`,
+				Tags:       []string{"test"},
+			}
+			b, _ := json.Marshal(createNoteReq2)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusCreated, rec.Code)
+			var noteRes2 response.NoteResponse
+			json.Unmarshal(rec.Body.Bytes(), &noteRes2)
+			noteID2 := noteRes2.ID
+			originalGUID2 := noteRes2.GUID
+
+			// Delete the note
+			req = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/notes/%d", noteID2), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusNoContent, rec.Code)
+
+			time.Sleep(100 * time.Millisecond)
+
+			// Get deletion log ID - find the one that matches the GUID we just deleted
+			req = httptest.NewRequest(http.MethodGet, "/api/v1/notes/deletions?limit=10", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code)
+			var deletionsRes2 response.RecentDeletionsResponse
+			json.Unmarshal(rec.Body.Bytes(), &deletionsRes2)
+			require.Greater(t, len(deletionsRes2.Data), 0)
+			
+			// Find the deletion log that matches the GUID we just deleted
+			var deletionLogID2 int64
+			for _, dl := range deletionsRes2.Data {
+				if objData, ok := dl.ObjectData["guid"].(string); ok && objData == originalGUID2 {
+					deletionLogID2 = dl.ID
+					break
+				}
+			}
+			require.Greater(t, deletionLogID2, int64(0), "Should find deletion log for the note we just deleted")
+
+			// Restore it first time
+			restoreReq := request.RestoreDeletionRequest{
+				DeckID: defaultDeckID,
+			}
+			b, _ = json.Marshal(restoreReq)
+			req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID2), bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			// Try to restore again (should fail because GUID already exists)
+			req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID2), bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusConflict, rec.Code, "Should return 409 Conflict when trying to restore already restored note")
+		})
+	})
 }

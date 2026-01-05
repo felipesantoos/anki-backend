@@ -40,6 +40,12 @@ type ListNotesRequest struct {
 	Offset     int      `query:"offset"`
 }
 
+// RestoreDeletionRequest represents the request payload to restore a deleted note
+type RestoreDeletionRequest struct {
+	// ID of the deck where the restored note will be placed
+	DeckID int64 `json:"deck_id" example:"1" validate:"required,gt=0"`
+}
+
 // CopyNoteRequest represents the request payload to copy a note
 type CopyNoteRequest struct {
 	// Optional deck ID (if not provided, uses original note's deck)

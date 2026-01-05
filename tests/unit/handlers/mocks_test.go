@@ -683,6 +683,14 @@ func (m *MockDeletionLogService) FindRecent(ctx context.Context, userID int64, l
 	return args.Get(0).([]*deletionlog.DeletionLog), args.Error(1)
 }
 
+func (m *MockDeletionLogService) Restore(ctx context.Context, userID int64, deletionLogID int64, deckID int64) (*note.Note, error) {
+	args := m.Called(ctx, userID, deletionLogID, deckID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*note.Note), args.Error(1)
+}
+
 // MockUndoHistoryService is a mock implementation of IUndoHistoryService
 type MockUndoHistoryService struct {
 	mock.Mock

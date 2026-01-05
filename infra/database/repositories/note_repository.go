@@ -361,6 +361,7 @@ func (r *NoteRepository) FindByDeckID(ctx context.Context, userID int64, deckID 
 }
 
 // FindByGUID finds a note by GUID, filtering by userID to ensure ownership
+// Only returns notes that are not soft-deleted (deleted_at IS NULL)
 func (r *NoteRepository) FindByGUID(ctx context.Context, userID int64, guid string) (*note.Note, error) {
 	query := `
 		SELECT id, user_id, guid, note_type_id, fields_json, tags, marked, created_at, updated_at, deleted_at

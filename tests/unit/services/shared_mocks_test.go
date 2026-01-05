@@ -19,6 +19,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
 	"github.com/felipesantos/anki-backend/core/domain/entities/profile"
+	"github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/domain/entities/review"
 	savedsearch "github.com/felipesantos/anki-backend/core/domain/entities/saved_search"
 	"github.com/felipesantos/anki-backend/core/domain/entities/shared_deck"
@@ -151,6 +152,9 @@ func (m *MockNoteRepository) FindDuplicatesByField(ctx context.Context, uid int6
 }
 func (m *MockNoteRepository) FindDuplicatesByGUID(ctx context.Context, uid int64) ([]*note.DuplicateGroup, error) {
 	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.DuplicateGroup), args.Error(1)
+}
+func (m *MockNoteRepository) FindByAdvancedSearch(ctx context.Context, uid int64, q *search.SearchQuery, l, o int) ([]*note.Note, error) {
+	args := m.Called(ctx, uid, q, l, o); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
 }
 
 // MockCardRepository
@@ -538,6 +542,33 @@ func (m *MockBackupService) FindByUserID(ctx context.Context, uid int64) ([]*bac
 	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*backup.Backup), args.Error(1)
 }
 func (m *MockBackupService) Delete(ctx context.Context, uid, id int64) error { return m.Called(ctx, uid, id).Error(0) }
+
+// MockNoteService
+type MockNoteService struct{ mock.Mock }
+func (m *MockNoteService) Create(ctx context.Context, uid int64, ntid, did int64, fj string, tags []string) (*note.Note, error) {
+	args := m.Called(ctx, uid, ntid, did, fj, tags); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.Note), args.Error(1)
+}
+func (m *MockNoteService) FindByID(ctx context.Context, uid, id int64) (*note.Note, error) {
+	args := m.Called(ctx, uid, id); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.Note), args.Error(1)
+}
+func (m *MockNoteService) FindAll(ctx context.Context, uid int64, f note.NoteFilters) ([]*note.Note, error) {
+	args := m.Called(ctx, uid, f); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*note.Note), args.Error(1)
+}
+func (m *MockNoteService) Update(ctx context.Context, uid, id int64, fj string, tags []string) (*note.Note, error) {
+	args := m.Called(ctx, uid, id, fj, tags); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.Note), args.Error(1)
+}
+func (m *MockNoteService) Delete(ctx context.Context, uid, id int64) error { return m.Called(ctx, uid, id).Error(0) }
+func (m *MockNoteService) AddTag(ctx context.Context, uid, id int64, tag string) error { return m.Called(ctx, uid, id, tag).Error(0) }
+func (m *MockNoteService) RemoveTag(ctx context.Context, uid, id int64, tag string) error { return m.Called(ctx, uid, id, tag).Error(0) }
+func (m *MockNoteService) Copy(ctx context.Context, uid, nid int64, did *int64, ct, cm bool) (*note.Note, error) {
+	args := m.Called(ctx, uid, nid, did, ct, cm); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.Note), args.Error(1)
+}
+func (m *MockNoteService) FindDuplicates(ctx context.Context, uid int64, ntid *int64, fn string) (*note.DuplicateResult, error) {
+	args := m.Called(ctx, uid, ntid, fn); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.DuplicateResult), args.Error(1)
+}
+func (m *MockNoteService) FindDuplicatesByGUID(ctx context.Context, uid int64) (*note.DuplicateResult, error) {
+	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.DuplicateResult), args.Error(1)
+}
 
 // MockExportService
 type MockExportService struct{ mock.Mock }

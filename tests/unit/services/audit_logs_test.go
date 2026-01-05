@@ -2,20 +2,26 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/check_database_log"
 	deletionlog "github.com/felipesantos/anki-backend/core/domain/entities/deletion_log"
+	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	"github.com/felipesantos/anki-backend/core/domain/entities/undo_history"
+	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	auditSvc "github.com/felipesantos/anki-backend/core/services/audit"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestDeletionLogService_Create(t *testing.T) {
 	mockRepo := new(MockDeletionLogRepository)
-	service := auditSvc.NewDeletionLogService(mockRepo)
+	mockNoteService := new(MockNoteService)
+	mockNoteRepo := new(MockNoteRepository)
+	service := auditSvc.NewDeletionLogService(mockRepo, mockNoteService, mockNoteRepo)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -32,7 +38,9 @@ func TestDeletionLogService_Create(t *testing.T) {
 
 func TestDeletionLogService_FindRecent(t *testing.T) {
 	mockRepo := new(MockDeletionLogRepository)
-	service := auditSvc.NewDeletionLogService(mockRepo)
+	mockNoteService := new(MockNoteService)
+	mockNoteRepo := new(MockNoteRepository)
+	service := auditSvc.NewDeletionLogService(mockRepo, mockNoteService, mockNoteRepo)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -192,6 +200,207 @@ func TestDeletionLogService_FindRecent(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestDeletionLogService_Restore(t *testing.T) {
+	mockRepo := new(MockDeletionLogRepository)
+	mockNoteService := new(MockNoteService)
+	mockNoteRepo := new(MockNoteRepository)
+	service := auditSvc.NewDeletionLogService(mockRepo, mockNoteService, mockNoteRepo)
+	ctx := context.Background()
+	userID := int64(1)
+	deletionLogID := int64(100)
+	deckID := int64(20)
+
+	// Sample deletion log with valid object_data
+	objectDataJSON := `{"guid":"550e8400-e29b-41d4-a716-446655440000","note_type_id":10,"fields":{"Front":"Hello","Back":"World"},"tags":["vocab"]}`
+	dl, _ := deletionlog.NewBuilder().
+		WithID(deletionLogID).
+		WithUserID(userID).
+		WithObjectType(deletionlog.ObjectTypeNote).
+		WithObjectID(101).
+		WithObjectData(objectDataJSON).
+		WithDeletedAt(time.Now()).
+		Build()
+
+	// Sample restored note
+	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	restoredNote, _ := note.NewBuilder().
+		WithID(201).
+		WithUserID(userID).
+		WithGUID(guid).
+		WithNoteTypeID(10).
+		WithFieldsJSON(`{"Front":"Hello","Back":"World"}`).
+		WithTags([]string{"vocab"}).
+		Build()
+
+	t.Run("Success - restore note", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dl, nil).Once()
+		mockNoteRepo.On("FindByGUID", ctx, userID, "550e8400-e29b-41d4-a716-446655440000").Return(nil, nil).Once()
+		mockNoteService.On("Create", ctx, userID, int64(10), deckID, `{"Front":"Hello","Back":"World"}`, []string{"vocab"}).Return(restoredNote, nil).Once()
+		mockNoteRepo.On("Update", ctx, userID, int64(201), mock.AnythingOfType("*note.Note")).Return(nil).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, restoredNote.GetID(), result.GetID())
+		mockRepo.AssertExpectations(t)
+		mockNoteService.AssertExpectations(t)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - deletion log not found", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(nil, ownership.ErrResourceNotFound).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, ownership.ErrResourceNotFound))
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - deletion log belongs to another user", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(nil, ownership.ErrResourceNotFound).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.True(t, errors.Is(err, ownership.ErrResourceNotFound))
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - empty object_data", func(t *testing.T) {
+		dlEmpty, _ := deletionlog.NewBuilder().
+			WithID(deletionLogID).
+			WithUserID(userID).
+			WithObjectType(deletionlog.ObjectTypeNote).
+			WithObjectID(101).
+			WithObjectData("").
+			WithDeletedAt(time.Now()).
+			Build()
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dlEmpty, nil).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "recoverable data")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - invalid object_type", func(t *testing.T) {
+		dlCard, _ := deletionlog.NewBuilder().
+			WithID(deletionLogID).
+			WithUserID(userID).
+			WithObjectType(deletionlog.ObjectTypeCard).
+			WithObjectID(101).
+			WithObjectData(objectDataJSON).
+			WithDeletedAt(time.Now()).
+			Build()
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dlCard, nil).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "can only restore notes")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - invalid JSON in object_data", func(t *testing.T) {
+		dlInvalid, _ := deletionlog.NewBuilder().
+			WithID(deletionLogID).
+			WithUserID(userID).
+			WithObjectType(deletionlog.ObjectTypeNote).
+			WithObjectID(101).
+			WithObjectData("invalid json{").
+			WithDeletedAt(time.Now()).
+			Build()
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dlInvalid, nil).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse object_data JSON")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - missing guid in object_data", func(t *testing.T) {
+		invalidDataJSON := `{"note_type_id":10,"fields":{"Front":"Hello"},"tags":[]}`
+		dlNoGUID, _ := deletionlog.NewBuilder().
+			WithID(deletionLogID).
+			WithUserID(userID).
+			WithObjectType(deletionlog.ObjectTypeNote).
+			WithObjectID(101).
+			WithObjectData(invalidDataJSON).
+			WithDeletedAt(time.Now()).
+			Build()
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dlNoGUID, nil).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "missing or invalid guid")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - note already restored (GUID conflict)", func(t *testing.T) {
+		existingNote, _ := note.NewBuilder().
+			WithID(301).
+			WithUserID(userID).
+			WithGUID(guid).
+			WithNoteTypeID(10).
+			WithFieldsJSON(`{"Front":"Existing"}`).
+			WithTags([]string{}).
+			Build()
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dl, nil).Once()
+		mockNoteRepo.On("FindByGUID", ctx, userID, "550e8400-e29b-41d4-a716-446655440000").Return(existingNote, nil).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "already exists and is not deleted")
+		assert.Contains(t, err.Error(), "already restored")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - note service Create fails", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dl, nil).Once()
+		mockNoteRepo.On("FindByGUID", ctx, userID, "550e8400-e29b-41d4-a716-446655440000").Return(nil, nil).Once()
+		mockNoteService.On("Create", ctx, userID, int64(10), deckID, `{"Front":"Hello","Back":"World"}`, []string{"vocab"}).Return(nil, errors.New("note type not found")).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create note")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+		mockNoteService.AssertExpectations(t)
+		mockNoteRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error - Update GUID fails", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dl, nil).Once()
+		mockNoteRepo.On("FindByGUID", ctx, userID, "550e8400-e29b-41d4-a716-446655440000").Return(nil, nil).Once()
+		mockNoteService.On("Create", ctx, userID, int64(10), deckID, `{"Front":"Hello","Back":"World"}`, []string{"vocab"}).Return(restoredNote, nil).Once()
+		mockNoteRepo.On("Update", ctx, userID, int64(201), mock.AnythingOfType("*note.Note")).Return(errors.New("update failed")).Once()
+
+		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to set original GUID")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+		mockNoteService.AssertExpectations(t)
+		mockNoteRepo.AssertExpectations(t)
 	})
 }
 

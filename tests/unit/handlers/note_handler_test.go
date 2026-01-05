@@ -460,3 +460,188 @@ func TestNoteHandler_GetRecentDeletions(t *testing.T) {
 	})
 }
 
+func TestNoteHandler_RestoreDeletion(t *testing.T) {
+	e := echo.New()
+	mockNoteSvc := new(MockNoteService)
+	mockExportSvc := new(MockExportService)
+	mockDeletionLogSvc := new(MockDeletionLogService)
+	handler := handlers.NewNoteHandler(mockNoteSvc, mockExportSvc, mockDeletionLogSvc)
+	userID := int64(1)
+	deletionLogID := int64(100)
+	deckID := int64(20)
+
+	guid, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+	restoredNote, _ := note.NewBuilder().
+		WithID(201).
+		WithUserID(userID).
+		WithGUID(guid).
+		WithNoteTypeID(10).
+		WithFieldsJSON(`{"Front":"Hello","Back":"World"}`).
+		WithTags([]string{"vocab"}).
+		Build()
+
+	t.Run("Success - restore deletion", func(t *testing.T) {
+		reqBody := request.RestoreDeletionRequest{
+			DeckID: deckID,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/notes/deletions/:id/restore")
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", deletionLogID))
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockDeletionLogSvc.On("Restore", mock.Anything, userID, deletionLogID, deckID).Return(restoredNote, nil).Once()
+
+		if assert.NoError(t, handler.RestoreDeletion(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var response response.RestoreDeletionResponse
+			json.Unmarshal(rec.Body.Bytes(), &response)
+			assert.Equal(t, restoredNote.GetID(), response.ID)
+			assert.Equal(t, restoredNote.GetGUID().Value(), response.GUID)
+			assert.Equal(t, "Note restored successfully", response.Message)
+		}
+		mockDeletionLogSvc.AssertExpectations(t)
+	})
+
+	t.Run("Error - invalid deletion log ID", func(t *testing.T) {
+		reqBody := request.RestoreDeletionRequest{
+			DeckID: deckID,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notes/deletions/invalid/restore", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/notes/deletions/:id/restore")
+		c.SetParamNames("id")
+		c.SetParamValues("invalid")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.RestoreDeletion(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusBadRequest, httpError.Code)
+		assert.Contains(t, httpError.Message, "Invalid deletion log ID")
+	})
+
+	t.Run("Error - invalid request body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader([]byte("invalid json")))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/notes/deletions/:id/restore")
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", deletionLogID))
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.RestoreDeletion(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusBadRequest, httpError.Code)
+		assert.Equal(t, "Invalid request body", httpError.Message)
+	})
+
+	t.Run("Error - missing deck_id", func(t *testing.T) {
+		reqBody := request.RestoreDeletionRequest{
+			DeckID: 0,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/notes/deletions/:id/restore")
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", deletionLogID))
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.RestoreDeletion(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusBadRequest, httpError.Code)
+		assert.Contains(t, httpError.Message, "deck_id is required")
+	})
+
+	t.Run("Error - deletion log not found", func(t *testing.T) {
+		reqBody := request.RestoreDeletionRequest{
+			DeckID: deckID,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/notes/deletions/:id/restore")
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", deletionLogID))
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockDeletionLogSvc.On("Restore", mock.Anything, userID, deletionLogID, deckID).Return(nil, fmt.Errorf("not found")).Once()
+
+		err := handler.RestoreDeletion(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusNotFound, httpError.Code)
+		assert.Contains(t, httpError.Message, "not found")
+		mockDeletionLogSvc.AssertExpectations(t)
+	})
+
+	t.Run("Error - already restored (409 Conflict)", func(t *testing.T) {
+		reqBody := request.RestoreDeletionRequest{
+			DeckID: deckID,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/notes/deletions/:id/restore")
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", deletionLogID))
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockDeletionLogSvc.On("Restore", mock.Anything, userID, deletionLogID, deckID).Return(nil, fmt.Errorf("already restored")).Once()
+
+		err := handler.RestoreDeletion(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusConflict, httpError.Code)
+		assert.Contains(t, httpError.Message, "already restored")
+		mockDeletionLogSvc.AssertExpectations(t)
+	})
+
+	t.Run("Error - service returns internal error", func(t *testing.T) {
+		reqBody := request.RestoreDeletionRequest{
+			DeckID: deckID,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/notes/deletions/%d/restore", deletionLogID), bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/notes/deletions/:id/restore")
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", deletionLogID))
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockDeletionLogSvc.On("Restore", mock.Anything, userID, deletionLogID, deckID).Return(nil, fmt.Errorf("internal service error")).Once()
+
+		err := handler.RestoreDeletion(c)
+		assert.Error(t, err)
+		httpError, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusInternalServerError, httpError.Code)
+		assert.Contains(t, httpError.Message, "Failed to restore note")
+		mockDeletionLogSvc.AssertExpectations(t)
+	})
+}
+

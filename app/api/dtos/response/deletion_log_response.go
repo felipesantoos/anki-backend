@@ -28,3 +28,11 @@ type RecentDeletionsResponse struct {
 	Pagination PaginationResponse     `json:"pagination"`
 }
 
+// RestoreDeletionResponse represents the response payload for restore deletion endpoint
+type RestoreDeletionResponse struct {
+	ID         int64     `json:"id"`
+	GUID       string    `json:"guid"`
+	RestoredAt time.Time `json:"restored_at"`
+	Message    string    `json:"message"`
+}
+

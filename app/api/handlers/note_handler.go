@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
 // NoteHandler handles note-related HTTP requests
@@ -414,6 +417,103 @@ func (h *NoteHandler) GetRecentDeletions(c echo.Context) error {
 			Total:      total,
 			TotalPages: totalPages,
 		},
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// RestoreDeletion handles POST /api/v1/notes/deletions/:id/restore
+// @Summary Restore a deleted note
+// @Description Restores a deleted note from a deletion log entry. The note will be recreated with its original data in the specified deck.
+// @Tags notes
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Deletion log ID"
+// @Param request body request.RestoreDeletionRequest true "Restore deletion request"
+// @Success 200 {object} response.RestoreDeletionResponse "Note restored successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request body or parameters"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Deletion log not found"
+// @Failure 409 {object} response.ErrorResponse "Note already restored or conflict"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/notes/deletions/{id}/restore [post]
+func (h *NoteHandler) RestoreDeletion(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	// Parse deletion log ID from path parameter
+	deletionLogID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || deletionLogID <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid deletion log ID")
+	}
+
+	// Bind request body
+	var req request.RestoreDeletionRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if req.DeckID <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "deck_id is required and must be greater than 0")
+	}
+
+	// Call service to restore note
+	restoredNote, err := h.deletionLogService.Restore(ctx, userID, deletionLogID, req.DeckID)
+	if err != nil {
+		// Handle specific error cases
+		errMsg := err.Error()
+		
+		// Deck not found should return 400 (Bad Request) as it's an invalid parameter
+		// Check for "deck not found" FIRST before other "not found" checks
+		// (may be wrapped in "failed to create note")
+		if strings.Contains(errMsg, "deck not found") {
+			return echo.NewHTTPError(http.StatusBadRequest, "deck not found")
+		}
+		
+		// Note type not found should also return 400
+		if strings.Contains(errMsg, "note type not found") {
+			return echo.NewHTTPError(http.StatusBadRequest, "note type not found")
+		}
+		
+		// If error is ownership.ErrResourceNotFound and contains "failed to create note",
+		// it's likely a deck or note type not found (invalid parameter), return 400
+		if errors.Is(err, ownership.ErrResourceNotFound) && strings.Contains(errMsg, "failed to create note") {
+			return echo.NewHTTPError(http.StatusBadRequest, "deck or note type not found")
+		}
+		
+		// Deletion log not found should return 404
+		if strings.Contains(errMsg, "deletion log") && strings.Contains(errMsg, "not found") {
+			return echo.NewHTTPError(http.StatusNotFound, "Deletion log not found or access denied")
+		}
+		if errors.Is(err, ownership.ErrResourceNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "Deletion log not found or access denied")
+		}
+		
+		// Already restored or conflict - this shouldn't happen normally but can occur
+		// due to test isolation issues or race conditions. Treat as success (idempotent).
+		if strings.Contains(errMsg, "already restored") {
+			return echo.NewHTTPError(http.StatusConflict, err.Error())
+		}
+		if strings.Contains(errMsg, "conflict") {
+			return echo.NewHTTPError(http.StatusConflict, err.Error())
+		}
+		
+		// Invalid or missing data should return 400
+		if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "missing") {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Failed to restore note: %v", err))
+	}
+
+	// Map to response DTO
+	response := response.RestoreDeletionResponse{
+		ID:         restoredNote.GetID(),
+		GUID:       restoredNote.GetGUID().Value(),
+		RestoredAt: time.Now(),
+		Message:    "Note restored successfully",
 	}
 
 	return c.JSON(http.StatusOK, response)

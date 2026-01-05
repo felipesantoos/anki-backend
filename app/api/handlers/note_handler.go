@@ -448,15 +448,15 @@ func (h *NoteHandler) RestoreDeletion(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid deletion log ID")
 	}
 
-	// Bind request body
+	// Bind and validate request body
 	var req request.RestoreDeletionRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate request
-	if req.DeckID <= 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "deck_id is required and must be greater than 0")
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
 	}
 
 	// Call service to restore note

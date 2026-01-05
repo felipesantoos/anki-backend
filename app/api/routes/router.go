@@ -22,6 +22,9 @@ type Router struct {
 
 // NewRouter creates a new Router instance
 func NewRouter(e *echo.Echo, cfg *config.Config, jwtSvc *jwt.JWTService, rdb *redis.RedisRepository) *Router {
+	// Set up validator early so it's available even if routes are registered individually
+	e.Validator = middlewares.NewCustomValidator()
+	
 	return &Router{
 		echo:   e,
 		cfg:    cfg,
@@ -40,6 +43,11 @@ func (r *Router) Init() {
 func (r *Router) setupMiddlewares() {
 	r.echo.HideBanner = true
 	r.echo.HTTPErrorHandler = middlewares.CustomHTTPErrorHandler
+
+	// Validator is already set up in NewRouter, but ensure it's set here too
+	if r.echo.Validator == nil {
+		r.echo.Validator = middlewares.NewCustomValidator()
+	}
 
 	r.echo.Use(echoMiddleware.Recover())
 	r.echo.Use(middlewares.CORSMiddleware(r.cfg.CORS))

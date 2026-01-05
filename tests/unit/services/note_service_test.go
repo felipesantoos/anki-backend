@@ -10,6 +10,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
+	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	noteSvc "github.com/felipesantos/anki-backend/core/services/note"
 	"github.com/felipesantos/anki-backend/pkg/ownership"
 	"github.com/stretchr/testify/assert"
@@ -73,6 +74,49 @@ func TestNoteService_Create(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "deck not found")
 		assert.Nil(t, result)
+	})
+
+	t.Run("Generates GUID automatically", func(t *testing.T) {
+		noteTypeID := int64(10)
+		deckID := int64(20)
+		fields := "{\"Front\":\"Q\", \"Back\":\"A\"}"
+		
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithCardTypesJSON("[{}]"). // 1 card type
+			Build()
+
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("Target Deck").Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+		mockDeckRepo.On("FindByID", mock.Anything, userID, deckID).Return(d, nil).Once()
+		mockNoteRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*note.Note")).Return(nil).Run(func(args mock.Arguments) {
+			n := args.Get(2).(*note.Note)
+			n.SetID(100) // Set ID so card generation works
+			// Verify GUID is generated and valid
+			guid := n.GetGUID()
+			assert.False(t, guid.IsEmpty(), "GUID should not be empty")
+			assert.NotEmpty(t, guid.Value(), "GUID should have a value")
+			// Verify GUID format is valid UUID (RFC 4122)
+			guidValue := guid.Value()
+			assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, guidValue, "GUID should be in UUID format")
+		}).Once()
+		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
+
+		result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{})
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		// Verify GUID is present in result
+		guid := result.GetGUID()
+		assert.False(t, guid.IsEmpty(), "GUID should not be empty")
+		assert.NotEmpty(t, guid.Value(), "GUID should have a value")
+		mockNoteRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
 	})
 }
 
@@ -476,6 +520,69 @@ func TestNoteService_Copy(t *testing.T) {
 		assert.Contains(t, err.Error(), "note not found")
 		assert.Nil(t, result)
 		mockNoteRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Generates new GUID automatically", func(t *testing.T) {
+		// Setup original note with a specific GUID
+		originalGUID, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
+		originalNote, _ := note.NewBuilder().
+			WithID(originalNoteID).
+			WithUserID(userID).
+			WithGUID(originalGUID).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"Q", "Back":"A"}`).
+			WithTags([]string{"tag1"}).
+			Build()
+
+		// Setup note type
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithCardTypesJSON("[{}]"). // 1 card type
+			Build()
+
+		// Setup deck
+		d, _ := deck.NewBuilder().WithID(targetDeckID).WithUserID(userID).WithName("Target Deck").Build()
+
+		// Setup original cards
+		originalCard, _ := card.NewBuilder().
+			WithNoteID(originalNoteID).
+			WithDeckID(originalDeckID).
+			Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(originalNote, nil).Once()
+		mockDeckRepo.On("FindByID", mock.Anything, userID, targetDeckID).Return(d, nil).Once()
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+		mockNoteRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*note.Note")).Return(nil).Run(func(args mock.Arguments) {
+			n := args.Get(2).(*note.Note)
+			n.SetID(200) // Set ID so card generation works
+			// Verify new GUID is generated and different from original
+			newGUID := n.GetGUID()
+			assert.False(t, newGUID.IsEmpty(), "New GUID should not be empty")
+			assert.NotEmpty(t, newGUID.Value(), "New GUID should have a value")
+			// Verify GUID format is valid UUID (RFC 4122)
+			guidValue := newGUID.Value()
+			assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, guidValue, "GUID should be in UUID format")
+			// Verify new GUID is different from original
+			assert.False(t, newGUID.Equals(originalGUID), "Copied note should have a different GUID from original")
+		}).Once()
+		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, &targetDeckID, true, true)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		// Verify GUID is present and different from original
+		newGUID := result.GetGUID()
+		assert.False(t, newGUID.IsEmpty(), "GUID should not be empty")
+		assert.NotEmpty(t, newGUID.Value(), "GUID should have a value")
+		assert.False(t, newGUID.Equals(originalGUID), "Copied note should have a different GUID from original")
+		mockNoteRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockNoteTypeRepo.AssertExpectations(t)
 		mockTM.AssertExpectations(t)
 	})
 }

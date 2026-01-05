@@ -281,6 +281,10 @@ func TestContent_Integration(t *testing.T) {
 		assert.Equal(t, createNoteReq.FieldsJSON, noteRes.FieldsJSON)
 		noteID := noteRes.ID
 
+		// Verify GUID is automatically generated and valid
+		assert.NotEmpty(t, noteRes.GUID, "GUID should be automatically generated")
+		assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, noteRes.GUID, "GUID should be in UUID format (RFC 4122)")
+
 		// Update Note
 		updateReq := request.UpdateNoteRequest{
 			FieldsJSON: `{"Front": "Updated Front", "Back": "Updated Back"}`,
@@ -759,6 +763,9 @@ func TestContent_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &copiedNoteRes)
 		assert.NotEqual(t, noteToCopyID, copiedNoteRes.ID, "Copy should have different ID")
 		assert.NotEqual(t, noteToCopy.GUID, copiedNoteRes.GUID, "Copy should have different GUID")
+		// Verify new GUID is automatically generated and valid
+		assert.NotEmpty(t, copiedNoteRes.GUID, "Copied note should have a GUID")
+		assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, copiedNoteRes.GUID, "Copied note GUID should be in UUID format (RFC 4122)")
 		// Compare JSON fields (order may vary, so parse and compare)
 		var originalFields, copiedFields map[string]interface{}
 		json.Unmarshal([]byte(noteToCopy.FieldsJSON), &originalFields)

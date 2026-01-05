@@ -45,6 +45,9 @@ func NewNoteService(
 }
 
 // Create creates a new note and generates associated cards
+// GUID generation strategy: The application layer generates a GUID using uuid.New() as the primary method.
+// The database layer provides a fallback trigger (set_note_guid) that automatically generates a GUID
+// if one is not provided, ensuring GUIDs are always present even if application-level generation fails.
 func (s *NoteService) Create(ctx context.Context, userID int64, noteTypeID int64, deckID int64, fieldsJSON string, tags []string) (*note.Note, error) {
 	var noteEntity *note.Note
 
@@ -68,7 +71,10 @@ func (s *NoteService) Create(ctx context.Context, userID int64, noteTypeID int64
 		}
 
 		// 3. Create Note
-		guid, _ := valueobjects.NewGUID(uuid.New().String()) // Generate new GUID
+		guid, err := valueobjects.NewGUID(uuid.New().String()) // Generate new GUID
+		if err != nil {
+			return fmt.Errorf("failed to generate GUID: %w", err)
+		}
 		now := time.Now()
 		noteEntity, err = note.NewBuilder().
 			WithUserID(userID).
@@ -232,6 +238,8 @@ func (s *NoteService) RemoveTag(ctx context.Context, userID int64, id int64, tag
 }
 
 // Copy creates a copy of an existing note
+// A new GUID is automatically generated for the copied note to ensure uniqueness.
+// The database trigger provides a fallback if GUID generation fails at the application layer.
 func (s *NoteService) Copy(ctx context.Context, userID int64, noteID int64, deckID *int64, copyTags bool, copyMedia bool) (*note.Note, error) {
 	var copiedNote *note.Note
 
@@ -294,7 +302,10 @@ func (s *NoteService) Copy(ctx context.Context, userID int64, noteID int64, deck
 		}
 
 		// 5. Create new note entity
-		guid, _ := valueobjects.NewGUID(uuid.New().String()) // Generate new GUID
+		guid, err := valueobjects.NewGUID(uuid.New().String()) // Generate new GUID
+		if err != nil {
+			return fmt.Errorf("failed to generate GUID: %w", err)
+		}
 		now := time.Now()
 		copiedNote, err = note.NewBuilder().
 			WithUserID(userID).

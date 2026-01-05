@@ -250,7 +250,7 @@ func TestContent_Integration(t *testing.T) {
 	t.Run("Notes", func(t *testing.T) {
 		// Re-create a note type for notes test since we deleted it above
 		var noteTypeID int64
-		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'For Notes Test', '[]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'For Notes Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
 		require.NoError(t, err)
 
 		// Get default deck ID
@@ -1256,6 +1256,163 @@ func TestContent_Integration(t *testing.T) {
 
 			assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for missing required fields")
 			assert.Contains(t, rec.Body.String(), "required", "Error message should mention required field")
+		})
+
+		t.Run("First Field Validation", func(t *testing.T) {
+			// Create a note type with first field "Front"
+			var noteTypeID int64
+			err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'First Field Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+			require.NoError(t, err)
+
+			var defaultDeckID int64
+			err = db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default'", loginRes.User.ID).Scan(&defaultDeckID)
+			require.NoError(t, err)
+
+			t.Run("Create Note - first field empty", func(t *testing.T) {
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: noteTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Front": "", "Back": "Answer"}`,
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+
+				assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for empty first field")
+				assert.Contains(t, rec.Body.String(), "first field", "Error message should mention first field")
+			})
+
+			t.Run("Create Note - first field missing", func(t *testing.T) {
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: noteTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Back": "Answer"}`,
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+
+				assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for missing first field")
+				assert.Contains(t, rec.Body.String(), "first field", "Error message should mention first field")
+			})
+
+			t.Run("Create Note - first field whitespace only", func(t *testing.T) {
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: noteTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Front": "   ", "Back": "Answer"}`,
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+
+				assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for whitespace-only first field")
+				assert.Contains(t, rec.Body.String(), "first field", "Error message should mention first field")
+			})
+
+			t.Run("Create Note - first field valid", func(t *testing.T) {
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: noteTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Front": "Question", "Back": "Answer"}`,
+					Tags:       []string{},
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+
+				if rec.Code != http.StatusCreated {
+					t.Errorf("Expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+				}
+				assert.Equal(t, http.StatusCreated, rec.Code, "Should return 201 for valid first field")
+			})
+
+			t.Run("Update Note - first field empty", func(t *testing.T) {
+				// First create a note
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: noteTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Front": "Question", "Back": "Answer"}`,
+					Tags:       []string{},
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				require.Equal(t, http.StatusCreated, rec.Code)
+				var noteRes response.NoteResponse
+				json.Unmarshal(rec.Body.Bytes(), &noteRes)
+				noteID := noteRes.ID
+
+				// Now try to update with empty first field
+				updateNoteReq := request.UpdateNoteRequest{
+					FieldsJSON: `{"Front": "", "Back": "Answer"}`,
+					Tags:       []string{},
+				}
+				b, _ = json.Marshal(updateNoteReq)
+				req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec = httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+
+				if rec.Code != http.StatusBadRequest {
+					t.Errorf("Expected 400, got %d. Body: %s", rec.Code, rec.Body.String())
+				}
+				assert.Equal(t, http.StatusBadRequest, rec.Code, "Should return 400 for empty first field on update")
+				assert.Contains(t, rec.Body.String(), "first field", "Error message should mention first field")
+			})
+
+			t.Run("Update Note - first field valid", func(t *testing.T) {
+				// First create a note
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: noteTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Front": "Question", "Back": "Answer"}`,
+					Tags:       []string{},
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				require.Equal(t, http.StatusCreated, rec.Code)
+				var noteRes response.NoteResponse
+				json.Unmarshal(rec.Body.Bytes(), &noteRes)
+				noteID := noteRes.ID
+
+				// Now update with valid first field
+				updateNoteReq := request.UpdateNoteRequest{
+					FieldsJSON: `{"Front": "Updated Question", "Back": "Answer"}`,
+					Tags:       []string{},
+				}
+				b, _ = json.Marshal(updateNoteReq)
+				req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec = httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+
+				if rec.Code != http.StatusOK {
+					t.Errorf("Expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+				}
+				assert.Equal(t, http.StatusOK, rec.Code, "Should return 200 for valid first field on update")
+			})
 		})
 	})
 }

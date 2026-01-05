@@ -118,6 +118,87 @@ func TestNoteService_Create(t *testing.T) {
 		mockDeckRepo.AssertExpectations(t)
 		mockTM.AssertExpectations(t)
 	})
+
+	t.Run("First Field Validation", func(t *testing.T) {
+		noteTypeID := int64(10)
+		deckID := int64(20)
+
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithCardTypesJSON("[{}]"). // 1 card type
+			Build()
+
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("Target Deck").Build()
+
+		t.Run("First Field Empty", func(t *testing.T) {
+			fields := "{\"Front\":\"\", \"Back\":\"A\"}"
+
+			mockTM.ExpectTransaction()
+			mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+
+			result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{})
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "first field is required")
+			assert.Nil(t, result)
+			mockNoteTypeRepo.AssertExpectations(t)
+			mockTM.AssertExpectations(t)
+		})
+
+		t.Run("First Field Missing", func(t *testing.T) {
+			fields := "{\"Back\":\"A\"}"
+
+			mockTM.ExpectTransaction()
+			mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+
+			result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{})
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "first field is required")
+			assert.Nil(t, result)
+			mockNoteTypeRepo.AssertExpectations(t)
+			mockTM.AssertExpectations(t)
+		})
+
+		t.Run("First Field Whitespace Only", func(t *testing.T) {
+			fields := "{\"Front\":\"   \", \"Back\":\"A\"}"
+
+			mockTM.ExpectTransaction()
+			mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+
+			result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{})
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "first field is required")
+			assert.Nil(t, result)
+			mockNoteTypeRepo.AssertExpectations(t)
+			mockTM.AssertExpectations(t)
+		})
+
+		t.Run("First Field Valid", func(t *testing.T) {
+			fields := "{\"Front\":\"Question\", \"Back\":\"Answer\"}"
+
+			mockTM.ExpectTransaction()
+			mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
+			mockDeckRepo.On("FindByID", mock.Anything, userID, deckID).Return(d, nil).Once()
+			mockNoteRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*note.Note")).Return(nil).Run(func(args mock.Arguments) {
+				n := args.Get(2).(*note.Note)
+				n.SetID(100) // Set ID so card generation works
+			}).Once()
+			mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
+
+			result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{})
+
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+			mockNoteRepo.AssertExpectations(t)
+			mockCardRepo.AssertExpectations(t)
+			mockDeckRepo.AssertExpectations(t)
+			mockTM.AssertExpectations(t)
+		})
+	})
 }
 
 func TestNoteService_FindAll(t *testing.T) {
@@ -960,10 +1041,18 @@ func TestNoteService_Update(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		existing := &note.Note{}
 		existing.SetID(noteID)
+		existing.SetNoteTypeID(10)
 		fields := "{\"Front\":\"New Q\"}"
 		tags := []string{"new-tag"}
 
+		nt, _ := notetype.NewBuilder().
+			WithID(10).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			Build()
+
 		mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(existing, nil).Once()
+		mockNoteTypeRepo.On("FindByID", ctx, userID, int64(10)).Return(nt, nil).Once()
 		mockNoteRepo.On("Update", ctx, userID, noteID, existing).Return(nil).Once()
 
 		result, err := service.Update(ctx, userID, noteID, fields, tags)
@@ -973,6 +1062,66 @@ func TestNoteService_Update(t *testing.T) {
 		assert.Equal(t, fields, result.GetFieldsJSON())
 		assert.Equal(t, tags, result.GetTags())
 		mockNoteRepo.AssertExpectations(t)
+		mockNoteTypeRepo.AssertExpectations(t)
+	})
+
+	t.Run("First Field Validation", func(t *testing.T) {
+		noteTypeID := int64(10)
+
+		existing := &note.Note{}
+		existing.SetID(noteID)
+		existing.SetNoteTypeID(noteTypeID)
+
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			Build()
+
+		t.Run("First Field Empty", func(t *testing.T) {
+			fields := "{\"Front\":\"\", \"Back\":\"A\"}"
+
+			mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(existing, nil).Once()
+			mockNoteTypeRepo.On("FindByID", ctx, userID, noteTypeID).Return(nt, nil).Once()
+
+			result, err := service.Update(ctx, userID, noteID, fields, []string{})
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "first field is required")
+			assert.Nil(t, result)
+			mockNoteRepo.AssertExpectations(t)
+			mockNoteTypeRepo.AssertExpectations(t)
+		})
+
+		t.Run("First Field Missing", func(t *testing.T) {
+			fields := "{\"Back\":\"A\"}"
+
+			mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(existing, nil).Once()
+			mockNoteTypeRepo.On("FindByID", ctx, userID, noteTypeID).Return(nt, nil).Once()
+
+			result, err := service.Update(ctx, userID, noteID, fields, []string{})
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "first field is required")
+			assert.Nil(t, result)
+			mockNoteRepo.AssertExpectations(t)
+			mockNoteTypeRepo.AssertExpectations(t)
+		})
+
+		t.Run("First Field Valid", func(t *testing.T) {
+			fields := "{\"Front\":\"Updated Question\", \"Back\":\"Answer\"}"
+
+			mockNoteRepo.On("FindByID", ctx, userID, noteID).Return(existing, nil).Once()
+			mockNoteTypeRepo.On("FindByID", ctx, userID, noteTypeID).Return(nt, nil).Once()
+			mockNoteRepo.On("Update", ctx, userID, noteID, existing).Return(nil).Once()
+
+			result, err := service.Update(ctx, userID, noteID, fields, []string{})
+
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+			mockNoteRepo.AssertExpectations(t)
+			mockNoteTypeRepo.AssertExpectations(t)
+		})
 	})
 
 	t.Run("Not Found", func(t *testing.T) {

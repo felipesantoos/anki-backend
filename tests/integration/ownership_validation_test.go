@@ -104,7 +104,7 @@ func TestOwnership_Validation(t *testing.T) {
 		// Create NoteType
 		ntReq := request.CreateNoteTypeRequest{
 			Name:           "User A NoteType",
-			FieldsJSON:     `["Front", "Back"]`,
+			FieldsJSON:     `[{"name":"Front"},{"name":"Back"}]`,
 			CardTypesJSON:  `[{"Name": "Card 1"}]`,
 			TemplatesJSON:  `[{"Front": "{{Front}}", "Back": "{{Back}}"}]`,
 		}

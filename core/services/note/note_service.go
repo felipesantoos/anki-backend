@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
@@ -59,6 +60,11 @@ func (s *NoteService) Create(ctx context.Context, userID int64, noteTypeID int64
 		}
 		if nt == nil {
 			return fmt.Errorf("note type not found")
+		}
+
+		// 1.5. Validate first field is not empty
+		if err := s.validateFirstField(nt, fieldsJSON); err != nil {
+			return fmt.Errorf("first field validation failed: %w", err)
 		}
 
 		// 2. Validate Deck ownership
@@ -172,6 +178,18 @@ func (s *NoteService) Update(ctx context.Context, userID int64, id int64, fields
 	}
 	if existing == nil {
 		return nil, fmt.Errorf("note not found")
+	}
+
+	// Validate first field is not empty
+	nt, err := s.noteTypeRepo.FindByID(ctx, userID, existing.GetNoteTypeID())
+	if err != nil {
+		return nil, err
+	}
+	if nt == nil {
+		return nil, fmt.Errorf("note type not found")
+	}
+	if err := s.validateFirstField(nt, fieldsJSON); err != nil {
+		return nil, fmt.Errorf("first field validation failed: %w", err)
 	}
 
 	existing.SetFieldsJSON(fieldsJSON)
@@ -456,5 +474,35 @@ func (s *NoteService) validateFieldName(nt *notetype.NoteType, fieldName string)
 	}
 
 	return fmt.Errorf("field '%s' not found in note type", fieldName)
+}
+
+// validateFirstField validates that the first field of a note has a non-empty value
+func (s *NoteService) validateFirstField(nt *notetype.NoteType, fieldsJSON string) error {
+	// 1. Get first field name from note type
+	firstFieldName, err := nt.GetFirstFieldName()
+	if err != nil {
+		return fmt.Errorf("failed to get first field name: %w", err)
+	}
+
+	// 2. Parse fieldsJSON as map[string]interface{}
+	var fields map[string]interface{}
+	if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
+		return fmt.Errorf("invalid fields JSON: %w", err)
+	}
+
+	// 3. Extract value for first field name
+	value, exists := fields[firstFieldName]
+	if !exists {
+		return note.ErrFirstFieldRequired
+	}
+
+	// 4. Check if value is non-empty (after trimming whitespace)
+	valueStr := fmt.Sprintf("%v", value)
+	valueStr = strings.TrimSpace(valueStr)
+	if valueStr == "" {
+		return note.ErrFirstFieldRequired
+	}
+
+	return nil
 }
 

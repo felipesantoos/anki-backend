@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	ErrUserIDRequired    = errors.New("userID is required")
-	ErrNoteTypeIDRequired = errors.New("noteTypeID is required")
-	ErrGUIDRequired       = errors.New("guid is required")
+	ErrUserIDRequired      = errors.New("userID is required")
+	ErrNoteTypeIDRequired  = errors.New("noteTypeID is required")
+	ErrGUIDRequired        = errors.New("guid is required")
+	ErrFirstFieldRequired  = errors.New("first field is required and cannot be empty")
 )
 
 type NoteBuilder struct {

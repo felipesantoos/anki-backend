@@ -250,7 +250,7 @@ func TestContent_Integration(t *testing.T) {
 	t.Run("Notes", func(t *testing.T) {
 		// Re-create a note type for notes test since we deleted it above
 		var noteTypeID int64
-		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'For Notes Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'For Notes Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[{\"qfmt\":\"{{Front}}\",\"afmt\":\"{{FrontSide}}<hr id=answer>{{Back}}\"}]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
 		require.NoError(t, err)
 
 		// Get default deck ID
@@ -1261,7 +1261,7 @@ func TestContent_Integration(t *testing.T) {
 		t.Run("First Field Validation", func(t *testing.T) {
 			// Create a note type with first field "Front"
 			var noteTypeID int64
-			err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'First Field Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+			err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'First Field Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[{\"qfmt\":\"{{Front}}\",\"afmt\":\"{{Back}}\"}]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
 			require.NoError(t, err)
 
 			var defaultDeckID int64
@@ -1396,6 +1396,11 @@ func TestContent_Integration(t *testing.T) {
 				json.Unmarshal(rec.Body.Bytes(), &noteRes)
 				noteID := noteRes.ID
 
+				// Get cards before update
+				var cardCountBefore int
+				err := db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountBefore)
+				require.NoError(t, err)
+
 				// Now update with valid first field
 				updateNoteReq := request.UpdateNoteRequest{
 					FieldsJSON: `{"Front": "Updated Question", "Back": "Answer"}`,
@@ -1412,6 +1417,167 @@ func TestContent_Integration(t *testing.T) {
 					t.Errorf("Expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
 				}
 				assert.Equal(t, http.StatusOK, rec.Code, "Should return 200 for valid first field on update")
+
+				// Verify cards are maintained (regeneration should keep existing cards)
+				var cardCountAfter int
+				err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountAfter)
+				require.NoError(t, err)
+				assert.Equal(t, cardCountBefore, cardCountAfter, "Card count should remain the same after update")
+			})
+		})
+
+		t.Run("Card Regeneration on Update", func(t *testing.T) {
+			// Create a note type with templates that support conditional rendering
+			var cardRegenNoteTypeID int64
+			err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Card Regen Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"},{\"name\":\"Extra\"}]', '[{\"name\": \"Card 1\"}]', '[{\"qfmt\":\"{{#Extra}}{{Front}}{{/Extra}}\",\"afmt\":\"{{Back}}\"}]') RETURNING id", loginRes.User.ID).Scan(&cardRegenNoteTypeID)
+			require.NoError(t, err)
+
+			var defaultDeckID int64
+			err = db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default'", loginRes.User.ID).Scan(&defaultDeckID)
+			require.NoError(t, err)
+
+			t.Run("Maintains cards when template is valid", func(t *testing.T) {
+				// Create note with Extra field populated
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: cardRegenNoteTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Front": "Question", "Back": "Answer", "Extra": "Yes"}`,
+					Tags:       []string{},
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				require.Equal(t, http.StatusCreated, rec.Code)
+				var noteRes response.NoteResponse
+				json.Unmarshal(rec.Body.Bytes(), &noteRes)
+				noteID := noteRes.ID
+
+				// Get card count before update
+				var cardCountBefore int
+				err := db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountBefore)
+				require.NoError(t, err)
+				assert.Greater(t, cardCountBefore, 0, "Note should have at least one card")
+
+				// Update note (keeping Extra field populated)
+				updateNoteReq := request.UpdateNoteRequest{
+					FieldsJSON: `{"Front": "Updated Question", "Back": "Updated Answer", "Extra": "Yes"}`,
+					Tags:       []string{},
+				}
+				b, _ = json.Marshal(updateNoteReq)
+				req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec = httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				require.Equal(t, http.StatusOK, rec.Code)
+
+				// Verify card count remains the same
+				var cardCountAfter int
+				err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountAfter)
+				require.NoError(t, err)
+				assert.Equal(t, cardCountBefore, cardCountAfter, "Card count should remain the same when template is still valid")
+			})
+
+			t.Run("Deletes card when template renders empty", func(t *testing.T) {
+				// Create note with Extra field populated (so card is created)
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: cardRegenNoteTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Front": "Question", "Back": "Answer", "Extra": "Yes"}`,
+					Tags:       []string{},
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				require.Equal(t, http.StatusCreated, rec.Code)
+				var noteRes response.NoteResponse
+				json.Unmarshal(rec.Body.Bytes(), &noteRes)
+				noteID := noteRes.ID
+
+				// Verify card exists
+				var cardCountBefore int
+				err := db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountBefore)
+				require.NoError(t, err)
+				assert.Equal(t, 1, cardCountBefore, "Note should have one card initially")
+
+				// Update note removing Extra field (template will render empty)
+				updateNoteReq := request.UpdateNoteRequest{
+					FieldsJSON: `{"Front": "Question", "Back": "Answer"}`,
+					Tags:       []string{},
+				}
+				b, _ = json.Marshal(updateNoteReq)
+				req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec = httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				require.Equal(t, http.StatusOK, rec.Code)
+
+				// Verify card is deleted
+				var cardCountAfter int
+				err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountAfter)
+				require.NoError(t, err)
+				assert.Equal(t, 0, cardCountAfter, "Card should be deleted when template renders empty")
+			})
+
+			t.Run("Creates new card when card type is added", func(t *testing.T) {
+				// Create note type with 1 card type
+				var singleCardTypeID int64
+				err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Single Card Type', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[{\"qfmt\":\"{{Front}}\",\"afmt\":\"{{Back}}\"}]') RETURNING id", loginRes.User.ID).Scan(&singleCardTypeID)
+				require.NoError(t, err)
+
+				// Create note
+				createNoteReq := request.CreateNoteRequest{
+					NoteTypeID: singleCardTypeID,
+					DeckID:     defaultDeckID,
+					FieldsJSON: `{"Front": "Question", "Back": "Answer"}`,
+					Tags:       []string{},
+				}
+				b, _ := json.Marshal(createNoteReq)
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				require.Equal(t, http.StatusCreated, rec.Code)
+				var noteRes response.NoteResponse
+				json.Unmarshal(rec.Body.Bytes(), &noteRes)
+				noteID := noteRes.ID
+
+				// Verify initial card count
+				var cardCountBefore int
+				err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountBefore)
+				require.NoError(t, err)
+				assert.Equal(t, 1, cardCountBefore, "Note should have one card initially")
+
+				// Update note type to have 2 card types
+				_, err = db.DB.Exec("UPDATE note_types SET card_types_json = '[{\"name\": \"Card 1\"},{\"name\": \"Card 2\"}]', templates_json = '[{\"qfmt\":\"{{Front}}\",\"afmt\":\"{{Back}}\"},{\"qfmt\":\"{{Back}}\",\"afmt\":\"{{Front}}\"}]' WHERE id = $1", singleCardTypeID)
+				require.NoError(t, err)
+
+				// Update note (this should trigger card regeneration and create a new card)
+				updateNoteReq := request.UpdateNoteRequest{
+					FieldsJSON: `{"Front": "Updated Question", "Back": "Updated Answer"}`,
+					Tags:       []string{},
+				}
+				b, _ = json.Marshal(updateNoteReq)
+				req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/"+strconv.FormatInt(noteID, 10), bytes.NewReader(b))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req.Header.Set("Authorization", "Bearer "+token)
+				rec = httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				require.Equal(t, http.StatusOK, rec.Code)
+
+				// Verify new card was created
+				var cardCountAfter int
+				err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID).Scan(&cardCountAfter)
+				require.NoError(t, err)
+				assert.Equal(t, 2, cardCountAfter, "New card should be created when card type is added")
 			})
 		})
 	})

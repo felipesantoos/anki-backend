@@ -11,6 +11,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
+	"github.com/felipesantos/anki-backend/core/domain/services"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
@@ -170,37 +171,173 @@ func (s *NoteService) FindAll(ctx context.Context, userID int64, filters note.No
 	return s.noteRepo.FindByUserID(ctx, userID, filters.Limit, filters.Offset)
 }
 
-// Update updates an existing note
+// Update updates an existing note and regenerates related cards
+// Cards are automatically regenerated based on the updated note fields and templates
+// Empty cards (where front template renders to empty) are deleted
+// New cards are created if new card types are added to the note type
 func (s *NoteService) Update(ctx context.Context, userID int64, id int64, fieldsJSON string, tags []string) (*note.Note, error) {
-	existing, err := s.noteRepo.FindByID(ctx, userID, id)
+	var updatedNote *note.Note
+
+	err := s.tm.WithTransaction(ctx, func(txCtx context.Context) error {
+		// 1. Find existing note
+		existing, err := s.noteRepo.FindByID(txCtx, userID, id)
+		if err != nil {
+			return err
+		}
+		if existing == nil {
+			return fmt.Errorf("note not found")
+		}
+
+		// 2. Validate first field is not empty
+		nt, err := s.noteTypeRepo.FindByID(txCtx, userID, existing.GetNoteTypeID())
+		if err != nil {
+			return err
+		}
+		if nt == nil {
+			return fmt.Errorf("note type not found")
+		}
+		if err := s.validateFirstField(nt, fieldsJSON); err != nil {
+			return fmt.Errorf("first field validation failed: %w", err)
+		}
+
+		// 3. Update note
+		existing.SetFieldsJSON(fieldsJSON)
+		existing.SetTags(tags)
+		existing.SetUpdatedAt(time.Now())
+
+		if err := s.noteRepo.Update(txCtx, userID, id, existing); err != nil {
+			return err
+		}
+
+		// 4. Regenerate cards based on updated fields
+		if err := s.regenerateCards(txCtx, userID, existing, nt, fieldsJSON); err != nil {
+			return fmt.Errorf("failed to regenerate cards: %w", err)
+		}
+
+		updatedNote = existing
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	if existing == nil {
-		return nil, fmt.Errorf("note not found")
+
+	return updatedNote, nil
+}
+
+// regenerateCards regenerates cards for a note based on templates and fields
+// This method ensures that:
+// - Cards with empty front templates are deleted
+// - Cards for valid templates are maintained or created
+// - Cards for removed card types are deleted
+func (s *NoteService) regenerateCards(ctx context.Context, userID int64, noteEntity *note.Note, nt *notetype.NoteType, fieldsJSON string) error {
+	// 1. Parse fieldsJSON to map[string]string
+	var fieldsMap map[string]interface{}
+	if err := json.Unmarshal([]byte(fieldsJSON), &fieldsMap); err != nil {
+		return fmt.Errorf("invalid fields JSON: %w", err)
 	}
 
-	// Validate first field is not empty
-	nt, err := s.noteTypeRepo.FindByID(ctx, userID, existing.GetNoteTypeID())
+	// Convert to map[string]string for template renderer
+	fields := make(map[string]string)
+	for k, v := range fieldsMap {
+		if str, ok := v.(string); ok {
+			fields[k] = str
+		} else {
+			fields[k] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	// 2. Get existing cards for this note
+	existingCards, err := s.cardRepo.FindByNoteID(ctx, userID, noteEntity.GetID())
 	if err != nil {
-		return nil, err
-	}
-	if nt == nil {
-		return nil, fmt.Errorf("note type not found")
-	}
-	if err := s.validateFirstField(nt, fieldsJSON); err != nil {
-		return nil, fmt.Errorf("first field validation failed: %w", err)
+		return err
 	}
 
-	existing.SetFieldsJSON(fieldsJSON)
-	existing.SetTags(tags)
-	existing.SetUpdatedAt(time.Now())
-
-	if err := s.noteRepo.Update(ctx, userID, id, existing); err != nil {
-		return nil, err
+	// 3. Create a map of existing cards by card type ID for quick lookup
+	existingCardsByType := make(map[int]int64) // cardTypeID -> cardID
+	for _, c := range existingCards {
+		existingCardsByType[c.GetCardTypeID()] = c.GetID()
 	}
 
-	return existing, nil
+	// 4. Initialize template renderer
+	templateRenderer := services.NewTemplateRenderer()
+
+	// 5. Get deck ID from first existing card
+	// If no cards exist, we cannot determine which deck to use for new cards
+	// This is an edge case that shouldn't happen in normal flow (notes should always have cards)
+	// In this case, we skip card regeneration but don't fail the update
+	var deckID int64
+	if len(existingCards) == 0 {
+		// No cards exist - this is unusual but we handle it gracefully
+		// We can't create new cards without knowing which deck to use
+		// The note update will succeed, but cards won't be regenerated
+		return nil
+	}
+	deckID = existingCards[0].GetDeckID()
+
+	// 6. Process each card type in the note type
+	cardTypeCount := nt.GetCardTypeCount()
+	now := time.Now()
+
+	for cardTypeIndex := 0; cardTypeIndex < cardTypeCount; cardTypeIndex++ {
+		// Render front template
+		renderedFront, err := templateRenderer.RenderFront(nt.GetTemplatesJSON(), cardTypeIndex, fields)
+		if err != nil {
+			// If template rendering fails, log error but continue with other card types
+			// This prevents one bad template from breaking the entire update
+			continue
+		}
+
+		// Check if template rendered to empty
+		if renderedFront == "" {
+			// Front template is empty, delete card if it exists
+			if cardID, exists := existingCardsByType[cardTypeIndex]; exists {
+				if err := s.cardRepo.Delete(ctx, userID, cardID); err != nil {
+					return fmt.Errorf("failed to delete empty card: %w", err)
+				}
+			}
+			// Remove from map to track processed cards
+			delete(existingCardsByType, cardTypeIndex)
+		} else {
+			// Front template is not empty
+			if _, exists := existingCardsByType[cardTypeIndex]; exists {
+				// Card already exists, keep it (no need to update as content is rendered dynamically)
+				delete(existingCardsByType, cardTypeIndex)
+			} else {
+				// Card doesn't exist, create it
+				cardEntity, err := card.NewBuilder().
+					WithNoteID(noteEntity.GetID()).
+					WithCardTypeID(cardTypeIndex).
+					WithDeckID(deckID).
+					WithDue(now.Unix() * 1000). // New cards due now
+					WithEase(2500).             // Default ease 250%
+					WithState(valueobjects.CardStateNew).
+					WithCreatedAt(now).
+					WithUpdatedAt(now).
+					Build()
+				if err != nil {
+					return fmt.Errorf("failed to build card: %w", err)
+				}
+
+				if err := s.cardRepo.Save(ctx, userID, cardEntity); err != nil {
+					return fmt.Errorf("failed to create card: %w", err)
+				}
+			}
+		}
+	}
+
+	// 7. Delete any remaining cards that don't correspond to valid card types
+	// (This handles the case where card types were removed from the note type)
+	for cardTypeIndex, cardID := range existingCardsByType {
+		// Only delete if card type index is beyond the current card type count
+		if cardTypeIndex >= cardTypeCount {
+			if err := s.cardRepo.Delete(ctx, userID, cardID); err != nil {
+				return fmt.Errorf("failed to delete obsolete card: %w", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // Delete deletes a note and its associated cards (soft delete)

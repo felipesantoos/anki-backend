@@ -68,7 +68,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 
 // handleRegisterError handles errors from the auth service and converts them to appropriate HTTP errors
 func handleRegisterError(err error) *echo.HTTPError {
-	if errors.Is(err, user.ErrEmailAlreadyExists) {
+	if errors.Is(err, user.ErrEmailAlreadyExists) || err == user.ErrEmailAlreadyExists {
 		return echo.NewHTTPError(http.StatusConflict, "Email already registered")
 	}
 

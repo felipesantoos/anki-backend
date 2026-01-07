@@ -283,3 +283,14 @@ func (c *Card) SetFlag(flag int) error {
 	return nil
 }
 
+// CardFilters represents the filters for listing cards
+type CardFilters struct {
+	DeckID    *int64
+	State     *string // "new", "learn", "review", "relearn"
+	Flag      *int    // 0-7
+	Suspended *bool
+	Buried    *bool
+	Limit     int
+	Offset    int
+}
+

@@ -8,9 +8,11 @@ import (
 	"testing"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
+	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/handlers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
+	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -123,3 +125,353 @@ func TestCardHandler_SetFlag(t *testing.T) {
 	})
 }
 
+func TestCardHandler_FindAll(t *testing.T) {
+	e := echo.New()
+	e.Validator = middlewares.NewCustomValidator()
+	mockSvc := new(MockCardService)
+	handler := handlers.NewCardHandler(mockSvc)
+	userID := int64(1)
+
+	t.Run("Success with no filters", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{
+			func() *card.Card { c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(1).Build(); return c }(),
+			func() *card.Card { c, _ := card.NewBuilder().WithID(2).WithNoteID(2).WithDeckID(1).Build(); return c }(),
+		}
+		total := 2
+
+		mockSvc.On("FindAll", mock.Anything, userID, mock.MatchedBy(func(filters card.CardFilters) bool {
+			return filters.Limit == 20 && filters.Offset == 0 &&
+				filters.DeckID == nil && filters.State == nil && filters.Flag == nil &&
+				filters.Suspended == nil && filters.Buried == nil
+		})).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, handler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Len(t, res.Data, 2)
+			assert.Equal(t, 1, res.Pagination.Page)
+			assert.Equal(t, 20, res.Pagination.Limit)
+			assert.Equal(t, total, res.Pagination.Total)
+			assert.Equal(t, 1, res.Pagination.TotalPages)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success with deck_id filter", func(t *testing.T) {
+		deckID := int64(10)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?deck_id=10", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{
+			func() *card.Card {
+				c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(deckID).Build()
+				return c
+			}(),
+		}
+		total := 1
+
+		mockSvc.On("FindAll", mock.Anything, userID, mock.MatchedBy(func(filters card.CardFilters) bool {
+			return filters.DeckID != nil && *filters.DeckID == deckID
+		})).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, handler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Len(t, res.Data, 1)
+			assert.Equal(t, deckID, res.Data[0].DeckID)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success with state filter", func(t *testing.T) {
+		state := "new"
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?state=new", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{
+			func() *card.Card {
+				c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(1).WithState(valueobjects.CardStateNew).Build()
+				return c
+			}(),
+		}
+		total := 1
+
+		mockSvc.On("FindAll", mock.Anything, userID, mock.MatchedBy(func(filters card.CardFilters) bool {
+			return filters.State != nil && *filters.State == state
+		})).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, handler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Len(t, res.Data, 1)
+			assert.Equal(t, state, res.Data[0].State)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success with flag filter", func(t *testing.T) {
+		flag := 3
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?flag=3", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{
+			func() *card.Card {
+				c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(1).Build()
+				c.SetFlag(flag)
+				return c
+			}(),
+		}
+		total := 1
+
+		mockSvc.On("FindAll", mock.Anything, userID, mock.MatchedBy(func(filters card.CardFilters) bool {
+			return filters.Flag != nil && *filters.Flag == flag
+		})).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, handler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Len(t, res.Data, 1)
+			assert.Equal(t, flag, res.Data[0].Flags)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success with suspended filter", func(t *testing.T) {
+		suspended := true
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?suspended=true", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{
+			func() *card.Card {
+				c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(1).Build()
+				c.Suspend()
+				return c
+			}(),
+		}
+		total := 1
+
+		mockSvc.On("FindAll", mock.Anything, userID, mock.MatchedBy(func(filters card.CardFilters) bool {
+			return filters.Suspended != nil && *filters.Suspended == suspended
+		})).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, handler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Len(t, res.Data, 1)
+			assert.True(t, res.Data[0].Suspended)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success with buried filter", func(t *testing.T) {
+		buried := true
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?buried=true", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{
+			func() *card.Card {
+				c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(1).Build()
+				c.Bury()
+				return c
+			}(),
+		}
+		total := 1
+
+		mockSvc.On("FindAll", mock.Anything, userID, mock.MatchedBy(func(filters card.CardFilters) bool {
+			return filters.Buried != nil && *filters.Buried == buried
+		})).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, handler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success with pagination", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?page=2&limit=10", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{
+			func() *card.Card { c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(1).Build(); return c }(),
+		}
+		total := 25
+
+		mockSvc.On("FindAll", mock.Anything, userID, mock.MatchedBy(func(filters card.CardFilters) bool {
+			return filters.Limit == 10 && filters.Offset == 10
+		})).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, handler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Equal(t, 2, res.Pagination.Page)
+			assert.Equal(t, 10, res.Pagination.Limit)
+			assert.Equal(t, total, res.Pagination.Total)
+			assert.Equal(t, 3, res.Pagination.TotalPages)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success with multiple filters", func(t *testing.T) {
+		deckID := int64(10)
+		state := "review"
+		flag := 2
+		suspended := false
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?deck_id=10&state=review&flag=2&suspended=false", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{
+			func() *card.Card {
+				c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(deckID).WithState(valueobjects.CardStateReview).Build()
+				c.SetFlag(flag)
+				return c
+			}(),
+		}
+		total := 1
+
+		mockSvc.On("FindAll", mock.Anything, userID, mock.MatchedBy(func(filters card.CardFilters) bool {
+			return filters.DeckID != nil && *filters.DeckID == deckID &&
+				filters.State != nil && *filters.State == state &&
+				filters.Flag != nil && *filters.Flag == flag &&
+				filters.Suspended != nil && *filters.Suspended == suspended
+		})).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, handler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Validation error - invalid state", func(t *testing.T) {
+		validationMockSvc := new(MockCardService)
+		validationHandler := handlers.NewCardHandler(validationMockSvc)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?state=invalid", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := validationHandler.FindAll(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+		}
+		// Service should not be called when validation fails
+		validationMockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Validation error - invalid flag", func(t *testing.T) {
+		validationMockSvc := new(MockCardService)
+		validationHandler := handlers.NewCardHandler(validationMockSvc)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?flag=10", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := validationHandler.FindAll(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+		}
+		// Service should not be called when validation fails
+		validationMockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Validation error - invalid limit (exceeds max)", func(t *testing.T) {
+		validationMockSvc := new(MockCardService)
+		validationHandler := handlers.NewCardHandler(validationMockSvc)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?limit=101", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := validationHandler.FindAll(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+		}
+		// Service should not be called when validation fails
+		validationMockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Service error handling", func(t *testing.T) {
+		serviceErrorMockSvc := new(MockCardService)
+		serviceErrorHandler := handlers.NewCardHandler(serviceErrorMockSvc)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		serviceErrorMockSvc.On("FindAll", mock.Anything, userID, mock.Anything).Return(nil, 0, echo.NewHTTPError(http.StatusInternalServerError, "database error")).Once()
+
+		err := serviceErrorHandler.FindAll(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
+		}
+		serviceErrorMockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Pagination with zero total", func(t *testing.T) {
+		zeroTotalMockSvc := new(MockCardService)
+		zeroTotalHandler := handlers.NewCardHandler(zeroTotalMockSvc)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		cards := []*card.Card{}
+		total := 0
+
+		zeroTotalMockSvc.On("FindAll", mock.Anything, userID, mock.Anything).Return(cards, total, nil).Once()
+
+		if assert.NoError(t, zeroTotalHandler.FindAll(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Equal(t, 0, res.Pagination.Total)
+			assert.Equal(t, 1, res.Pagination.TotalPages) // Should be 1 even with 0 total
+		}
+		zeroTotalMockSvc.AssertExpectations(t)
+	})
+}

@@ -48,3 +48,12 @@ type CardResponse struct {
 	UpdatedAt time.Time `json:"updated_at" example:"2024-01-15T10:30:00Z"`
 }
 
+// ListCardsResponse represents the response payload for listing cards
+type ListCardsResponse struct {
+	// List of cards
+	Data []*CardResponse `json:"data"`
+
+	// Pagination metadata
+	Pagination PaginationResponse `json:"pagination"`
+}
+

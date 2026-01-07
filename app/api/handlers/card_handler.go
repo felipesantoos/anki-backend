@@ -7,8 +7,10 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
+	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/mappers"
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
+	"github.com/felipesantos/anki-backend/core/domain/entities/card"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 )
 
@@ -22,6 +24,82 @@ func NewCardHandler(service primary.ICardService) *CardHandler {
 	return &CardHandler{
 		service: service,
 	}
+}
+
+// FindAll handles GET /api/v1/cards
+// @Summary List cards
+// @Description List cards with optional filters and pagination
+// @Tags cards
+// @Produce json
+// @Security BearerAuth
+// @Param deck_id query int false "Filter by deck ID"
+// @Param state query string false "Filter by state (new, learn, review, relearn)"
+// @Param flag query int false "Filter by flag (0-7)"
+// @Param suspended query bool false "Filter by suspended"
+// @Param buried query bool false "Filter by buried"
+// @Param page query int false "Page number (default: 1)"
+// @Param limit query int false "Items per page (default: 20, max: 100)"
+// @Success 200 {object} response.ListCardsResponse
+// @Router /api/v1/cards [get]
+func (h *CardHandler) FindAll(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	var req request.ListCardsRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid query parameters")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err // Returns HTTP 400 with validation error message
+	}
+
+	// Convert ListCardsRequest to CardFilters
+	filters := card.CardFilters{
+		DeckID:    req.DeckID,
+		State:     req.State,
+		Flag:      req.Flag,
+		Suspended: req.Suspended,
+		Buried:    req.Buried,
+	}
+
+	// Apply pagination defaults and calculate offset
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	filters.Limit = limit
+	filters.Offset = offset
+
+	// Call service
+	cards, total, err := h.service.FindAll(ctx, userID, filters)
+	if err != nil {
+		return err
+	}
+
+	// Calculate total pages
+	totalPages := (total + limit - 1) / limit
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	// Build response
+	return c.JSON(http.StatusOK, response.ListCardsResponse{
+		Data: mappers.ToCardResponseList(cards),
+		Pagination: response.PaginationResponse{
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	})
 }
 
 // FindByID handles GET /api/v1/cards/:id

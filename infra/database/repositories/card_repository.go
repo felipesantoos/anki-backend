@@ -919,6 +919,108 @@ func (r *CardRepository) scanCards(rows *sql.Rows) ([]*card.Card, error) {
 	return cards, nil
 }
 
+// FindAll finds cards for a user based on filters and pagination
+func (r *CardRepository) FindAll(ctx context.Context, userID int64, filters card.CardFilters) ([]*card.Card, int, error) {
+	// Build dynamic SQL query
+	var conditions []string
+	var args []interface{}
+	argIndex := 1
+
+	// Base condition: ownership via deck JOIN
+	conditions = append(conditions, "d.user_id = $1")
+	args = append(args, userID)
+	argIndex++
+
+	conditions = append(conditions, "d.deleted_at IS NULL")
+
+	// Apply optional filters
+	if filters.DeckID != nil {
+		conditions = append(conditions, fmt.Sprintf("c.deck_id = $%d", argIndex))
+		args = append(args, *filters.DeckID)
+		argIndex++
+	}
+
+	if filters.State != nil {
+		conditions = append(conditions, fmt.Sprintf("c.state = $%d", argIndex))
+		args = append(args, *filters.State)
+		argIndex++
+	}
+
+	if filters.Flag != nil {
+		conditions = append(conditions, fmt.Sprintf("c.flag = $%d", argIndex))
+		args = append(args, *filters.Flag)
+		argIndex++
+	}
+
+	if filters.Suspended != nil {
+		conditions = append(conditions, fmt.Sprintf("c.suspended = $%d", argIndex))
+		args = append(args, *filters.Suspended)
+		argIndex++
+	}
+
+	if filters.Buried != nil {
+		conditions = append(conditions, fmt.Sprintf("c.buried = $%d", argIndex))
+		args = append(args, *filters.Buried)
+		argIndex++
+	}
+
+	// Build WHERE clause
+	whereClause := strings.Join(conditions, " AND ")
+
+	// Build COUNT query for total
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM cards c
+		INNER JOIN decks d ON c.deck_id = d.id
+		WHERE %s
+	`, whereClause)
+
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count cards: %w", err)
+	}
+
+	// Build SELECT query with pagination
+	baseQuery := `
+		SELECT c.id, c.note_id, c.card_type_id, c.deck_id, c.home_deck_id, c.due, c.interval,
+			c.ease, c.lapses, c.reps, c.state, c.position, c.flag, c.suspended, c.buried,
+			c.stability, c.difficulty, c.last_review_at, c.created_at, c.updated_at
+		FROM cards c
+		INNER JOIN decks d ON c.deck_id = d.id
+		WHERE %s
+		ORDER BY c.created_at DESC
+	`
+
+	// Apply pagination
+	if filters.Limit > 0 {
+		baseQuery += fmt.Sprintf(" LIMIT $%d", argIndex)
+		args = append(args, filters.Limit)
+		argIndex++
+	}
+
+	if filters.Offset > 0 {
+		baseQuery += fmt.Sprintf(" OFFSET $%d", argIndex)
+		args = append(args, filters.Offset)
+		argIndex++
+	}
+
+	queryStr := fmt.Sprintf(baseQuery, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, queryStr, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to find cards: %w", err)
+	}
+	defer rows.Close()
+
+	cards, err := r.scanCards(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return cards, total, nil
+}
+
 // Ensure CardRepository implements ICardRepository
 var _ secondary.ICardRepository = (*CardRepository)(nil)
 

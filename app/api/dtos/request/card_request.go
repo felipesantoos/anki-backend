@@ -40,3 +40,27 @@ type SetCardFlagRequest struct {
 	Flag int `json:"flag" example:"1" validate:"min=0,max=7"`
 }
 
+// ListCardsRequest represents the query parameters for listing cards
+type ListCardsRequest struct {
+	// Filter by deck ID
+	DeckID *int64 `query:"deck_id"`
+
+	// Filter by state (new, learn, review, relearn)
+	State *string `query:"state" validate:"omitempty,oneof=new learn review relearn"`
+
+	// Filter by flag (0-7)
+	Flag *int `query:"flag" validate:"omitempty,min=0,max=7"`
+
+	// Filter by suspended
+	Suspended *bool `query:"suspended"`
+
+	// Filter by buried
+	Buried *bool `query:"buried"`
+
+	// Page number (default: 1)
+	Page int `query:"page" validate:"omitempty,min=1"`
+
+	// Items per page (default: 20, max: 100)
+	Limit int `query:"limit" validate:"omitempty,min=1,max=100"`
+}
+

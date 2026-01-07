@@ -18,8 +18,8 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/routes"
-	"github.com/felipesantos/anki-backend/dicontainer"
 	"github.com/felipesantos/anki-backend/config"
+	"github.com/felipesantos/anki-backend/dicontainer"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
 	"github.com/felipesantos/anki-backend/pkg/jwt"
@@ -68,10 +68,10 @@ func TestContent_Integration(t *testing.T) {
 	t.Run("NoteTypes", func(t *testing.T) {
 		// Create NoteType
 		createReq := request.CreateNoteTypeRequest{
-			Name:            "Basic Integration",
-			FieldsJSON:      `[{"name": "Front"}, {"name": "Back"}]`,
-			CardTypesJSON:   `[{"name": "Card 1"}]`,
-			TemplatesJSON:   `[{"name": "Template 1"}]`,
+			Name:          "Basic Integration",
+			FieldsJSON:    `[{"name": "Front"}, {"name": "Back"}]`,
+			CardTypesJSON: `[{"name": "Card 1"}]`,
+			TemplatesJSON: `[{"name": "Template 1"}]`,
 		}
 		b, _ := json.Marshal(createReq)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
@@ -92,9 +92,9 @@ func TestContent_Integration(t *testing.T) {
 		// Update NoteType
 		updateReq := request.UpdateNoteTypeRequest{
 			Name:          "Updated Basic Integration",
-			FieldsJSON:     `[{"name": "Front"}, {"name": "Back"}, {"name": "Extra"}]`,
-			CardTypesJSON:  `[{"name": "Card 1"}]`,
-			TemplatesJSON:  `[{"name": "Template 1"}]`,
+			FieldsJSON:    `[{"name": "Front"}, {"name": "Back"}, {"name": "Extra"}]`,
+			CardTypesJSON: `[{"name": "Card 1"}]`,
+			TemplatesJSON: `[{"name": "Template 1"}]`,
 		}
 		b, _ = json.Marshal(updateReq)
 		req = httptest.NewRequest(http.MethodPut, "/api/v1/note-types/"+strconv.FormatInt(noteTypeID, 10), bytes.NewReader(b))
@@ -399,7 +399,7 @@ func TestContent_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rec.Code)
 		var uppercaseTagNote response.NoteResponse
 		json.Unmarshal(rec.Body.Bytes(), &uppercaseTagNote)
-		
+
 		// Search with lowercase tag should find the note with uppercase tag
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=uppercase-tag", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -441,7 +441,7 @@ func TestContent_Integration(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusCreated, rec.Code)
-		
+
 		// Search for tag with special characters
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/notes?tags=tag-with-dash", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -564,7 +564,7 @@ func TestContent_Integration(t *testing.T) {
 
 		// Create Note in User A's deck (defaultDeckID)
 		badCreateNoteReq := request.CreateNoteRequest{
-			NoteTypeID: noteTypeID, // NoteType created by User A
+			NoteTypeID: noteTypeID,    // NoteType created by User A
 			DeckID:     defaultDeckID, // Deck created by User A
 			FieldsJSON: `{"Front": "Bad", "Back": "Bad"}`,
 		}
@@ -1085,7 +1085,7 @@ func TestContent_Integration(t *testing.T) {
 		var edgeCaseNoteTypeID int64
 		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Edge Case Test', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[]') RETURNING id", loginRes.User.ID).Scan(&edgeCaseNoteTypeID)
 		require.NoError(t, err)
-		
+
 		// Create a note without any cards
 		var noteIDNoCard int64
 		err = db.DB.QueryRow("INSERT INTO notes (user_id, guid, note_type_id, fields_json, tags) VALUES ($1, gen_random_uuid()::text, $2, '{\"Front\":\"NoCardTest\"}', '{}') RETURNING id", loginRes.User.ID, edgeCaseNoteTypeID).Scan(&noteIDNoCard)
@@ -1614,6 +1614,7 @@ func TestSearch_Regex(t *testing.T) {
 	router := routes.NewRouter(e, cfg, jwtSvc, redisRepo)
 	router.RegisterAuthRoutes()
 	router.RegisterContentRoutes()
+	router.RegisterStudyRoutes()
 	router.RegisterSearchRoutes()
 
 	// Register and login
@@ -1903,9 +1904,9 @@ func TestSearch_Regex(t *testing.T) {
 
 		t.Run("Success - Text format without scheduling", func(t *testing.T) {
 			exportReq := request.ExportNotesRequest{
-				NoteIDs:          noteIDs,
-				Format:           "text",
-				IncludeMedia:     false,
+				NoteIDs:           noteIDs,
+				Format:            "text",
+				IncludeMedia:      false,
 				IncludeScheduling: false,
 			}
 			b, _ := json.Marshal(exportReq)
@@ -1929,9 +1930,9 @@ func TestSearch_Regex(t *testing.T) {
 
 		t.Run("Success - Text format with scheduling", func(t *testing.T) {
 			exportReq := request.ExportNotesRequest{
-				NoteIDs:          noteIDs[:1], // Only first note
-				Format:           "text",
-				IncludeMedia:     false,
+				NoteIDs:           noteIDs[:1], // Only first note
+				Format:            "text",
+				IncludeMedia:      false,
 				IncludeScheduling: true,
 			}
 			b, _ := json.Marshal(exportReq)
@@ -1950,9 +1951,9 @@ func TestSearch_Regex(t *testing.T) {
 
 		t.Run("Invalid format", func(t *testing.T) {
 			exportReq := request.ExportNotesRequest{
-				NoteIDs:          noteIDs,
-				Format:           "invalid",
-				IncludeMedia:     false,
+				NoteIDs:           noteIDs,
+				Format:            "invalid",
+				IncludeMedia:      false,
 				IncludeScheduling: false,
 			}
 			b, _ := json.Marshal(exportReq)
@@ -1967,9 +1968,9 @@ func TestSearch_Regex(t *testing.T) {
 
 		t.Run("Empty note IDs", func(t *testing.T) {
 			exportReq := request.ExportNotesRequest{
-				NoteIDs:          []int64{},
-				Format:           "text",
-				IncludeMedia:     false,
+				NoteIDs:           []int64{},
+				Format:            "text",
+				IncludeMedia:      false,
 				IncludeScheduling: false,
 			}
 			b, _ := json.Marshal(exportReq)
@@ -1984,9 +1985,9 @@ func TestSearch_Regex(t *testing.T) {
 
 		t.Run("Note not found or access denied", func(t *testing.T) {
 			exportReq := request.ExportNotesRequest{
-				NoteIDs:          []int64{99999},
-				Format:           "text",
-				IncludeMedia:     false,
+				NoteIDs:           []int64{99999},
+				Format:            "text",
+				IncludeMedia:      false,
 				IncludeScheduling: false,
 			}
 			b, _ := json.Marshal(exportReq)
@@ -2006,9 +2007,9 @@ func TestSearch_Regex(t *testing.T) {
 
 			// User 2 tries to export User 1's notes
 			exportReq := request.ExportNotesRequest{
-				NoteIDs:          noteIDs, // User 1's notes
-				Format:           "text",
-				IncludeMedia:     false,
+				NoteIDs:           noteIDs, // User 1's notes
+				Format:            "text",
+				IncludeMedia:      false,
 				IncludeScheduling: false,
 			}
 			b, _ := json.Marshal(exportReq)
@@ -2024,9 +2025,9 @@ func TestSearch_Regex(t *testing.T) {
 
 		t.Run("APKG format - Not yet implemented", func(t *testing.T) {
 			exportReq := request.ExportNotesRequest{
-				NoteIDs:          noteIDs[:1],
-				Format:           "apkg",
-				IncludeMedia:     false,
+				NoteIDs:           noteIDs[:1],
+				Format:            "apkg",
+				IncludeMedia:      false,
 				IncludeScheduling: false,
 			}
 			b, _ := json.Marshal(exportReq)
@@ -2396,7 +2397,7 @@ func TestSearch_Regex(t *testing.T) {
 			var deletionsRes2 response.RecentDeletionsResponse
 			json.Unmarshal(rec.Body.Bytes(), &deletionsRes2)
 			require.Greater(t, len(deletionsRes2.Data), 0)
-			
+
 			// Find the deletion log that matches the GUID we just deleted
 			var deletionLogID2 int64
 			for _, dl := range deletionsRes2.Data {
@@ -2427,6 +2428,223 @@ func TestSearch_Regex(t *testing.T) {
 			e.ServeHTTP(rec, req)
 
 			assert.Equal(t, http.StatusConflict, rec.Code, "Should return 409 Conflict when trying to restore already restored note")
+		})
+	})
+
+	t.Run("Cards", func(t *testing.T) {
+		// Create a deck for cards
+		createDeckReq := request.CreateDeckRequest{
+			Name: "Cards Test Deck",
+		}
+		b, _ := json.Marshal(createDeckReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/decks", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+		var deckRes response.DeckResponse
+		json.Unmarshal(rec.Body.Bytes(), &deckRes)
+		deckID := deckRes.ID
+
+		// Create a note type for cards
+		var cardNoteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Card Test Type', '[{\"name\":\"Front\"},{\"name\":\"Back\"}]', '[{\"name\": \"Card 1\"}]', '[{\"qfmt\":\"{{Front}}\",\"afmt\":\"{{FrontSide}}<hr id=answer>{{Back}}\"}]') RETURNING id", loginRes.User.ID).Scan(&cardNoteTypeID)
+		require.NoError(t, err)
+
+		// Create notes with cards
+		note1Req := request.CreateNoteRequest{
+			NoteTypeID: cardNoteTypeID,
+			DeckID:     deckID,
+			FieldsJSON: `{"Front": "Card 1 Front", "Back": "Card 1 Back"}`,
+			Tags:       []string{},
+		}
+		b, _ = json.Marshal(note1Req)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+
+		note2Req := request.CreateNoteRequest{
+			NoteTypeID: cardNoteTypeID,
+			DeckID:     deckID,
+			FieldsJSON: `{"Front": "Card 2 Front", "Back": "Card 2 Back"}`,
+			Tags:       []string{},
+		}
+		b, _ = json.Marshal(note2Req)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code)
+
+		t.Run("List all cards", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/cards", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var listRes response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &listRes)
+			assert.GreaterOrEqual(t, len(listRes.Data), 2, "Should have at least 2 cards")
+			assert.Greater(t, listRes.Pagination.Total, 0)
+			assert.Equal(t, 1, listRes.Pagination.Page)
+			assert.Equal(t, 20, listRes.Pagination.Limit)
+		})
+
+		t.Run("Filter by deck_id", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/cards?deck_id=%d", deckID), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var listRes response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &listRes)
+			for _, card := range listRes.Data {
+				assert.Equal(t, deckID, card.DeckID, "All cards should belong to the specified deck")
+			}
+		})
+
+		t.Run("Filter by state", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?state=new", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var listRes response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &listRes)
+			for _, card := range listRes.Data {
+				assert.Equal(t, "new", card.State, "All cards should have state 'new'")
+			}
+		})
+
+		t.Run("Filter by flag", func(t *testing.T) {
+			// First, set a flag on a card
+			var cardID int64
+			err := db.DB.QueryRow("SELECT id FROM cards WHERE deck_id = $1 LIMIT 1", deckID).Scan(&cardID)
+			require.NoError(t, err)
+
+			setFlagReq := request.SetCardFlagRequest{Flag: 1}
+			b, _ := json.Marshal(setFlagReq)
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/cards/%d/flag", cardID), bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusNoContent, rec.Code)
+
+			// Now filter by flag
+			req = httptest.NewRequest(http.MethodGet, "/api/v1/cards?flag=1", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var listRes response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &listRes)
+			for _, card := range listRes.Data {
+				assert.Equal(t, 1, card.Flags, "All cards should have flag 1")
+			}
+		})
+
+		t.Run("Filter by suspended", func(t *testing.T) {
+			// First, suspend a card
+			var cardID int64
+			err := db.DB.QueryRow("SELECT id FROM cards WHERE deck_id = $1 LIMIT 1", deckID).Scan(&cardID)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/cards/%d/suspend", cardID), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusNoContent, rec.Code)
+
+			// Now filter by suspended
+			req = httptest.NewRequest(http.MethodGet, "/api/v1/cards?suspended=true", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var listRes response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &listRes)
+			for _, card := range listRes.Data {
+				assert.True(t, card.Suspended, "All cards should be suspended")
+			}
+		})
+
+		t.Run("Pagination", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?page=1&limit=1", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var listRes response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &listRes)
+			assert.LessOrEqual(t, len(listRes.Data), 1, "Should return at most 1 card per page")
+			assert.Equal(t, 1, listRes.Pagination.Page)
+			assert.Equal(t, 1, listRes.Pagination.Limit)
+			assert.Greater(t, listRes.Pagination.Total, 0)
+			assert.Greater(t, listRes.Pagination.TotalPages, 0)
+		})
+
+		t.Run("Invalid state filter", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?state=invalid", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Invalid flag filter", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/cards?flag=10", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+
+		t.Run("Cross-user isolation", func(t *testing.T) {
+			// Create another user
+			loginResB := registerAndLogin(t, e, "cardsuser2@example.com", "password123")
+			tokenB := loginResB.AccessToken
+
+			// User B should not see User A's cards
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/cards", nil)
+			req.Header.Set("Authorization", "Bearer "+tokenB)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var listRes response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &listRes)
+			assert.Equal(t, 0, len(listRes.Data), "User B should not see User A's cards")
+			assert.Equal(t, 0, listRes.Pagination.Total)
+		})
+
+		t.Run("Combine multiple filters", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/cards?deck_id=%d&state=new&suspended=false", deckID), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var listRes response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &listRes)
+			for _, card := range listRes.Data {
+				assert.Equal(t, deckID, card.DeckID)
+				assert.Equal(t, "new", card.State)
+				assert.False(t, card.Suspended)
+			}
 		})
 	})
 }

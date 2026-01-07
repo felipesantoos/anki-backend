@@ -9,25 +9,26 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/handlers"
+	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	userEntity "github.com/felipesantos/anki-backend/core/domain/entities/user"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
+	"github.com/labstack/echo/v4"
 )
 
 // mockAuthService is a mock implementation of IAuthService
 type mockAuthService struct {
-	registerFunc            func(ctx context.Context, email string, password string) (*userEntity.User, error)
-	loginFunc               func(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error)
-	refreshTokenFunc        func(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
-	logoutFunc              func(ctx context.Context, accessToken string, refreshToken string) error
-	verifyEmailFunc         func(ctx context.Context, token string) error
+	registerFunc                func(ctx context.Context, email string, password string) (*userEntity.User, error)
+	loginFunc                   func(ctx context.Context, email string, password string, ipAddress string, userAgent string) (*response.LoginResponse, error)
+	refreshTokenFunc            func(ctx context.Context, refreshToken string) (*response.TokenResponse, error)
+	logoutFunc                  func(ctx context.Context, accessToken string, refreshToken string) error
+	verifyEmailFunc             func(ctx context.Context, token string) error
 	resendVerificationEmailFunc func(ctx context.Context, email string) error
-	requestPasswordResetFunc func(ctx context.Context, email string) error
-	resetPasswordFunc        func(ctx context.Context, token string, newPassword string) error
-	changePasswordFunc       func(ctx context.Context, userID int64, currentPassword string, newPassword string) error
+	requestPasswordResetFunc    func(ctx context.Context, email string) error
+	resetPasswordFunc           func(ctx context.Context, token string, newPassword string) error
+	changePasswordFunc          func(ctx context.Context, userID int64, currentPassword string, newPassword string) error
 }
 
 func (m *mockAuthService) Register(ctx context.Context, email string, password string) (*userEntity.User, error) {
@@ -184,7 +185,7 @@ func TestAuthHandler_Register_InvalidRequest(t *testing.T) {
 func TestAuthHandler_Register_EmailAlreadyExists(t *testing.T) {
 	mockService := &mockAuthService{
 		registerFunc: func(ctx context.Context, email string, password string) (*userEntity.User, error) {
-			return nil, authService.ErrEmailAlreadyExists
+			return nil, userEntity.ErrEmailAlreadyExists
 		},
 	}
 
@@ -198,6 +199,7 @@ func TestAuthHandler_Register_EmailAlreadyExists(t *testing.T) {
 	jsonBody, _ := json.Marshal(reqBody)
 
 	e := echo.New()
+	e.Validator = middlewares.NewCustomValidator()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(jsonBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -225,8 +227,8 @@ func TestAuthHandler_Register_ValidationErrors(t *testing.T) {
 	e := echo.New()
 
 	tests := []struct {
-		name    string
-		reqBody map[string]interface{}
+		name     string
+		reqBody  map[string]interface{}
 		wantCode int
 	}{
 		{
@@ -396,8 +398,8 @@ func TestAuthHandler_Login_InvalidRequest(t *testing.T) {
 	handler := handlers.NewAuthHandler(mockService)
 
 	tests := []struct {
-		name    string
-		reqBody map[string]interface{}
+		name     string
+		reqBody  map[string]interface{}
 		wantCode int
 	}{
 		{
@@ -818,8 +820,8 @@ func TestAuthHandler_ResetPassword_ValidationErrors(t *testing.T) {
 	e := echo.New()
 
 	tests := []struct {
-		name    string
-		reqBody map[string]interface{}
+		name     string
+		reqBody  map[string]interface{}
 		wantCode int
 	}{
 		{

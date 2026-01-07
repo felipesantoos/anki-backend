@@ -4,23 +4,23 @@ import (
 	"context"
 	"io"
 
-	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
-	"github.com/felipesantos/anki-backend/core/domain/entities/filtered_deck"
-	"github.com/felipesantos/anki-backend/core/domain/entities/card"
-	"github.com/felipesantos/anki-backend/core/domain/entities/review"
-	"github.com/felipesantos/anki-backend/core/domain/entities/note"
-	"github.com/felipesantos/anki-backend/core/domain/entities/note_type"
-	"github.com/felipesantos/anki-backend/core/domain/entities/profile"
-	"github.com/felipesantos/anki-backend/core/domain/entities/user"
-	"github.com/felipesantos/anki-backend/core/domain/entities/user_preferences"
-	"github.com/felipesantos/anki-backend/core/domain/entities/add_on"
+	addon "github.com/felipesantos/anki-backend/core/domain/entities/add_on"
 	"github.com/felipesantos/anki-backend/core/domain/entities/backup"
+	"github.com/felipesantos/anki-backend/core/domain/entities/card"
+	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
+	deletionlog "github.com/felipesantos/anki-backend/core/domain/entities/deletion_log"
+	filtereddeck "github.com/felipesantos/anki-backend/core/domain/entities/filtered_deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/media"
-	"github.com/felipesantos/anki-backend/core/domain/entities/sync_meta"
-	"github.com/felipesantos/anki-backend/core/domain/entities/shared_deck"
-	"github.com/felipesantos/anki-backend/core/domain/entities/shared_deck_rating"
-	"github.com/felipesantos/anki-backend/core/domain/entities/deletion_log"
-	"github.com/felipesantos/anki-backend/core/domain/entities/undo_history"
+	"github.com/felipesantos/anki-backend/core/domain/entities/note"
+	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
+	"github.com/felipesantos/anki-backend/core/domain/entities/profile"
+	"github.com/felipesantos/anki-backend/core/domain/entities/review"
+	shareddeck "github.com/felipesantos/anki-backend/core/domain/entities/shared_deck"
+	shareddeckrating "github.com/felipesantos/anki-backend/core/domain/entities/shared_deck_rating"
+	syncmeta "github.com/felipesantos/anki-backend/core/domain/entities/sync_meta"
+	undohistory "github.com/felipesantos/anki-backend/core/domain/entities/undo_history"
+	"github.com/felipesantos/anki-backend/core/domain/entities/user"
+	userpreferences "github.com/felipesantos/anki-backend/core/domain/entities/user_preferences"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -45,8 +45,8 @@ func (m *MockDeckService) FindByID(ctx context.Context, userID int64, id int64) 
 	return args.Get(0).(*deck.Deck), args.Error(1)
 }
 
-func (m *MockDeckService) FindByUserID(ctx context.Context, userID int64) ([]*deck.Deck, error) {
-	args := m.Called(ctx, userID)
+func (m *MockDeckService) FindByUserID(ctx context.Context, userID int64, search string) ([]*deck.Deck, error) {
+	args := m.Called(ctx, userID, search)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -61,8 +61,16 @@ func (m *MockDeckService) Update(ctx context.Context, userID int64, id int64, na
 	return args.Get(0).(*deck.Deck), args.Error(1)
 }
 
-func (m *MockDeckService) Delete(ctx context.Context, userID int64, id int64) error {
-	args := m.Called(ctx, userID, id)
+func (m *MockDeckService) UpdateOptions(ctx context.Context, userID int64, id int64, optionsJSON string) (*deck.Deck, error) {
+	args := m.Called(ctx, userID, id, optionsJSON)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*deck.Deck), args.Error(1)
+}
+
+func (m *MockDeckService) Delete(ctx context.Context, userID int64, id int64, action deck.DeleteAction, targetDeckID *int64) error {
+	args := m.Called(ctx, userID, id, action, targetDeckID)
 	return args.Error(0)
 }
 
@@ -172,6 +180,19 @@ func (m *MockCardService) Delete(ctx context.Context, userID int64, id int64) er
 	return args.Error(0)
 }
 
+func (m *MockCardService) CountByDeckAndState(ctx context.Context, userID int64, deckID int64, state string) (int, error) {
+	args := m.Called(ctx, userID, deckID, state)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockCardService) FindAll(ctx context.Context, userID int64, filters card.CardFilters) ([]*card.Card, int, error) {
+	args := m.Called(ctx, userID, filters)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]*card.Card), args.Int(1), args.Error(2)
+}
+
 // MockReviewService is a mock implementation of IReviewService
 type MockReviewService struct {
 	mock.Mock
@@ -220,6 +241,14 @@ func (m *MockNoteService) FindByID(ctx context.Context, userID int64, id int64) 
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*note.Note), args.Error(1)
+}
+
+func (m *MockNoteService) FindAll(ctx context.Context, userID int64, filters note.NoteFilters) ([]*note.Note, error) {
+	args := m.Called(ctx, userID, filters)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*note.Note), args.Error(1)
 }
 
 func (m *MockNoteService) FindByUserID(ctx context.Context, userID int64) ([]*note.Note, error) {
@@ -478,6 +507,14 @@ func (m *MockBackupService) Create(ctx context.Context, userID int64, filename s
 	return args.Get(0).(*backup.Backup), args.Error(1)
 }
 
+func (m *MockBackupService) CreatePreOperationBackup(ctx context.Context, userID int64) (*backup.Backup, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*backup.Backup), args.Error(1)
+}
+
 func (m *MockBackupService) FindByUserID(ctx context.Context, userID int64) ([]*backup.Backup, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
@@ -716,4 +753,3 @@ func (m *MockUndoHistoryService) Delete(ctx context.Context, userID int64, id in
 	args := m.Called(ctx, userID, id)
 	return args.Error(0)
 }
-

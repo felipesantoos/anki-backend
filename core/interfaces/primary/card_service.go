@@ -40,5 +40,9 @@ type ICardService interface {
 
 	// CountByDeckAndState counts cards with a specific state in a deck
 	CountByDeckAndState(ctx context.Context, userID int64, deckID int64, state string) (int, error)
+
+	// FindAll finds cards for a user based on filters and pagination
+	// Returns: list of cards, total count (for pagination), error
+	FindAll(ctx context.Context, userID int64, filters card.CardFilters) ([]*card.Card, int, error)
 }
 

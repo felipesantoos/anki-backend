@@ -131,3 +131,33 @@ func (s *CardService) CountByDeckAndState(ctx context.Context, userID int64, dec
 	return s.cardRepo.CountByDeckAndState(ctx, userID, deckID, cardState)
 }
 
+// FindAll finds cards for a user based on filters and pagination
+func (s *CardService) FindAll(ctx context.Context, userID int64, filters card.CardFilters) ([]*card.Card, int, error) {
+	// Validate state filter if provided
+	if filters.State != nil {
+		cardState := valueobjects.CardState(*filters.State)
+		if !cardState.IsValid() {
+			return nil, 0, fmt.Errorf("invalid card state: %s", *filters.State)
+		}
+		stateStr := cardState.String()
+		filters.State = &stateStr
+	}
+
+	// Validate flag filter if provided
+	if filters.Flag != nil {
+		if *filters.Flag < 0 || *filters.Flag > 7 {
+			return nil, 0, fmt.Errorf("flag must be between 0 and 7")
+		}
+	}
+
+	// Apply defaults for pagination
+	if filters.Limit <= 0 {
+		filters.Limit = 20
+	}
+	if filters.Offset < 0 {
+		filters.Offset = 0
+	}
+
+	return s.cardRepo.FindAll(ctx, userID, filters)
+}
+

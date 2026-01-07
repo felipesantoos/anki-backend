@@ -119,7 +119,7 @@ func TestDeckHandler_FindAll(t *testing.T) {
 		c.Set(middlewares.UserIDContextKey, userID)
 
 		d1, _ := deck.NewBuilder().WithID(1).WithUserID(userID).WithName("D1").Build()
-		mockSvc.On("FindByUserID", mock.Anything, userID).Return([]*deck.Deck{d1}, nil).Once()
+		mockSvc.On("FindByUserID", mock.Anything, userID, "").Return([]*deck.Deck{d1}, nil).Once()
 
 		if assert.NoError(t, handler.FindAll(c)) {
 			assert.Equal(t, http.StatusOK, rec.Code)
@@ -183,4 +183,3 @@ func TestDeckHandler_Delete(t *testing.T) {
 		mockSvc.AssertExpectations(t)
 	})
 }
-

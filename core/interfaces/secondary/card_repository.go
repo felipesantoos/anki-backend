@@ -63,5 +63,9 @@ type ICardRepository interface {
 	// FindByAdvancedSearch finds cards matching advanced search criteria
 	// Used for is:new, is:due, is:review, prop: filters
 	FindByAdvancedSearch(ctx context.Context, userID int64, query *search.SearchQuery) ([]*card.Card, error)
+
+	// FindAll finds cards for a user based on filters and pagination
+	// Returns: list of cards, total count (for pagination), error
+	FindAll(ctx context.Context, userID int64, filters card.CardFilters) ([]*card.Card, int, error)
 }
 

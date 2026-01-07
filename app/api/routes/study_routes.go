@@ -60,6 +60,7 @@ func (r *Router) RegisterStudyRoutes() {
 
 	// Cards (Direct)
 	cards := v1.Group("/cards")
+	cards.GET("", cardHandler.FindAll)
 	cards.GET("/:id", cardHandler.FindByID)
 	cards.POST("/:id/suspend", cardHandler.Suspend)
 	cards.POST("/:id/unsuspend", cardHandler.Unsuspend)

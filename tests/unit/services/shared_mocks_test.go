@@ -197,6 +197,14 @@ func (m *MockCardRepository) DeleteByDeckRecursive(ctx context.Context, uid, did
 func (m *MockCardRepository) FindByAdvancedSearch(ctx context.Context, uid int64, q *search.SearchQuery) ([]*card.Card, error) {
 	args := m.Called(ctx, uid, q); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*card.Card), args.Error(1)
 }
+func (m *MockCardRepository) FindAll(ctx context.Context, uid int64, f card.CardFilters) ([]*card.Card, int, error) {
+	args := m.Called(ctx, uid, f)
+	var cards []*card.Card
+	if args.Get(0) != nil {
+		cards = args.Get(0).([]*card.Card)
+	}
+	return cards, args.Int(1), args.Error(2)
+}
 
 // MockReviewRepository
 type MockReviewRepository struct{ mock.Mock }

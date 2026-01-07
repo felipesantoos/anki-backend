@@ -13,6 +13,7 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -42,6 +43,135 @@ func TestCardHandler_FindByID(t *testing.T) {
 			assert.Equal(t, http.StatusOK, rec.Code)
 		}
 		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID format (non-numeric)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id")
+		c.SetParamNames("id")
+		c.SetParamValues("invalid")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.FindByID(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Contains(t, httpErr.Message.(string), "Invalid card ID format")
+		}
+		// Service should not be called when validation fails
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID (zero)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id")
+		c.SetParamNames("id")
+		c.SetParamValues("0")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.FindByID(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Contains(t, httpErr.Message.(string), "Card ID must be greater than 0")
+		}
+		// Service should not be called when validation fails
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID (negative)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id")
+		c.SetParamNames("id")
+		c.SetParamValues("-1")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.FindByID(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Contains(t, httpErr.Message.(string), "Card ID must be greater than 0")
+		}
+		// Service should not be called when validation fails
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Card not found (404)", func(t *testing.T) {
+		notFoundMockSvc := new(MockCardService)
+		notFoundHandler := handlers.NewCardHandler(notFoundMockSvc)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id")
+		c.SetParamNames("id")
+		c.SetParamValues("999")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		notFoundMockSvc.On("FindByID", mock.Anything, userID, int64(999)).Return(nil, ownership.ErrResourceNotFound).Once()
+
+		err := notFoundHandler.FindByID(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Contains(t, httpErr.Message.(string), "Card not found")
+		}
+		notFoundMockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Service error handling", func(t *testing.T) {
+		serviceErrorMockSvc := new(MockCardService)
+		serviceErrorHandler := handlers.NewCardHandler(serviceErrorMockSvc)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		serviceErrorMockSvc.On("FindByID", mock.Anything, userID, cardID).Return(nil, echo.NewHTTPError(http.StatusInternalServerError, "database error")).Once()
+
+		err := serviceErrorHandler.FindByID(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
+		}
+		serviceErrorMockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Cross-user isolation (returns 404)", func(t *testing.T) {
+		crossUserMockSvc := new(MockCardService)
+		crossUserHandler := handlers.NewCardHandler(crossUserMockSvc)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		// User tries to access another user's card - should return 404
+		crossUserMockSvc.On("FindByID", mock.Anything, userID, cardID).Return(nil, ownership.ErrResourceNotFound).Once()
+
+		err := crossUserHandler.FindByID(c)
+
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Contains(t, httpErr.Message.(string), "Card not found")
+		}
+		crossUserMockSvc.AssertExpectations(t)
 	})
 }
 

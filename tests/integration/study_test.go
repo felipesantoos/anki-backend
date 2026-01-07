@@ -15,8 +15,8 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/dtos/request"
 	"github.com/felipesantos/anki-backend/app/api/dtos/response"
 	"github.com/felipesantos/anki-backend/app/api/routes"
-	"github.com/felipesantos/anki-backend/dicontainer"
 	"github.com/felipesantos/anki-backend/config"
+	"github.com/felipesantos/anki-backend/dicontainer"
 	infraEvents "github.com/felipesantos/anki-backend/infra/events"
 	postgresInfra "github.com/felipesantos/anki-backend/infra/postgres"
 	redisInfra "github.com/felipesantos/anki-backend/infra/redis"
@@ -117,7 +117,7 @@ func TestStudy_Integration(t *testing.T) {
 		var deckList []response.DeckResponse
 		json.Unmarshal(rec.Body.Bytes(), &deckList)
 		assert.NotEmpty(t, deckList)
-		
+
 		// Find our created deck in the list
 		found := false
 		for _, d := range deckList {
@@ -558,7 +558,7 @@ func TestStudy_Integration(t *testing.T) {
 		var movedRes response.DeckResponse
 		json.Unmarshal(rec.Body.Bytes(), &movedRes)
 		assert.Equal(t, &pB.ID, movedRes.ParentID)
-		
+
 		// Verify FullName updated in list
 		req = httptest.NewRequest(http.MethodGet, "/api/v1/decks", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -659,6 +659,30 @@ func TestStudy_Integration(t *testing.T) {
 		var cardRes response.CardResponse
 		json.Unmarshal(rec.Body.Bytes(), &cardRes)
 		assert.Equal(t, cardID, cardRes.ID)
+
+		// Test: GET card with invalid ID format
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/cards/invalid", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+		// Test: GET card with zero ID
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/cards/0", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+		// Test: GET non-existent card (404)
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/cards/99999", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		var errorRes response.ErrorResponse
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Contains(t, errorRes.Message, "Card not found")
 
 		// Suspend Card
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/suspend", nil)
@@ -891,7 +915,7 @@ func TestStudy_Integration(t *testing.T) {
 	t.Run("BackupBeforeDeletion", func(t *testing.T) {
 		// 1. Create a deck
 		d := createDeck(t, e, token, request.CreateDeckRequest{Name: "Backup Test Deck"})
-		
+
 		// 2. Delete the deck
 		deleteReq := request.DeleteDeckRequest{Action: request.ActionDeleteCards}
 		b, _ := json.Marshal(deleteReq)
@@ -983,4 +1007,3 @@ func createCard(t *testing.T, pgRepo *postgresInfra.PostgresRepository, userID, 
 
 	return cardID
 }
-

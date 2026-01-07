@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/felipesantos/anki-backend/app/api/middlewares"
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
+	"github.com/felipesantos/anki-backend/pkg/ownership"
 )
 
 // CardHandler handles card-related HTTP requests
@@ -109,15 +111,29 @@ func (h *CardHandler) FindAll(c echo.Context) error {
 // @Security BearerAuth
 // @Param id path int true "Card ID"
 // @Success 200 {object} response.CardResponse
+// @Failure 400 {object} response.ErrorResponse "Invalid card ID"
+// @Failure 404 {object} response.ErrorResponse "Card not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/cards/{id} [get]
 func (h *CardHandler) FindByID(c echo.Context) error {
 	ctx := c.Request().Context()
 	userID := middlewares.GetUserID(c)
-	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	// Parse and validate ID parameter
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid card ID format")
+	}
+
+	// Validate that ID is positive
+	if id <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "Card ID must be greater than 0")
+	}
 
 	card, err := h.service.FindByID(ctx, userID, id)
 	if err != nil {
-		return err
+		return handleCardError(err)
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToCardResponse(card))
@@ -290,3 +306,27 @@ func (h *CardHandler) Delete(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// handleCardError maps service-level card errors to HTTP errors
+func handleCardError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Check for resource not found (card doesn't exist or user doesn't have access)
+	if errors.Is(err, ownership.ErrResourceNotFound) {
+		return echo.NewHTTPError(http.StatusNotFound, "Card not found")
+	}
+
+	// Check for access denied
+	if errors.Is(err, ownership.ErrAccessDenied) {
+		return echo.NewHTTPError(http.StatusNotFound, "Card not found")
+	}
+
+	// If error message contains "not found", return 404
+	if errors.Is(err, errors.New("card not found")) {
+		return echo.NewHTTPError(http.StatusNotFound, "Card not found")
+	}
+
+	// For other errors, return as-is (may be HTTPError already or will be handled by error middleware)
+	return err
+}

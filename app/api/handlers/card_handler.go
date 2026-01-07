@@ -139,6 +139,42 @@ func (h *CardHandler) FindByID(c echo.Context) error {
 	return c.JSON(http.StatusOK, mappers.ToCardResponse(card))
 }
 
+// GetInfo handles GET /api/v1/cards/:id/info
+// @Summary Get detailed card information
+// @Description Returns detailed card information including note data, deck/note type names, and review history
+// @Tags cards
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Card ID"
+// @Success 200 {object} response.CardInfoResponse
+// @Failure 400 {object} response.ErrorResponse "Invalid card ID"
+// @Failure 404 {object} response.ErrorResponse "Card not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/cards/{id}/info [get]
+func (h *CardHandler) GetInfo(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	// Parse and validate ID parameter
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid card ID format")
+	}
+
+	// Validate that ID is positive
+	if id <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "Card ID must be greater than 0")
+	}
+
+	info, err := h.service.GetInfo(ctx, userID, id)
+	if err != nil {
+		return handleCardError(err)
+	}
+
+	return c.JSON(http.StatusOK, mappers.ToCardInfoResponse(info))
+}
+
 // FindByDeckID handles GET /api/v1/decks/:deckID/cards
 // @Summary List cards in a deck
 // @Tags cards

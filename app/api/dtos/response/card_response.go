@@ -57,3 +57,66 @@ type ListCardsResponse struct {
 	Pagination PaginationResponse `json:"pagination"`
 }
 
+// CardInfoResponse represents detailed card information (Card Info Dialog)
+// @Description Detailed card information including note data, deck/note type names, and review history
+type CardInfoResponse struct {
+	// Card ID
+	CardID int64 `json:"card_id" example:"1"`
+
+	// Note ID
+	NoteID int64 `json:"note_id" example:"1"`
+
+	// Deck name
+	DeckName string `json:"deck_name" example:"Default"`
+
+	// Note type name
+	NoteTypeName string `json:"note_type_name" example:"Basic"`
+
+	// Note fields (parsed from fieldsJSON)
+	Fields map[string]interface{} `json:"fields" example:"{\"Front\":\"Hello\",\"Back\":\"Olá\"}"`
+
+	// Note tags
+	Tags []string `json:"tags" example:"[\"vocabulary\"]"`
+
+	// Card creation timestamp
+	CreatedAt time.Time `json:"created_at" example:"2024-01-15T10:30:00Z"`
+
+	// First review timestamp (null if no reviews)
+	FirstReview *time.Time `json:"first_review,omitempty" example:"2024-01-16T10:00:00Z"`
+
+	// Last review timestamp (null if no reviews)
+	LastReview *time.Time `json:"last_review,omitempty" example:"2024-01-20T15:45:00Z"`
+
+	// Total number of reviews
+	TotalReviews int `json:"total_reviews" example:"5"`
+
+	// Ease factor history (array of ease values ordered by review date)
+	EaseHistory []int `json:"ease_history" example:"[2500,2600,2500,2400,2500]"`
+
+	// Interval history (array of interval values ordered by review date)
+	IntervalHistory []int `json:"interval_history" example:"[1,2,4,1,2]"`
+
+	// Full review history
+	ReviewHistory []CardInfoReviewItem `json:"review_history"`
+}
+
+// CardInfoReviewItem represents a single review in the card info history
+type CardInfoReviewItem struct {
+	// Rating given (1-4)
+	Rating int `json:"rating" example:"3"`
+
+	// Interval after review (days or negative seconds)
+	Interval int `json:"interval" example:"1"`
+
+	// Ease factor after review (permille)
+	Ease int `json:"ease" example:"2500"`
+
+	// Time spent on review (milliseconds)
+	TimeMs int `json:"time_ms" example:"5000"`
+
+	// Review type (new, learn, review, relearn)
+	Type string `json:"type" example:"review"`
+
+	// Review timestamp
+	CreatedAt time.Time `json:"created_at" example:"2024-01-20T15:45:00Z"`
+}

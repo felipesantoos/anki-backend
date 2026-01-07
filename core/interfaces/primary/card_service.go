@@ -44,5 +44,7 @@ type ICardService interface {
 	// FindAll finds cards for a user based on filters and pagination
 	// Returns: list of cards, total count (for pagination), error
 	FindAll(ctx context.Context, userID int64, filters card.CardFilters) ([]*card.Card, int, error)
-}
 
+	// GetInfo returns detailed card information including note data, deck/note type names, and review history
+	GetInfo(ctx context.Context, userID int64, cardID int64) (*card.CardInfo, error)
+}

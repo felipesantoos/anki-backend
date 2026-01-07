@@ -61,6 +61,7 @@ func (r *Router) RegisterStudyRoutes() {
 	// Cards (Direct)
 	cards := v1.Group("/cards")
 	cards.GET("", cardHandler.FindAll)
+	cards.GET("/:id/info", cardHandler.GetInfo) // Must be before /:id to avoid route conflicts
 	cards.GET("/:id", cardHandler.FindByID)
 	cards.POST("/:id/suspend", cardHandler.Suspend)
 	cards.POST("/:id/unsuspend", cardHandler.Unsuspend)
@@ -72,8 +73,7 @@ func (r *Router) RegisterStudyRoutes() {
 	// Reviews
 	reviews := v1.Group("/reviews")
 	reviews.POST("", reviewHandler.Create)
-	
+
 	// Card Reviews
 	cards.GET("/:cardID/reviews", reviewHandler.FindByCardID)
 }
-

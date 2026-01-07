@@ -294,3 +294,29 @@ type CardFilters struct {
 	Offset    int
 }
 
+// CardInfo represents aggregated detailed card information
+type CardInfo struct {
+	CardID          int64
+	NoteID          int64
+	DeckName        string
+	NoteTypeName    string
+	Fields          map[string]interface{}
+	Tags            []string
+	CreatedAt       time.Time
+	FirstReview     *time.Time
+	LastReview      *time.Time
+	TotalReviews    int
+	EaseHistory     []int
+	IntervalHistory []int
+	ReviewHistory   []*ReviewInfo
+}
+
+// ReviewInfo represents review information for card info
+type ReviewInfo struct {
+	Rating    int
+	Interval  int
+	Ease      int
+	TimeMs    int
+	Type      string
+	CreatedAt time.Time
+}

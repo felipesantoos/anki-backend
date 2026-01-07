@@ -5,15 +5,19 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/config"
+	"github.com/felipesantos/anki-backend/core/interfaces/primary"
+	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	addonService "github.com/felipesantos/anki-backend/core/services/addon"
 	auditService "github.com/felipesantos/anki-backend/core/services/audit"
 	authService "github.com/felipesantos/anki-backend/core/services/auth"
 	backupService "github.com/felipesantos/anki-backend/core/services/backup"
 	cardService "github.com/felipesantos/anki-backend/core/services/card"
-	exportService "github.com/felipesantos/anki-backend/core/services/export"
 	deckService "github.com/felipesantos/anki-backend/core/services/deck"
 	emailService "github.com/felipesantos/anki-backend/core/services/email"
+	exportService "github.com/felipesantos/anki-backend/core/services/export"
+	"github.com/felipesantos/anki-backend/core/services/health"
 	mediaService "github.com/felipesantos/anki-backend/core/services/media"
+	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
 	noteService "github.com/felipesantos/anki-backend/core/services/note"
 	notetypeService "github.com/felipesantos/anki-backend/core/services/notetype"
 	profileService "github.com/felipesantos/anki-backend/core/services/profile"
@@ -26,10 +30,6 @@ import (
 	syncService "github.com/felipesantos/anki-backend/core/services/sync"
 	userService "github.com/felipesantos/anki-backend/core/services/user"
 	userpreferencesService "github.com/felipesantos/anki-backend/core/services/userpreferences"
-	"github.com/felipesantos/anki-backend/core/services/health"
-	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
-	"github.com/felipesantos/anki-backend/core/interfaces/primary"
-	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/infra/database/repositories"
 	infraEmail "github.com/felipesantos/anki-backend/infra/email"
 	"github.com/felipesantos/anki-backend/infra/redis"
@@ -95,7 +95,11 @@ func GetFilteredDeckService() primary.IFilteredDeckService {
 // GetCardService returns a fresh instance of CardService
 func GetCardService() primary.ICardService {
 	cardRepo := repositories.NewCardRepository(dbRepo.GetDB())
-	return cardService.NewCardService(cardRepo)
+	noteService := GetNoteService()
+	deckService := GetDeckService()
+	noteTypeService := GetNoteTypeService()
+	reviewService := GetReviewService()
+	return cardService.NewCardService(cardRepo, noteService, deckService, noteTypeService, reviewService)
 }
 
 // GetReviewService returns a fresh instance of ReviewService
@@ -219,9 +223,9 @@ func GetEmailService() primary.IEmailService {
 		emailRepo, _ := infraEmail.NewSMTPRepository(cfg.Email)
 		return emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
 	}
-		emailRepo := infraEmail.NewConsoleRepository(log)
+	emailRepo := infraEmail.NewConsoleRepository(log)
 	return emailService.NewEmailService(emailRepo, jwtSvc, cfg.Email)
-	}
+}
 
 // GetSessionService returns a fresh instance of SessionService
 func GetSessionService() primary.ISessionService {
@@ -271,7 +275,7 @@ func GetMetricsService() primary.IMetricsService {
 		metricsSvc.RegisterDatabaseCollector(dbRepo.GetDB())
 		metricsSvc.RegisterRedisCollector(rdb.Client)
 	}
-		if cfg.Metrics.EnableBusinessMetrics {
+	if cfg.Metrics.EnableBusinessMetrics {
 		metricsSvc.RegisterBusinessMetrics()
 	}
 	return metricsSvc

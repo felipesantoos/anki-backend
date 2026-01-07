@@ -2,6 +2,7 @@ package card
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,13 +14,27 @@ import (
 
 // CardService implements ICardService
 type CardService struct {
-	cardRepo secondary.ICardRepository
+	cardRepo        secondary.ICardRepository
+	noteService     primary.INoteService
+	deckService     primary.IDeckService
+	noteTypeService primary.INoteTypeService
+	reviewService   primary.IReviewService
 }
 
 // NewCardService creates a new CardService instance
-func NewCardService(cardRepo secondary.ICardRepository) primary.ICardService {
+func NewCardService(
+	cardRepo secondary.ICardRepository,
+	noteService primary.INoteService,
+	deckService primary.IDeckService,
+	noteTypeService primary.INoteTypeService,
+	reviewService primary.IReviewService,
+) primary.ICardService {
 	return &CardService{
-		cardRepo: cardRepo,
+		cardRepo:        cardRepo,
+		noteService:     noteService,
+		deckService:     deckService,
+		noteTypeService: noteTypeService,
+		reviewService:   reviewService,
 	}
 }
 
@@ -161,3 +176,93 @@ func (s *CardService) FindAll(ctx context.Context, userID int64, filters card.Ca
 	return s.cardRepo.FindAll(ctx, userID, filters)
 }
 
+// GetInfo returns detailed card information including note data, deck/note type names, and review history
+func (s *CardService) GetInfo(ctx context.Context, userID int64, cardID int64) (*card.CardInfo, error) {
+	// Get card (validates ownership)
+	cardEntity, err := s.cardRepo.FindByID(ctx, userID, cardID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find card: %w", err)
+	}
+
+	// Get note
+	noteEntity, err := s.noteService.FindByID(ctx, userID, cardEntity.GetNoteID())
+	if err != nil {
+		return nil, fmt.Errorf("failed to find note: %w", err)
+	}
+
+	// Get deck
+	deckEntity, err := s.deckService.FindByID(ctx, userID, cardEntity.GetDeckID())
+	if err != nil {
+		return nil, fmt.Errorf("failed to find deck: %w", err)
+	}
+
+	// Get note type
+	noteTypeEntity, err := s.noteTypeService.FindByID(ctx, userID, noteEntity.GetNoteTypeID())
+	if err != nil {
+		return nil, fmt.Errorf("failed to find note type: %w", err)
+	}
+
+	// Get reviews
+	reviews, err := s.reviewService.FindByCardID(ctx, userID, cardID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find reviews: %w", err)
+	}
+
+	// Parse note fields JSON
+	var fields map[string]interface{}
+	if noteEntity.GetFieldsJSON() != "" {
+		if err := json.Unmarshal([]byte(noteEntity.GetFieldsJSON()), &fields); err != nil {
+			return nil, fmt.Errorf("failed to parse note fields: %w", err)
+		}
+	} else {
+		fields = make(map[string]interface{})
+	}
+
+	// Calculate statistics from reviews
+	var firstReview *time.Time
+	var lastReview *time.Time
+	totalReviews := len(reviews)
+	easeHistory := make([]int, 0, totalReviews)
+	intervalHistory := make([]int, 0, totalReviews)
+	reviewHistory := make([]*card.ReviewInfo, 0, totalReviews)
+
+	if totalReviews > 0 {
+		// Reviews are ordered by createdAt DESC from repository, so first is last and last is first
+		// We need to reverse for chronological order (oldest first)
+		firstCreatedAt := reviews[totalReviews-1].GetCreatedAt()
+		lastCreatedAt := reviews[0].GetCreatedAt()
+		firstReview = &firstCreatedAt
+		lastReview = &lastCreatedAt
+
+		// Build histories in chronological order (oldest first)
+		for i := totalReviews - 1; i >= 0; i-- {
+			r := reviews[i]
+			easeHistory = append(easeHistory, r.GetEase())
+			intervalHistory = append(intervalHistory, r.GetInterval())
+			reviewHistory = append(reviewHistory, &card.ReviewInfo{
+				Rating:    r.GetRating(),
+				Interval:  r.GetInterval(),
+				Ease:      r.GetEase(),
+				TimeMs:    r.GetTimeMs(),
+				Type:      r.GetType().String(),
+				CreatedAt: r.GetCreatedAt(),
+			})
+		}
+	}
+
+	return &card.CardInfo{
+		CardID:          cardEntity.GetID(),
+		NoteID:          cardEntity.GetNoteID(),
+		DeckName:        deckEntity.GetName(),
+		NoteTypeName:    noteTypeEntity.GetName(),
+		Fields:          fields,
+		Tags:            noteEntity.GetTags(),
+		CreatedAt:       cardEntity.GetCreatedAt(),
+		FirstReview:     firstReview,
+		LastReview:      lastReview,
+		TotalReviews:    totalReviews,
+		EaseHistory:     easeHistory,
+		IntervalHistory: intervalHistory,
+		ReviewHistory:   reviewHistory,
+	}, nil
+}

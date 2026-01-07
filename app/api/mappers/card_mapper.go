@@ -37,3 +37,37 @@ func ToCardResponseList(cards []*card.Card) []*response.CardResponse {
 	return res
 }
 
+// ToCardInfoResponse converts CardInfo from service layer to CardInfoResponse DTO
+func ToCardInfoResponse(info *card.CardInfo) *response.CardInfoResponse {
+	if info == nil {
+		return nil
+	}
+
+	reviewHistory := make([]response.CardInfoReviewItem, len(info.ReviewHistory))
+	for i, r := range info.ReviewHistory {
+		reviewHistory[i] = response.CardInfoReviewItem{
+			Rating:    r.Rating,
+			Interval:  r.Interval,
+			Ease:      r.Ease,
+			TimeMs:    r.TimeMs,
+			Type:      r.Type,
+			CreatedAt: r.CreatedAt,
+		}
+	}
+
+	return &response.CardInfoResponse{
+		CardID:          info.CardID,
+		NoteID:          info.NoteID,
+		DeckName:        info.DeckName,
+		NoteTypeName:    info.NoteTypeName,
+		Fields:          info.Fields,
+		Tags:            info.Tags,
+		CreatedAt:       info.CreatedAt,
+		FirstReview:     info.FirstReview,
+		LastReview:      info.LastReview,
+		TotalReviews:    info.TotalReviews,
+		EaseHistory:     info.EaseHistory,
+		IntervalHistory: info.IntervalHistory,
+		ReviewHistory:   reviewHistory,
+	}
+}

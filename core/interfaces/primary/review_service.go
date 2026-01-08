@@ -16,5 +16,8 @@ type IReviewService interface {
 
 	// FindByCardID finds all reviews for a card
 	FindByCardID(ctx context.Context, userID int64, cardID int64) ([]*review.Review, error)
+
+	// DeleteByCardID deletes all reviews for a card
+	DeleteByCardID(ctx context.Context, userID int64, cardID int64) error
 }
 

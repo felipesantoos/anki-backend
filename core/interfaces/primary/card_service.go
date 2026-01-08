@@ -47,4 +47,7 @@ type ICardService interface {
 
 	// GetInfo returns detailed card information including note data, deck/note type names, and review history
 	GetInfo(ctx context.Context, userID int64, cardID int64) (*card.CardInfo, error)
+
+	// Reset resets a card (type can be "new" or "forget")
+	Reset(ctx context.Context, userID int64, id int64, resetType string) error
 }

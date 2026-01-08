@@ -64,3 +64,8 @@ type ListCardsRequest struct {
 	Limit int `query:"limit" validate:"omitempty,min=1,max=100"`
 }
 
+// ResetCardRequest represents the request payload to reset a card
+type ResetCardRequest struct {
+	// Type of reset ("new" to reset state, "forget" to reset state and remove history)
+	Type string `json:"type" example:"new" validate:"required,oneof=new forget"`
+}

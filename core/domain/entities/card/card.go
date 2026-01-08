@@ -283,6 +283,32 @@ func (c *Card) SetFlag(flag int) error {
 	return nil
 }
 
+// Reset resets the card to the new state
+func (c *Card) Reset(restorePosition bool, zeroStats bool) {
+	c.state = valueobjects.CardStateNew
+	c.due = 0
+	c.interval = 0
+	c.ease = 2500
+	c.stability = nil
+	c.difficulty = nil
+	c.lastReviewAt = nil
+
+	if zeroStats {
+		c.lapses = 0
+		c.reps = 0
+	}
+
+	// Note: restorePosition logic can be expanded if original position is stored.
+	// For now, it ensures the card is in 'new' state which uses 'position' for ordering.
+
+	c.updatedAt = time.Now()
+}
+
+// Forget is a convenience method for a complete reset
+func (c *Card) Forget() {
+	c.Reset(true, true)
+}
+
 // CardFilters represents the filters for listing cards
 type CardFilters struct {
 	DeckID    *int64

@@ -68,6 +68,7 @@ func (r *Router) RegisterStudyRoutes() {
 	cards.POST("/:id/bury", cardHandler.Bury)
 	cards.POST("/:id/unbury", cardHandler.Unbury)
 	cards.POST("/:id/flag", cardHandler.SetFlag)
+	cards.POST("/:id/reset", cardHandler.Reset)
 	cards.DELETE("/:id", cardHandler.Delete)
 
 	// Reviews

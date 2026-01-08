@@ -32,7 +32,7 @@ func TestOwnership_Validation(t *testing.T) {
 	cfg, _ := config.Load()
 	cfg.Metrics.Enabled = false
 	cfg.Tracing.Enabled = false
-	
+
 	logger := slog.Default()
 	rdb, err := redis.NewRedisRepository(cfg.Redis, logger)
 	require.NoError(t, err, "Failed to create Redis connection")
@@ -103,10 +103,10 @@ func TestOwnership_Validation(t *testing.T) {
 		// User A setup: NoteType, Deck, Note
 		// Create NoteType
 		ntReq := request.CreateNoteTypeRequest{
-			Name:           "User A NoteType",
-			FieldsJSON:     `[{"name":"Front"},{"name":"Back"}]`,
-			CardTypesJSON:  `[{"Name": "Card 1"}]`,
-			TemplatesJSON:  `[{"Front": "{{Front}}", "Back": "{{Back}}"}]`,
+			Name:          "User A NoteType",
+			FieldsJSON:    `[{"name":"Front"},{"name":"Back"}]`,
+			CardTypesJSON: `[{"Name": "Card 1"}]`,
+			TemplatesJSON: `[{"Front": "{{Front}}", "Back": "{{Back}}"}]`,
 		}
 		b, _ := json.Marshal(ntReq)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
@@ -209,6 +209,16 @@ func TestOwnership_Validation(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to unbury User A's card")
+
+		// User B tries to Reset User A's card
+		resetReq := request.ResetCardRequest{Type: "new"}
+		b, _ = json.Marshal(resetReq)
+		req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/cards/%d/reset", cardA.ID), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to reset User A's card")
 	})
 
 	// --- Media Isolation ---

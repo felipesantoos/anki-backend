@@ -412,6 +412,51 @@ func (h *CardHandler) Delete(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// Reset handles POST /api/v1/cards/:id/reset
+// @Summary Reset card
+// @Description Resets a card to the new state or completely forgets its history
+// @Tags cards
+// @Security BearerAuth
+// @Param id path int true "Card ID"
+// @Param request body request.ResetCardRequest true "Reset request"
+// @Success 204 "No Content"
+// @Failure 400 {object} response.ErrorResponse "Invalid card ID or reset type"
+// @Failure 404 {object} response.ErrorResponse "Card not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/cards/{id}/reset [post]
+func (h *CardHandler) Reset(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	// Parse and validate ID parameter
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid card ID format")
+	}
+
+	// Validate that ID is positive
+	if id <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "Card ID must be greater than 0")
+	}
+
+	var req request.ResetCardRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err
+	}
+
+	if err := h.service.Reset(ctx, userID, id, req.Type); err != nil {
+		return handleCardError(err)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 // handleCardError maps service-level card errors to HTTP errors
 func handleCardError(err error) error {
 	if err == nil {

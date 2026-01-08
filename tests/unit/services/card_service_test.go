@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
@@ -13,7 +14,12 @@ import (
 
 func TestCardService_Suspend(t *testing.T) {
 	mockRepo := new(MockCardRepository)
-	service := cardSvc.NewCardService(mockRepo)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	cardID := int64(100)
@@ -35,7 +41,12 @@ func TestCardService_Suspend(t *testing.T) {
 
 func TestCardService_SetFlag(t *testing.T) {
 	mockRepo := new(MockCardRepository)
-	service := cardSvc.NewCardService(mockRepo)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	cardID := int64(100)
@@ -69,7 +80,12 @@ func TestCardService_SetFlag(t *testing.T) {
 
 func TestCardService_CountByDeckAndState(t *testing.T) {
 	mockRepo := new(MockCardRepository)
-	service := cardSvc.NewCardService(mockRepo)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	deckID := int64(10)
@@ -95,7 +111,12 @@ func TestCardService_CountByDeckAndState(t *testing.T) {
 
 func TestCardService_FindAll(t *testing.T) {
 	mockRepo := new(MockCardRepository)
-	service := cardSvc.NewCardService(mockRepo)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -283,3 +304,59 @@ func TestCardService_FindAll(t *testing.T) {
 	})
 }
 
+func TestCardService_Reset(t *testing.T) {
+	mockRepo := new(MockCardRepository)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
+
+	ctx := context.Background()
+	userID := int64(1)
+	cardID := int64(123)
+
+	t.Run("Success - Reset type new", func(t *testing.T) {
+		c, _ := card.NewBuilder().WithID(cardID).WithDeckID(1).WithState(valueobjects.CardStateReview).Build()
+		c.SetReps(10)
+		c.SetLapses(2)
+
+		mockTM.On("WithTransaction", ctx, mock.Anything).Return(nil).Once()
+		mockRepo.On("FindByID", mock.Anything, userID, cardID).Return(c, nil).Once()
+		mockRepo.On("Update", mock.Anything, userID, cardID, mock.Anything).Return(nil).Once()
+
+		err := service.Reset(ctx, userID, cardID, "new")
+		assert.NoError(t, err)
+		assert.Equal(t, valueobjects.CardStateNew, c.GetState())
+		assert.Equal(t, 0, c.GetReps())
+		assert.Equal(t, 0, c.GetLapses())
+		mockTM.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Success - Reset type forget", func(t *testing.T) {
+		c, _ := card.NewBuilder().WithID(cardID).WithDeckID(1).WithState(valueobjects.CardStateReview).Build()
+
+		mockTM.On("WithTransaction", ctx, mock.Anything).Return(nil).Once()
+		mockRepo.On("FindByID", mock.Anything, userID, cardID).Return(c, nil).Once()
+		mockReviewSvc.On("DeleteByCardID", mock.Anything, userID, cardID).Return(nil).Once()
+		mockRepo.On("Update", mock.Anything, userID, cardID, mock.Anything).Return(nil).Once()
+
+		err := service.Reset(ctx, userID, cardID, "forget")
+		assert.NoError(t, err)
+		assert.Equal(t, valueobjects.CardStateNew, c.GetState())
+		mockTM.AssertExpectations(t)
+		mockRepo.AssertExpectations(t)
+		mockReviewSvc.AssertExpectations(t)
+	})
+
+	t.Run("Card not found", func(t *testing.T) {
+		mockTM.On("WithTransaction", ctx, mock.Anything).Return(fmt.Errorf("card not found")).Once()
+		mockRepo.On("FindByID", mock.Anything, userID, cardID).Return(nil, nil).Once()
+
+		err := service.Reset(ctx, userID, cardID, "new")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "card not found")
+	})
+}

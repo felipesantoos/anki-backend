@@ -19,6 +19,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
 	"github.com/felipesantos/anki-backend/core/domain/entities/profile"
+	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
 	"github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/domain/entities/review"
 	savedsearch "github.com/felipesantos/anki-backend/core/domain/entities/saved_search"
@@ -223,6 +224,9 @@ func (m *MockReviewRepository) FindByCardID(ctx context.Context, uid, cid int64)
 }
 func (m *MockReviewRepository) FindByDateRange(ctx context.Context, uid int64, s, e time.Time) ([]*review.Review, error) {
 	args := m.Called(ctx, uid, s, e); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*review.Review), args.Error(1)
+}
+func (m *MockReviewRepository) DeleteByCardID(ctx context.Context, uid int64, cid int64) error {
+	return m.Called(ctx, uid, cid).Error(0)
 }
 
 // MockProfileRepository
@@ -581,6 +585,66 @@ func (m *MockNoteService) FindDuplicatesByGUID(ctx context.Context, uid int64) (
 	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*note.DuplicateResult), args.Error(1)
 }
 
+// MockDeckService
+type MockDeckService struct{ mock.Mock }
+func (m *MockDeckService) Create(ctx context.Context, uid int64, n string, pid *int64, oj string) (*deck.Deck, error) {
+	args := m.Called(ctx, uid, n, pid, oj); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*deck.Deck), args.Error(1)
+}
+func (m *MockDeckService) FindByID(ctx context.Context, uid, id int64) (*deck.Deck, error) {
+	args := m.Called(ctx, uid, id); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*deck.Deck), args.Error(1)
+}
+func (m *MockDeckService) FindByUserID(ctx context.Context, uid int64, s string) ([]*deck.Deck, error) {
+	args := m.Called(ctx, uid, s); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*deck.Deck), args.Error(1)
+}
+func (m *MockDeckService) Update(ctx context.Context, uid, id int64, n string, pid *int64, oj string) (*deck.Deck, error) {
+	args := m.Called(ctx, uid, id, n, pid, oj); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*deck.Deck), args.Error(1)
+}
+func (m *MockDeckService) UpdateOptions(ctx context.Context, uid, id int64, oj string) (*deck.Deck, error) {
+	args := m.Called(ctx, uid, id, oj); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*deck.Deck), args.Error(1)
+}
+func (m *MockDeckService) Delete(ctx context.Context, uid, id int64, a deck.DeleteAction, tdid *int64) error {
+	return m.Called(ctx, uid, id, a, tdid).Error(0)
+}
+func (m *MockDeckService) CreateDefaultDeck(ctx context.Context, uid int64) (*deck.Deck, error) {
+	args := m.Called(ctx, uid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*deck.Deck), args.Error(1)
+}
+func (m *MockDeckService) GetOptions(ctx context.Context, uid, id int64) (string, error) {
+	args := m.Called(ctx, uid, id); return args.String(0), args.Error(1)
+}
+
+// MockNoteTypeService
+type MockNoteTypeService struct{ mock.Mock }
+func (m *MockNoteTypeService) Create(ctx context.Context, uid int64, n, fj, ctj, tj string) (*notetype.NoteType, error) {
+	args := m.Called(ctx, uid, n, fj, ctj, tj); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*notetype.NoteType), args.Error(1)
+}
+func (m *MockNoteTypeService) FindByID(ctx context.Context, uid, id int64) (*notetype.NoteType, error) {
+	args := m.Called(ctx, uid, id); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*notetype.NoteType), args.Error(1)
+}
+func (m *MockNoteTypeService) FindByUserID(ctx context.Context, uid int64, s string) ([]*notetype.NoteType, error) {
+	args := m.Called(ctx, uid, s); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*notetype.NoteType), args.Error(1)
+}
+func (m *MockNoteTypeService) Update(ctx context.Context, uid, id int64, n, fj, ctj, tj string) (*notetype.NoteType, error) {
+	args := m.Called(ctx, uid, id, n, fj, ctj, tj); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*notetype.NoteType), args.Error(1)
+}
+func (m *MockNoteTypeService) Delete(ctx context.Context, uid, id int64) error {
+	return m.Called(ctx, uid, id).Error(0)
+}
+
+// MockReviewService
+type MockReviewService struct{ mock.Mock }
+func (m *MockReviewService) Create(ctx context.Context, uid, cid int64, r, tms int) (*review.Review, error) {
+	args := m.Called(ctx, uid, cid, r, tms); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*review.Review), args.Error(1)
+}
+func (m *MockReviewService) FindByID(ctx context.Context, uid, id int64) (*review.Review, error) {
+	args := m.Called(ctx, uid, id); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*review.Review), args.Error(1)
+}
+func (m *MockReviewService) FindByCardID(ctx context.Context, uid, cid int64) ([]*review.Review, error) {
+	args := m.Called(ctx, uid, cid); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*review.Review), args.Error(1)
+}
+func (m *MockReviewService) DeleteByCardID(ctx context.Context, uid, cid int64) error {
+	return m.Called(ctx, uid, cid).Error(0)
+}
+
 // MockExportService
 type MockExportService struct{ mock.Mock }
 func (m *MockExportService) ExportCollection(ctx context.Context, uid int64) (io.Reader, int64, error) {
@@ -606,3 +670,30 @@ func (m *MockJobScheduler) Schedule(cronExpr string, jobType string, payload map
 }
 func (m *MockJobScheduler) Start() { m.Called() }
 func (m *MockJobScheduler) Stop()  { m.Called() }
+
+// MockStorageRepository
+type MockStorageRepository struct{ mock.Mock }
+func (m *MockStorageRepository) Upload(ctx context.Context, f io.Reader, p string, ct string) (*secondary.FileInfo, error) {
+	args := m.Called(ctx, f, p, ct); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).(*secondary.FileInfo), args.Error(1)
+}
+func (m *MockStorageRepository) Download(ctx context.Context, p string) ([]byte, error) {
+	args := m.Called(ctx, p); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]byte), args.Error(1)
+}
+func (m *MockStorageRepository) Delete(ctx context.Context, p string) error {
+	return m.Called(ctx, p).Error(0)
+}
+func (m *MockStorageRepository) Exists(ctx context.Context, p string) (bool, error) {
+	args := m.Called(ctx, p); return args.Bool(0), args.Error(1)
+}
+func (m *MockStorageRepository) List(ctx context.Context, pr string) ([]*secondary.FileInfo, error) {
+	args := m.Called(ctx, pr); if args.Get(0) == nil { return nil, args.Error(1) }; return args.Get(0).([]*secondary.FileInfo), args.Error(1)
+}
+func (m *MockStorageRepository) GetURL(ctx context.Context, p string, e time.Duration) (string, error) {
+	args := m.Called(ctx, p, e); return args.String(0), args.Error(1)
+}
+func (m *MockStorageRepository) Copy(ctx context.Context, s, d string) error {
+	return m.Called(ctx, s, d).Error(0)
+}
+func (m *MockStorageRepository) Move(ctx context.Context, s, d string) error {
+	return m.Called(ctx, s, d).Error(0)
+}

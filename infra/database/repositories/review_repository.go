@@ -321,6 +321,25 @@ func (r *ReviewRepository) FindByDateRange(ctx context.Context, userID int64, st
 	return reviews, nil
 }
 
+// DeleteByCardID deletes all reviews for a specific card, validating ownership
+func (r *ReviewRepository) DeleteByCardID(ctx context.Context, userID int64, cardID int64) error {
+	query := `
+		DELETE FROM reviews
+		WHERE card_id = $1 AND EXISTS (
+			SELECT 1 FROM cards c
+			INNER JOIN decks d ON c.deck_id = d.id
+			WHERE c.id = reviews.card_id AND d.user_id = $2 AND d.deleted_at IS NULL
+		)
+	`
+
+	_, err := r.db.ExecContext(ctx, query, cardID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete reviews by card ID: %w", err)
+	}
+
+	return nil
+}
+
 // Ensure ReviewRepository implements IReviewRepository
 var _ secondary.IReviewRepository = (*ReviewRepository)(nil)
 

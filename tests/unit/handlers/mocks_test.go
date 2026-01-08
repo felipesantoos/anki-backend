@@ -201,6 +201,11 @@ func (m *MockCardService) FindAll(ctx context.Context, userID int64, filters car
 	return args.Get(0).([]*card.Card), args.Int(1), args.Error(2)
 }
 
+func (m *MockCardService) Reset(ctx context.Context, userID int64, id int64, resetType string) error {
+	args := m.Called(ctx, userID, id, resetType)
+	return args.Error(0)
+}
+
 // MockReviewService is a mock implementation of IReviewService
 type MockReviewService struct {
 	mock.Mock
@@ -228,6 +233,11 @@ func (m *MockReviewService) FindByCardID(ctx context.Context, userID int64, card
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*review.Review), args.Error(1)
+}
+
+func (m *MockReviewService) DeleteByCardID(ctx context.Context, userID int64, cardID int64) error {
+	args := m.Called(ctx, userID, cardID)
+	return args.Error(0)
 }
 
 // MockNoteService is a mock implementation of INoteService

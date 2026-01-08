@@ -1278,3 +1278,160 @@ func TestCardHandler_FindAll(t *testing.T) {
 		zeroTotalMockSvc.AssertExpectations(t)
 	})
 }
+
+func TestCardHandler_Reset(t *testing.T) {
+	e := echo.New()
+	e.Validator = middlewares.NewCustomValidator()
+	userID := int64(1)
+	cardID := int64(123)
+
+	t.Run("Success - type new", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		resetReq := request.ResetCardRequest{Type: "new"}
+		b, _ := json.Marshal(resetReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/reset")
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Reset", mock.Anything, userID, cardID, "new").Return(nil).Once()
+
+		if assert.NoError(t, handler.Reset(c)) {
+			assert.Equal(t, http.StatusNoContent, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Success - type forget", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		resetReq := request.ResetCardRequest{Type: "forget"}
+		b, _ := json.Marshal(resetReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/reset")
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Reset", mock.Anything, userID, cardID, "forget").Return(nil).Once()
+
+		if assert.NoError(t, handler.Reset(c)) {
+			assert.Equal(t, http.StatusNoContent, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID format", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/abc/reset", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("abc")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Reset(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Invalid card ID format", httpErr.Message)
+		}
+	})
+
+	t.Run("Invalid ID (zero)", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/0/reset", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("0")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Reset(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+	})
+
+	t.Run("Validation error - invalid reset type", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		resetReq := map[string]string{"type": "invalid"}
+		b, _ := json.Marshal(resetReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Reset(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+		}
+	})
+
+	t.Run("Card not found", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		resetReq := request.ResetCardRequest{Type: "new"}
+		b, _ := json.Marshal(resetReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Reset", mock.Anything, userID, cardID, "new").Return(ownership.ErrResourceNotFound).Once()
+
+		err := handler.Reset(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+	})
+
+	t.Run("Service error", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		resetReq := request.ResetCardRequest{Type: "new"}
+		b, _ := json.Marshal(resetReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Reset", mock.Anything, userID, cardID, "new").Return(errors.New("service error")).Once()
+
+		err := handler.Reset(c)
+		assert.Error(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+}

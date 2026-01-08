@@ -10,6 +10,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
+	"github.com/felipesantos/anki-backend/pkg/database"
 )
 
 // CardService implements ICardService
@@ -19,6 +20,7 @@ type CardService struct {
 	deckService     primary.IDeckService
 	noteTypeService primary.INoteTypeService
 	reviewService   primary.IReviewService
+	tm              database.TransactionManager
 }
 
 // NewCardService creates a new CardService instance
@@ -28,6 +30,7 @@ func NewCardService(
 	deckService primary.IDeckService,
 	noteTypeService primary.INoteTypeService,
 	reviewService primary.IReviewService,
+	tm database.TransactionManager,
 ) primary.ICardService {
 	return &CardService{
 		cardRepo:        cardRepo,
@@ -35,6 +38,7 @@ func NewCardService(
 		deckService:     deckService,
 		noteTypeService: noteTypeService,
 		reviewService:   reviewService,
+		tm:              tm,
 	}
 }
 
@@ -265,4 +269,28 @@ func (s *CardService) GetInfo(ctx context.Context, userID int64, cardID int64) (
 		IntervalHistory: intervalHistory,
 		ReviewHistory:   reviewHistory,
 	}, nil
+}
+
+// Reset resets a card (type can be "new" or "forget")
+func (s *CardService) Reset(ctx context.Context, userID int64, id int64, resetType string) error {
+	return s.tm.WithTransaction(ctx, func(txCtx context.Context) error {
+		c, err := s.cardRepo.FindByID(txCtx, userID, id)
+		if err != nil {
+			return err
+		}
+		if c == nil {
+			return fmt.Errorf("card not found")
+		}
+
+		if resetType == "forget" {
+			c.Forget()
+			if err := s.reviewService.DeleteByCardID(txCtx, userID, id); err != nil {
+				return fmt.Errorf("failed to delete reviews: %w", err)
+			}
+		} else {
+			c.Reset(true, true)
+		}
+
+		return s.cardRepo.Update(txCtx, userID, id, c)
+	})
 }

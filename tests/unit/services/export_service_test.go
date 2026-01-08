@@ -1,14 +1,12 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
@@ -343,7 +341,6 @@ func TestExportService_ExportNotes_MediaExtraction(t *testing.T) {
 			WithMimeType("image/jpeg").
 			WithStoragePath("/path/to/image.jpg").
 			WithCreatedAt(time.Now()).
-			WithUpdatedAt(time.Now()).
 			Build()
 
 		mockNoteRepo.On("FindByIDs", ctx, userID, noteIDs).Return(notes, nil).Once()

@@ -873,6 +873,56 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		json.Unmarshal(rec.Body.Bytes(), &errorRes)
 		assert.Contains(t, errorRes.Message, "Flag")
+
+		// Reset Card (type new)
+		resetReq := request.ResetCardRequest{Type: "new"}
+		b, _ = json.Marshal(resetReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Test: POST card reset with invalid ID format
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/invalid/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Invalid card ID format", errorRes.Message)
+
+		// Test: POST card reset with zero ID
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/0/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card ID must be greater than 0", errorRes.Message)
+
+		// Test: POST card reset with non-existent card (404)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/99999/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card not found", errorRes.Message)
+
+		// Test: POST card reset with invalid reset type
+		invalidResetReq := map[string]string{"type": "invalid"}
+		invalidB, _ = json.Marshal(invalidResetReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/reset", bytes.NewReader(invalidB))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
 	t.Run("Reviews", func(t *testing.T) {
@@ -909,6 +959,25 @@ func TestStudy_Integration(t *testing.T) {
 		var reviewsRes []response.ReviewResponse
 		json.Unmarshal(rec.Body.Bytes(), &reviewsRes)
 		assert.NotEmpty(t, reviewsRes)
+
+		// Reset Card (type forget) - should remove reviews
+		resetForgetReq := request.ResetCardRequest{Type: "forget"}
+		b, _ = json.Marshal(resetForgetReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/reset", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify reviews are gone
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/reviews", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &reviewsRes)
+		assert.Empty(t, reviewsRes)
 	})
 
 	t.Run("FlexibleDeckDeletion", func(t *testing.T) {

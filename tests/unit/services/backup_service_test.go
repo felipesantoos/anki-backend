@@ -11,7 +11,9 @@ import (
 
 func TestBackupService_Create(t *testing.T) {
 	mockRepo := new(MockBackupRepository)
-	service := backupSvc.NewBackupService(mockRepo)
+	mockExportSvc := new(MockExportService)
+	mockStorageRepo := new(MockStorageRepository)
+	service := backupSvc.NewBackupService(mockRepo, mockExportSvc, mockStorageRepo)
 	ctx := context.Background()
 	userID := int64(1)
 

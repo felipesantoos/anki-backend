@@ -99,7 +99,8 @@ func GetCardService() primary.ICardService {
 	deckService := GetDeckService()
 	noteTypeService := GetNoteTypeService()
 	reviewService := GetReviewService()
-	return cardService.NewCardService(cardRepo, noteService, deckService, noteTypeService, reviewService)
+	tm := database.NewTransactionManager(dbRepo.GetDB())
+	return cardService.NewCardService(cardRepo, noteService, deckService, noteTypeService, reviewService, tm)
 }
 
 // GetReviewService returns a fresh instance of ReviewService

@@ -127,3 +127,7 @@ func (s *ReviewService) FindByCardID(ctx context.Context, userID int64, cardID i
 	return s.reviewRepo.FindByCardID(ctx, userID, cardID)
 }
 
+// DeleteByCardID deletes all reviews for a card
+func (s *ReviewService) DeleteByCardID(ctx context.Context, userID int64, cardID int64) error {
+	return s.reviewRepo.DeleteByCardID(ctx, userID, cardID)
+}

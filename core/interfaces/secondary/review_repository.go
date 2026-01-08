@@ -37,5 +37,8 @@ type IReviewRepository interface {
 
 	// FindByDateRange finds all reviews within a date range for a user
 	FindByDateRange(ctx context.Context, userID int64, startDate time.Time, endDate time.Time) ([]*review.Review, error)
+
+	// DeleteByCardID deletes all reviews for a specific card, validating ownership
+	DeleteByCardID(ctx context.Context, userID int64, cardID int64) error
 }
 

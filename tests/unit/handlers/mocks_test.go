@@ -175,6 +175,14 @@ func (m *MockCardService) SetFlag(ctx context.Context, userID int64, id int64, f
 	return args.Error(0)
 }
 
+func (m *MockCardService) GetInfo(ctx context.Context, userID int64, cardID int64) (*card.CardInfo, error) {
+	args := m.Called(ctx, userID, cardID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*card.CardInfo), args.Error(1)
+}
+
 func (m *MockCardService) Delete(ctx context.Context, userID int64, id int64) error {
 	args := m.Called(ctx, userID, id)
 	return args.Error(0)

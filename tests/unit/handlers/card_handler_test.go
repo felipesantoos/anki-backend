@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -229,6 +230,7 @@ func TestCardHandler_Suspend(t *testing.T) {
 
 func TestCardHandler_SetFlag(t *testing.T) {
 	e := echo.New()
+	e.Validator = middlewares.NewCustomValidator()
 	mockSvc := new(MockCardService)
 	handler := handlers.NewCardHandler(mockSvc)
 	userID := int64(1)
@@ -250,6 +252,162 @@ func TestCardHandler_SetFlag(t *testing.T) {
 
 		if assert.NoError(t, handler.SetFlag(c)) {
 			assert.Equal(t, http.StatusNoContent, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID format (non-numeric)", func(t *testing.T) {
+		reqBody := request.SetCardFlagRequest{Flag: 1}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/flag")
+		c.SetParamNames("id")
+		c.SetParamValues("invalid")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.SetFlag(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Invalid card ID format", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Invalid ID (zero)", func(t *testing.T) {
+		reqBody := request.SetCardFlagRequest{Flag: 1}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/flag")
+		c.SetParamNames("id")
+		c.SetParamValues("0")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.SetFlag(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Invalid ID (negative)", func(t *testing.T) {
+		reqBody := request.SetCardFlagRequest{Flag: 1}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/flag")
+		c.SetParamNames("id")
+		c.SetParamValues("-1")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.SetFlag(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Card not found (404)", func(t *testing.T) {
+		reqBody := request.SetCardFlagRequest{Flag: 1}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/flag")
+		c.SetParamNames("id")
+		c.SetParamValues("999")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("SetFlag", mock.Anything, userID, int64(999), 1).Return(ownership.ErrResourceNotFound).Once()
+
+		err := handler.SetFlag(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid flag value (domain error)", func(t *testing.T) {
+		// Use flag 9 to bypass DTO validation (which allows 0-7) and test domain error
+		// Actually, DTO validation will catch flag=9, so let's use a flag that passes DTO validation
+		// but would fail domain validation. Since DTO already validates 0-7, we need to mock
+		// a scenario where the service returns ErrInvalidFlag anyway (edge case)
+		reqBody := request.SetCardFlagRequest{Flag: 7} // Valid DTO value
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/flag")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		// Simulate service returning domain error (edge case where domain validation might fail)
+		mockSvc.On("SetFlag", mock.Anything, userID, cardID, 7).Return(card.ErrInvalidFlag).Once()
+
+		err := handler.SetFlag(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Flag must be between 0 and 7", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Service error handling", func(t *testing.T) {
+		reqBody := request.SetCardFlagRequest{Flag: 1}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/flag")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("SetFlag", mock.Anything, userID, cardID, 1).Return(errors.New("database error")).Once()
+
+		err := handler.SetFlag(c)
+		assert.Error(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Cross-user isolation (returns 404)", func(t *testing.T) {
+		reqBody := request.SetCardFlagRequest{Flag: 1}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/flag")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, int64(99)) // Different user ID
+
+		mockSvc.On("SetFlag", mock.Anything, int64(99), cardID, 1).Return(ownership.ErrResourceNotFound).Once()
+
+		err := handler.SetFlag(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
 		}
 		mockSvc.AssertExpectations(t)
 	})

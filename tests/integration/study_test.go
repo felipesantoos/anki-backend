@@ -723,6 +723,48 @@ func TestStudy_Integration(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Test: POST card flag with invalid ID format
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/invalid/flag", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Invalid card ID format", errorRes.Message)
+
+		// Test: POST card flag with zero ID
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/0/flag", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card ID must be greater than 0", errorRes.Message)
+
+		// Test: POST card flag with non-existent card (404)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/99999/flag", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card not found", errorRes.Message)
+
+		// Test: POST card flag with invalid flag value (8)
+		invalidFlagReq := request.SetCardFlagRequest{Flag: 8}
+		invalidB, _ := json.Marshal(invalidFlagReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/flag", bytes.NewReader(invalidB))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Contains(t, errorRes.Message, "Flag")
 	})
 
 	t.Run("Reviews", func(t *testing.T) {

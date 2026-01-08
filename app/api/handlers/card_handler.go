@@ -300,11 +300,25 @@ func (h *CardHandler) Unbury(c echo.Context) error {
 // @Param id path int true "Card ID"
 // @Param request body request.SetCardFlagRequest true "Flag request"
 // @Success 204 "No Content"
+// @Failure 400 {object} response.ErrorResponse "Invalid card ID or flag value"
+// @Failure 404 {object} response.ErrorResponse "Card not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/cards/{id}/flag [post]
 func (h *CardHandler) SetFlag(c echo.Context) error {
 	ctx := c.Request().Context()
 	userID := middlewares.GetUserID(c)
-	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	// Parse and validate ID parameter
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid card ID format")
+	}
+
+	// Validate that ID is positive
+	if id <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "Card ID must be greater than 0")
+	}
 
 	var req request.SetCardFlagRequest
 	if err := c.Bind(&req); err != nil {
@@ -317,7 +331,7 @@ func (h *CardHandler) SetFlag(c echo.Context) error {
 	}
 
 	if err := h.service.SetFlag(ctx, userID, id, req.Flag); err != nil {
-		return err
+		return handleCardError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -346,6 +360,11 @@ func (h *CardHandler) Delete(c echo.Context) error {
 func handleCardError(err error) error {
 	if err == nil {
 		return nil
+	}
+
+	// Check for invalid flag error
+	if errors.Is(err, card.ErrInvalidFlag) {
+		return echo.NewHTTPError(http.StatusBadRequest, "Flag must be between 0 and 7")
 	}
 
 	// Check for resource not found (card doesn't exist or user doesn't have access)

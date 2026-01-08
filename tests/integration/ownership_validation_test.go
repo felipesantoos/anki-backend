@@ -179,6 +179,13 @@ func TestOwnership_Validation(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to suspend User A's card")
 
+		// User B tries to Unsuspend User A's card
+		req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/cards/%d/unsuspend", cardA.ID), nil)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to unsuspend User A's card")
+
 		// User B tries to SetFlag on User A's card
 		flagReq := request.SetCardFlagRequest{Flag: 1}
 		b, _ = json.Marshal(flagReq)

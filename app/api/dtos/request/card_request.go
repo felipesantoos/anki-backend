@@ -69,3 +69,9 @@ type ResetCardRequest struct {
 	// Type of reset ("new" to reset state, "forget" to reset state and remove history)
 	Type string `json:"type" example:"new" validate:"required,oneof=new forget"`
 }
+
+// SetCardDueDateRequest represents the request payload to set a due date on a card
+type SetCardDueDateRequest struct {
+	// Next review date (Unix timestamp in milliseconds)
+	Due int64 `json:"due" example:"1705324200000" validate:"required,min=0"`
+}

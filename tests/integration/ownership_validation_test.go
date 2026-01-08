@@ -219,6 +219,16 @@ func TestOwnership_Validation(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to reset User A's card")
+
+		// User B tries to set Due Date on User A's card
+		dueReq := request.SetCardDueDateRequest{Due: 1705324200000}
+		b, _ = json.Marshal(dueReq)
+		req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/cards/%d/due", cardA.ID), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to set due date on User A's card")
 	})
 
 	// --- Media Isolation ---

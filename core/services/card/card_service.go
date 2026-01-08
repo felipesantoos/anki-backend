@@ -294,3 +294,17 @@ func (s *CardService) Reset(ctx context.Context, userID int64, id int64, resetTy
 		return s.cardRepo.Update(txCtx, userID, id, c)
 	})
 }
+
+// SetDueDate manually sets the due date for a card
+func (s *CardService) SetDueDate(ctx context.Context, userID int64, id int64, due int64) error {
+	c, err := s.cardRepo.FindByID(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if c == nil {
+		return fmt.Errorf("card not found")
+	}
+
+	c.SetDue(due)
+	return s.cardRepo.Update(ctx, userID, id, c)
+}

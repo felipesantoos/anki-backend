@@ -457,6 +457,51 @@ func (h *CardHandler) Reset(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// SetDueDate handles POST /api/v1/cards/:id/due
+// @Summary Set card due date
+// @Description Manually sets the next review date for a card
+// @Tags cards
+// @Security BearerAuth
+// @Param id path int true "Card ID"
+// @Param request body request.SetCardDueDateRequest true "Due date request"
+// @Success 204 "No Content"
+// @Failure 400 {object} response.ErrorResponse "Invalid card ID or due date"
+// @Failure 404 {object} response.ErrorResponse "Card not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/cards/{id}/due [post]
+func (h *CardHandler) SetDueDate(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	// Parse and validate ID parameter
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid card ID format")
+	}
+
+	// Validate that ID is positive
+	if id <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "Card ID must be greater than 0")
+	}
+
+	var req request.SetCardDueDateRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request using validator middleware
+	if err := c.Validate(&req); err != nil {
+		return err
+	}
+
+	if err := h.service.SetDueDate(ctx, userID, id, req.Due); err != nil {
+		return handleCardError(err)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 // handleCardError maps service-level card errors to HTTP errors
 func handleCardError(err error) error {
 	if err == nil {

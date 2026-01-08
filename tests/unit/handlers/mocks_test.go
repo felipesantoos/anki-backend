@@ -206,6 +206,11 @@ func (m *MockCardService) Reset(ctx context.Context, userID int64, id int64, res
 	return args.Error(0)
 }
 
+func (m *MockCardService) SetDueDate(ctx context.Context, userID int64, id int64, due int64) error {
+	args := m.Called(ctx, userID, id, due)
+	return args.Error(0)
+}
+
 // MockReviewService is a mock implementation of IReviewService
 type MockReviewService struct {
 	mock.Mock

@@ -1435,3 +1435,138 @@ func TestCardHandler_Reset(t *testing.T) {
 		mockSvc.AssertExpectations(t)
 	})
 }
+
+func TestCardHandler_SetDueDate(t *testing.T) {
+	e := echo.New()
+	e.Validator = middlewares.NewCustomValidator()
+	userID := int64(1)
+	cardID := int64(123)
+	due := int64(1705324200000)
+
+	t.Run("Success", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		dueReq := request.SetCardDueDateRequest{Due: due}
+		b, _ := json.Marshal(dueReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/due", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/due")
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("SetDueDate", mock.Anything, userID, cardID, due).Return(nil).Once()
+
+		if assert.NoError(t, handler.SetDueDate(c)) {
+			assert.Equal(t, http.StatusNoContent, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID format", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/abc/due", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("abc")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.SetDueDate(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Invalid card ID format", httpErr.Message)
+		}
+	})
+
+	t.Run("Invalid ID (zero)", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/0/due", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("0")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.SetDueDate(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+	})
+
+	t.Run("Validation error - negative due date", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		dueReq := map[string]interface{}{"due": -1}
+		b, _ := json.Marshal(dueReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/due", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.SetDueDate(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+		}
+	})
+
+	t.Run("Card not found", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		dueReq := request.SetCardDueDateRequest{Due: due}
+		b, _ := json.Marshal(dueReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/due", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("SetDueDate", mock.Anything, userID, cardID, due).Return(ownership.ErrResourceNotFound).Once()
+
+		err := handler.SetDueDate(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+	})
+
+	t.Run("Service error", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		dueReq := request.SetCardDueDateRequest{Due: due}
+		b, _ := json.Marshal(dueReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/123/due", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("SetDueDate", mock.Anything, userID, cardID, due).Return(errors.New("service error")).Once()
+
+		err := handler.SetDueDate(c)
+		assert.Error(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+}

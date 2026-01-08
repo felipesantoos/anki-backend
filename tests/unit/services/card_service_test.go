@@ -360,3 +360,39 @@ func TestCardService_Reset(t *testing.T) {
 		assert.Contains(t, err.Error(), "card not found")
 	})
 }
+
+func TestCardService_SetDueDate(t *testing.T) {
+	mockRepo := new(MockCardRepository)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
+
+	ctx := context.Background()
+	userID := int64(1)
+	cardID := int64(123)
+	due := int64(1705324200000)
+
+	t.Run("Success", func(t *testing.T) {
+		c, _ := card.NewBuilder().WithID(cardID).WithDeckID(1).WithDue(0).Build()
+
+		mockRepo.On("FindByID", ctx, userID, cardID).Return(c, nil).Once()
+		mockRepo.On("Update", ctx, userID, cardID, mock.Anything).Return(nil).Once()
+
+		err := service.SetDueDate(ctx, userID, cardID, due)
+		assert.NoError(t, err)
+		assert.Equal(t, due, c.GetDue())
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Card not found", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, cardID).Return(nil, nil).Once()
+
+		err := service.SetDueDate(ctx, userID, cardID, due)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "card not found")
+		mockRepo.AssertExpectations(t)
+	})
+}

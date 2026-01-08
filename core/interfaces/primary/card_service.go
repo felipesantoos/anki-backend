@@ -50,4 +50,7 @@ type ICardService interface {
 
 	// Reset resets a card (type can be "new" or "forget")
 	Reset(ctx context.Context, userID int64, id int64, resetType string) error
+
+	// SetDueDate manually sets the due date for a card
+	SetDueDate(ctx context.Context, userID int64, id int64, due int64) error
 }

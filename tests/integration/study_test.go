@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -978,6 +979,47 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		json.Unmarshal(rec.Body.Bytes(), &reviewsRes)
 		assert.Empty(t, reviewsRes)
+
+		// Set Due Date
+		due := time.Now().Add(24 * time.Hour).UnixMilli()
+		dueReq := request.SetCardDueDateRequest{Due: due}
+		b, _ = json.Marshal(dueReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/due", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify due date updated in DB
+		var currentDue int64
+		err = db.DB.QueryRow("SELECT due FROM cards WHERE id = $1", cardID).Scan(&currentDue)
+		require.NoError(t, err)
+		assert.Equal(t, due, currentDue)
+
+		// Test: POST card due with invalid ID format
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/invalid/due", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+		// Test: POST card due with zero ID
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/0/due", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+		// Test: POST card due with non-existent card (404)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/99999/due", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
 	})
 
 	t.Run("FlexibleDeckDeletion", func(t *testing.T) {

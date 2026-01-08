@@ -15,26 +15,26 @@ var (
 // Card represents a card entity in the domain
 // A card is generated from a note and represents a single question/answer pair
 type Card struct {
-	id            int64
-	noteID        int64
-	cardTypeID    int
-	deckID        int64
-	homeDeckID    *int64
-	due           int64 // Timestamp in milliseconds
-	interval      int   // Days (or negative seconds for learning)
-	ease          int   // Permille (2500 = 2.5x)
-	lapses        int
-	reps          int
-	state         valueobjects.CardState
-	position      int
-	flag          int // 0-7
-	suspended     bool
-	buried        bool
-	stability     *float64 // FSRS stability (in days)
-	difficulty    *float64 // FSRS difficulty (0.0-1.0)
-	lastReviewAt  *time.Time
-	createdAt     time.Time
-	updatedAt     time.Time
+	id           int64
+	noteID       int64
+	cardTypeID   int
+	deckID       int64
+	homeDeckID   *int64
+	due          int64 // Timestamp in milliseconds
+	interval     int   // Days (or negative seconds for learning)
+	ease         int   // Permille (2500 = 2.5x)
+	lapses       int
+	reps         int
+	state        valueobjects.CardState
+	position     int
+	flag         int // 0-7
+	suspended    bool
+	buried       bool
+	stability    *float64 // FSRS stability (in days)
+	difficulty   *float64 // FSRS difficulty (0.0-1.0)
+	lastReviewAt *time.Time
+	createdAt    time.Time
+	updatedAt    time.Time
 }
 
 // Getters
@@ -141,6 +141,7 @@ func (c *Card) SetHomeDeckID(homeDeckID *int64) {
 
 func (c *Card) SetDue(due int64) {
 	c.due = due
+	c.updatedAt = time.Now()
 }
 
 func (c *Card) SetInterval(interval int) {

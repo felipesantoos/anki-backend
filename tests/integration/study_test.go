@@ -691,6 +691,33 @@ func TestStudy_Integration(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 
+		// Test: POST card suspend with invalid ID format
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/invalid/suspend", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Invalid card ID format", errorRes.Message)
+
+		// Test: POST card suspend with zero ID
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/0/suspend", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card ID must be greater than 0", errorRes.Message)
+
+		// Test: POST card suspend with non-existent card (404)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/99999/suspend", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card not found", errorRes.Message)
+
 		// Unsuspend Card
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/unsuspend", nil)
 		req.Header.Set("Authorization", "Bearer "+token)

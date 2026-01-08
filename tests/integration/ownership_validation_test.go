@@ -188,6 +188,20 @@ func TestOwnership_Validation(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to set flag on User A's card")
+
+		// User B tries to Bury User A's card
+		req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/cards/%d/bury", cardA.ID), nil)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to bury User A's card")
+
+		// User B tries to Unbury User A's card
+		req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/cards/%d/unbury", cardA.ID), nil)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to unbury User A's card")
 	})
 
 	// --- Media Isolation ---

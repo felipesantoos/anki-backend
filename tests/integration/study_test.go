@@ -705,12 +705,66 @@ func TestStudy_Integration(t *testing.T) {
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 
+		// Test: POST card bury with invalid ID format
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/invalid/bury", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Invalid card ID format", errorRes.Message)
+
+		// Test: POST card bury with zero ID
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/0/bury", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card ID must be greater than 0", errorRes.Message)
+
+		// Test: POST card bury with non-existent card (404)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/99999/bury", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card not found", errorRes.Message)
+
 		// Unbury Card
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/"+strconv.FormatInt(cardID, 10)+"/unbury", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Test: POST card unbury with invalid ID format
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/invalid/unbury", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Invalid card ID format", errorRes.Message)
+
+		// Test: POST card unbury with zero ID
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/0/unbury", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card ID must be greater than 0", errorRes.Message)
+
+		// Test: POST card unbury with non-existent card (404)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/99999/unbury", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		json.Unmarshal(rec.Body.Bytes(), &errorRes)
+		assert.Equal(t, "Card not found", errorRes.Message)
 
 		// Set Flag
 		flagReq := request.SetCardFlagRequest{Flag: 1}

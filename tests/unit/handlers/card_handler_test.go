@@ -413,6 +413,276 @@ func TestCardHandler_SetFlag(t *testing.T) {
 	})
 }
 
+func TestCardHandler_Bury(t *testing.T) {
+	e := echo.New()
+	mockSvc := new(MockCardService)
+	handler := handlers.NewCardHandler(mockSvc)
+	userID := int64(1)
+	cardID := int64(10)
+
+	t.Run("Success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/bury")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Bury", mock.Anything, userID, cardID).Return(nil).Once()
+
+		if assert.NoError(t, handler.Bury(c)) {
+			assert.Equal(t, http.StatusNoContent, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID format (non-numeric)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/bury")
+		c.SetParamNames("id")
+		c.SetParamValues("invalid")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Bury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Invalid card ID format", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Invalid ID (zero)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/bury")
+		c.SetParamNames("id")
+		c.SetParamValues("0")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Bury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Invalid ID (negative)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/bury")
+		c.SetParamNames("id")
+		c.SetParamValues("-1")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Bury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Card not found (404)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/bury")
+		c.SetParamNames("id")
+		c.SetParamValues("999")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Bury", mock.Anything, userID, int64(999)).Return(ownership.ErrResourceNotFound).Once()
+
+		err := handler.Bury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Service error handling", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/bury")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Bury", mock.Anything, userID, cardID).Return(errors.New("database error")).Once()
+
+		err := handler.Bury(c)
+		assert.Error(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Cross-user isolation (returns 404)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/bury")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, int64(99)) // Different user ID
+
+		mockSvc.On("Bury", mock.Anything, int64(99), cardID).Return(ownership.ErrResourceNotFound).Once()
+
+		err := handler.Bury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestCardHandler_Unbury(t *testing.T) {
+	e := echo.New()
+	mockSvc := new(MockCardService)
+	handler := handlers.NewCardHandler(mockSvc)
+	userID := int64(1)
+	cardID := int64(10)
+
+	t.Run("Success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/unbury")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Unbury", mock.Anything, userID, cardID).Return(nil).Once()
+
+		if assert.NoError(t, handler.Unbury(c)) {
+			assert.Equal(t, http.StatusNoContent, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID format (non-numeric)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/unbury")
+		c.SetParamNames("id")
+		c.SetParamValues("invalid")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Unbury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Invalid card ID format", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Invalid ID (zero)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/unbury")
+		c.SetParamNames("id")
+		c.SetParamValues("0")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Unbury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Invalid ID (negative)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/unbury")
+		c.SetParamNames("id")
+		c.SetParamValues("-1")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Unbury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t) // Service should not be called
+	})
+
+	t.Run("Card not found (404)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/unbury")
+		c.SetParamNames("id")
+		c.SetParamValues("999")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Unbury", mock.Anything, userID, int64(999)).Return(ownership.ErrResourceNotFound).Once()
+
+		err := handler.Unbury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Service error handling", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/unbury")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Unbury", mock.Anything, userID, cardID).Return(errors.New("database error")).Once()
+
+		err := handler.Unbury(c)
+		assert.Error(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Cross-user isolation (returns 404)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/unbury")
+		c.SetParamNames("id")
+		c.SetParamValues("10")
+		c.Set(middlewares.UserIDContextKey, int64(99)) // Different user ID
+
+		mockSvc.On("Unbury", mock.Anything, int64(99), cardID).Return(ownership.ErrResourceNotFound).Once()
+
+		err := handler.Unbury(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+}
+
 func TestCardHandler_FindAll(t *testing.T) {
 	e := echo.New()
 	e.Validator = middlewares.NewCustomValidator()

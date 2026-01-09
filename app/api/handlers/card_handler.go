@@ -104,6 +104,54 @@ func (h *CardHandler) FindAll(c echo.Context) error {
 	})
 }
 
+// FindLeeches handles GET /api/v1/cards/leeches
+// @Summary List leech cards
+// @Description List cards that are difficult to memorize (leeches)
+// @Tags cards
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number (default: 1)"
+// @Param limit query int false "Items per page (default: 20, max: 100)"
+// @Success 200 {object} response.ListCardsResponse
+// @Router /api/v1/cards/leeches [get]
+func (h *CardHandler) FindLeeches(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page <= 0 {
+		page = 1
+	}
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+
+	cards, total, err := h.service.FindLeeches(ctx, userID, limit, offset)
+	if err != nil {
+		return handleCardError(err)
+	}
+
+	totalPages := (total + limit - 1) / limit
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	return c.JSON(http.StatusOK, response.ListCardsResponse{
+		Data: mappers.ToCardResponseList(cards),
+		Pagination: response.PaginationResponse{
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	})
+}
+
 // FindByID handles GET /api/v1/cards/:id
 // @Summary Get card by ID
 // @Tags cards

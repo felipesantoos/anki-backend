@@ -1240,6 +1240,54 @@ func TestStudy_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &fdRes)
 		assert.Equal(t, updateReq.Name, fdRes.Name)
 	})
+
+	t.Run("Leeches", func(t *testing.T) {
+		// Create deck with leech threshold
+		deckReq := request.CreateDeckRequest{
+			Name:        "Leech Test Deck",
+			OptionsJSON: `{"leech_threshold": 5}`,
+		}
+		deck := createDeck(t, e, token, deckReq)
+
+		// Create Note Type
+		var noteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Leech Test Type', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		require.NoError(t, err)
+
+		// Create a card that is a leech (lapses >= 5 and 'leech' tag)
+		var noteID int64
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, note_type_id, fields_json, guid, tags) VALUES ($1, $2, '{}', $3, $4) RETURNING id", loginRes.User.ID, noteTypeID, "550e8400-e29b-41d4-a716-446655440005", `{"leech"}`).Scan(&noteID)
+		require.NoError(t, err)
+
+		validDue := time.Now().UnixMilli()
+		var cardID int64
+		err = db.DB.QueryRow("INSERT INTO cards (deck_id, note_id, card_type_id, state, lapses, due) VALUES ($1, $2, 0, 'review', 10, $3) RETURNING id", deck.ID, noteID, validDue).Scan(&cardID)
+		require.NoError(t, err)
+
+		// Create a card that is NOT a leech (lapses < 5 even if it has 'leech' tag)
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, note_type_id, fields_json, guid, tags) VALUES ($1, $2, '{}', $3, $4) RETURNING id", loginRes.User.ID, noteTypeID, "550e8400-e29b-41d4-a716-446655440006", `{"leech"}`).Scan(&noteID)
+		require.NoError(t, err)
+		err = db.DB.QueryRow("INSERT INTO cards (deck_id, note_id, card_type_id, state, lapses, due) VALUES ($1, $2, 0, 'review', 2, $3) RETURNING id", deck.ID, noteID, validDue).Scan(&cardID)
+		require.NoError(t, err)
+
+		// Create a card that is NOT a leech (lapses >= 5 but NO 'leech' tag)
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, note_type_id, fields_json, guid, tags) VALUES ($1, $2, '{}', $3, $4) RETURNING id", loginRes.User.ID, noteTypeID, "550e8400-e29b-41d4-a716-446655440007", `{}`).Scan(&noteID)
+		require.NoError(t, err)
+		err = db.DB.QueryRow("INSERT INTO cards (deck_id, note_id, card_type_id, state, lapses, due) VALUES ($1, $2, 0, 'review', 10, $3) RETURNING id", deck.ID, noteID, validDue).Scan(&cardID)
+		require.NoError(t, err)
+
+		// List Leeches
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/leeches", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var res response.ListCardsResponse
+		json.Unmarshal(rec.Body.Bytes(), &res)
+		assert.Len(t, res.Data, 1)
+		assert.Equal(t, 10, res.Data[0].Lapses)
+	})
 }
 
 // Helper function to create a deck and return its response

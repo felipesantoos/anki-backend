@@ -206,6 +206,14 @@ func (m *MockCardRepository) FindAll(ctx context.Context, uid int64, f card.Card
 	}
 	return cards, args.Int(1), args.Error(2)
 }
+func (m *MockCardRepository) FindLeeches(ctx context.Context, uid int64, limit, offset int) ([]*card.Card, int, error) {
+	args := m.Called(ctx, uid, limit, offset)
+	var cards []*card.Card
+	if args.Get(0) != nil {
+		cards = args.Get(0).([]*card.Card)
+	}
+	return cards, args.Int(1), args.Error(2)
+}
 
 // MockReviewRepository
 type MockReviewRepository struct{ mock.Mock }

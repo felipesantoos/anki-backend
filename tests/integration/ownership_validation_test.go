@@ -229,6 +229,32 @@ func TestOwnership_Validation(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to set due date on User A's card")
+
+		// User B tries to List Leeches (should only see their own leeches)
+		// First, create a leech for User A
+		var noteTypeIDA int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Leech Isolation Type', '[]', '[]', '[]') RETURNING id", userA.User.ID).Scan(&noteTypeIDA)
+		require.NoError(t, err)
+		var noteAID int64
+		err = db.DB.QueryRow("INSERT INTO notes (user_id, note_type_id, fields_json, guid, tags) VALUES ($1, $2, '{}', $3, $4) RETURNING id", userA.User.ID, noteTypeIDA, "550e8400-e29b-41d4-a716-446655440008", `{"leech"}`).Scan(&noteAID)
+		require.NoError(t, err)
+		var deckAID int64
+		err = db.DB.QueryRow("INSERT INTO decks (user_id, name) VALUES ($1, 'User A Leech Deck') RETURNING id", userA.User.ID).Scan(&deckAID)
+		require.NoError(t, err)
+		validDue := time.Now().UnixMilli()
+		_, err = db.DB.Exec("INSERT INTO cards (deck_id, note_id, card_type_id, state, lapses, due) VALUES ($1, $2, 0, 'review', 10, $3)", deckAID, noteAID, validDue)
+		require.NoError(t, err)
+
+		// User B lists leeches
+		req = httptest.NewRequest(http.MethodGet, "/api/v1/cards/leeches", nil)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var leechesB response.ListCardsResponse
+		json.Unmarshal(rec.Body.Bytes(), &leechesB)
+		assert.Empty(t, leechesB.Data, "User B should not see User A's leeches")
 	})
 
 	// --- Media Isolation ---

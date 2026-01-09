@@ -53,4 +53,7 @@ type ICardService interface {
 
 	// SetDueDate manually sets the due date for a card
 	SetDueDate(ctx context.Context, userID int64, id int64, due int64) error
+
+	// FindLeeches finds cards that are difficult to memorize (leeches)
+	FindLeeches(ctx context.Context, userID int64, limit, offset int) ([]*card.Card, int, error)
 }

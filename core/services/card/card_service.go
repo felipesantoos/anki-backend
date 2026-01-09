@@ -308,3 +308,15 @@ func (s *CardService) SetDueDate(ctx context.Context, userID int64, id int64, du
 	c.SetDue(due)
 	return s.cardRepo.Update(ctx, userID, id, c)
 }
+
+// FindLeeches finds cards that are difficult to memorize (leeches)
+func (s *CardService) FindLeeches(ctx context.Context, userID int64, limit, offset int) ([]*card.Card, int, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	return s.cardRepo.FindLeeches(ctx, userID, limit, offset)
+}

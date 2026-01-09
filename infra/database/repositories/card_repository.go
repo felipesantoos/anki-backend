@@ -1021,6 +1021,62 @@ func (r *CardRepository) FindAll(ctx context.Context, userID int64, filters card
 	return cards, total, nil
 }
 
+// FindLeeches finds cards that are difficult to memorize (leeches)
+func (r *CardRepository) FindLeeches(ctx context.Context, userID int64, limit, offset int) ([]*card.Card, int, error) {
+	// First, count total leeches
+	countQuery := `
+		SELECT COUNT(*)
+		FROM cards c
+		JOIN notes n ON n.id = c.note_id
+		JOIN decks d ON d.id = c.deck_id
+		WHERE n.user_id = $1
+		  AND n.deleted_at IS NULL
+		  AND c.suspended = FALSE
+		  AND 'leech' = ANY(n.tags)
+		  AND c.lapses >= COALESCE((d.options_json->>'leech_threshold')::INTEGER, 8)
+	`
+
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, userID).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count leeches: %w", err)
+	}
+
+	if total == 0 {
+		return []*card.Card{}, 0, nil
+	}
+
+	// Then, fetch leeches with pagination
+	query := `
+		SELECT c.id, c.note_id, c.card_type_id, c.deck_id, c.home_deck_id, c.due, c.interval, c.ease, 
+		       c.lapses, c.reps, c.state, c.position, c.flag, c.suspended, c.buried, 
+		       c.stability, c.difficulty, c.last_review_at, c.created_at, c.updated_at
+		FROM cards c
+		JOIN notes n ON n.id = c.note_id
+		JOIN decks d ON d.id = c.deck_id
+		WHERE n.user_id = $1
+		  AND n.deleted_at IS NULL
+		  AND c.suspended = FALSE
+		  AND 'leech' = ANY(n.tags)
+		  AND c.lapses >= COALESCE((d.options_json->>'leech_threshold')::INTEGER, 8)
+		ORDER BY c.lapses DESC, c.id ASC
+		LIMIT $2 OFFSET $3
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to find leeches: %w", err)
+	}
+	defer rows.Close()
+
+	cards, err := r.scanCards(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return cards, total, nil
+}
+
 // Ensure CardRepository implements ICardRepository
 var _ secondary.ICardRepository = (*CardRepository)(nil)
 

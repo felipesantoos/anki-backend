@@ -211,6 +211,14 @@ func (m *MockCardService) SetDueDate(ctx context.Context, userID int64, id int64
 	return args.Error(0)
 }
 
+func (m *MockCardService) FindLeeches(ctx context.Context, userID int64, limit, offset int) ([]*card.Card, int, error) {
+	args := m.Called(ctx, userID, limit, offset)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]*card.Card), args.Int(1), args.Error(2)
+}
+
 // MockReviewService is a mock implementation of IReviewService
 type MockReviewService struct {
 	mock.Mock

@@ -1279,6 +1279,68 @@ func TestCardHandler_FindAll(t *testing.T) {
 	})
 }
 
+func TestCardHandler_FindLeeches(t *testing.T) {
+	e := echo.New()
+	userID := int64(1)
+
+	t.Run("Success", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		cards := []*card.Card{
+			func() *card.Card { c, _ := card.NewBuilder().WithID(1).WithLapses(10).Build(); return c }(),
+		}
+		mockSvc.On("FindLeeches", mock.Anything, userID, 20, 0).Return(cards, 1, nil).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/leeches", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		if assert.NoError(t, handler.FindLeeches(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.ListCardsResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Len(t, res.Data, 1)
+			assert.Equal(t, 1, res.Pagination.Total)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Pagination", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		mockSvc.On("FindLeeches", mock.Anything, userID, 10, 10).Return([]*card.Card{}, 0, nil).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/leeches?page=2&limit=10", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		if assert.NoError(t, handler.FindLeeches(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Service Error", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		mockSvc.On("FindLeeches", mock.Anything, userID, 20, 0).Return(nil, 0, errors.New("service error")).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/leeches", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.FindLeeches(c)
+		assert.Error(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
 func TestCardHandler_Reset(t *testing.T) {
 	e := echo.New()
 	e.Validator = middlewares.NewCustomValidator()

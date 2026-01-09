@@ -67,5 +67,9 @@ type ICardRepository interface {
 	// FindAll finds cards for a user based on filters and pagination
 	// Returns: list of cards, total count (for pagination), error
 	FindAll(ctx context.Context, userID int64, filters card.CardFilters) ([]*card.Card, int, error)
+
+	// FindLeeches finds cards that are difficult to memorize (leeches)
+	// Defined by a lapse count exceeding a deck-specific threshold
+	FindLeeches(ctx context.Context, userID int64, limit, offset int) ([]*card.Card, int, error)
 }
 

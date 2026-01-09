@@ -145,7 +145,10 @@ func TestCardService_FindAll(t *testing.T) {
 	t.Run("Success with deck filter", func(t *testing.T) {
 		deckID := int64(10)
 		cards := []*card.Card{
-			func() *card.Card { c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(deckID).Build(); return c }(),
+			func() *card.Card {
+				c, _ := card.NewBuilder().WithID(1).WithNoteID(1).WithDeckID(deckID).Build()
+				return c
+			}(),
 		}
 		total := 1
 
@@ -217,7 +220,7 @@ func TestCardService_FindAll(t *testing.T) {
 		total := 0
 
 		filters := card.CardFilters{
-			Limit:  0, // Should default to 20
+			Limit:  0,  // Should default to 20
 			Offset: -1, // Should default to 0
 		}
 
@@ -300,6 +303,46 @@ func TestCardService_FindAll(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, cards, result)
 		assert.Equal(t, total, count)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestCardService_FindLeeches(t *testing.T) {
+	mockRepo := new(MockCardRepository)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
+	ctx := context.Background()
+	userID := int64(1)
+
+	t.Run("Success", func(t *testing.T) {
+		cards := []*card.Card{
+			func() *card.Card { c, _ := card.NewBuilder().WithID(1).WithLapses(10).Build(); return c }(),
+		}
+		total := 1
+		limit, offset := 20, 0
+
+		mockRepo.On("FindLeeches", ctx, userID, limit, offset).Return(cards, total, nil).Once()
+
+		result, count, err := service.FindLeeches(ctx, userID, limit, offset)
+
+		assert.NoError(t, err)
+		assert.Equal(t, cards, result)
+		assert.Equal(t, total, count)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Default pagination", func(t *testing.T) {
+		mockRepo.On("FindLeeches", ctx, userID, 20, 0).Return([]*card.Card{}, 0, nil).Once()
+
+		result, count, err := service.FindLeeches(ctx, userID, 0, -1)
+
+		assert.NoError(t, err)
+		assert.Len(t, result, 0)
+		assert.Equal(t, 0, count)
 		mockRepo.AssertExpectations(t)
 	})
 }

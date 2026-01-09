@@ -550,6 +550,37 @@ func (h *CardHandler) SetDueDate(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// Reposition handles POST /api/v1/cards/reposition
+// @Summary Reposition cards
+// @Description Changes the order new cards will appear in
+// @Tags cards
+// @Security BearerAuth
+// @Param request body request.RepositionCardsRequest true "Reposition request"
+// @Success 204 "No Content"
+// @Failure 400 {object} response.ErrorResponse "Invalid request body or parameters"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/cards/reposition [post]
+func (h *CardHandler) Reposition(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	var req request.RepositionCardsRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Validate request
+	if err := c.Validate(&req); err != nil {
+		return err
+	}
+
+	if err := h.service.Reposition(ctx, userID, req.CardIDs, req.Start, req.Step, req.Shift); err != nil {
+		return handleCardError(err)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 // handleCardError maps service-level card errors to HTTP errors
 func handleCardError(err error) error {
 	if err == nil {

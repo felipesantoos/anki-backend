@@ -1288,6 +1288,83 @@ func TestStudy_Integration(t *testing.T) {
 		assert.Len(t, res.Data, 1)
 		assert.Equal(t, 10, res.Data[0].Lapses)
 	})
+
+	t.Run("Reposition", func(t *testing.T) {
+		// Create deck
+		deck := createDeck(t, e, token, request.CreateDeckRequest{Name: "Reposition Test Deck"})
+
+		// Create Note Type
+		var noteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Repo Test Type', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		require.NoError(t, err)
+
+		// Create 3 cards with initial positions
+		card1ID := createCardWithPosition(t, db, loginRes.User.ID, noteTypeID, deck.ID, "550e8400-e29b-41d4-a716-446655440011", 10)
+		card2ID := createCardWithPosition(t, db, loginRes.User.ID, noteTypeID, deck.ID, "550e8400-e29b-41d4-a716-446655440012", 11)
+		card3ID := createCardWithPosition(t, db, loginRes.User.ID, noteTypeID, deck.ID, "550e8400-e29b-41d4-a716-446655440013", 12)
+
+		// Reposition cards [1, 2, 3] to start=20, step=5, shift=false
+		repoReq := request.RepositionCardsRequest{
+			CardIDs: []int64{card1ID, card2ID, card3ID},
+			Start:   20,
+			Step:    5,
+			Shift:   false,
+		}
+		b, _ := json.Marshal(repoReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/reposition", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify positions
+		var p1, p2, p3 int
+		db.DB.QueryRow("SELECT position FROM cards WHERE id = $1", card1ID).Scan(&p1)
+		db.DB.QueryRow("SELECT position FROM cards WHERE id = $1", card2ID).Scan(&p2)
+		db.DB.QueryRow("SELECT position FROM cards WHERE id = $1", card3ID).Scan(&p3)
+		assert.Equal(t, 20, p1)
+		assert.Equal(t, 25, p2)
+		assert.Equal(t, 30, p3)
+
+		// Create card at position 40
+		card4ID := createCardWithPosition(t, db, loginRes.User.ID, noteTypeID, deck.ID, "550e8400-e29b-41d4-a716-446655440014", 40)
+
+		// Reposition card 1 to start=40, step=1, shift=true
+		// Card 4 should be shifted
+		repoReq = request.RepositionCardsRequest{
+			CardIDs: []int64{card1ID},
+			Start:   40,
+			Step:    1,
+			Shift:   true,
+		}
+		b, _ = json.Marshal(repoReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/reposition", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify positions
+		db.DB.QueryRow("SELECT position FROM cards WHERE id = $1", card1ID).Scan(&p1)
+		db.DB.QueryRow("SELECT position FROM cards WHERE id = $1", card4ID).Scan(&p2)
+		assert.Equal(t, 40, p1)
+		assert.Equal(t, 41, p2) // Shifted by 1 * 1 = 1
+	})
+}
+
+// Helper function to create a card manually in DB with position
+func createCardWithPosition(t *testing.T, pgRepo *postgresInfra.PostgresRepository, userID, noteTypeID, deckID int64, guid string, position int) int64 {
+	var noteID int64
+	err := pgRepo.DB.QueryRow("INSERT INTO notes (user_id, note_type_id, fields_json, guid) VALUES ($1, $2, '{}', $3) RETURNING id", userID, noteTypeID, guid).Scan(&noteID)
+	require.NoError(t, err)
+
+	var cardID int64
+	err = pgRepo.DB.QueryRow("INSERT INTO cards (deck_id, note_id, card_type_id, state, position) VALUES ($1, $2, 0, 'new', $3) RETURNING id", deckID, noteID, position).Scan(&cardID)
+	require.NoError(t, err)
+
+	return cardID
 }
 
 // Helper function to create a deck and return its response

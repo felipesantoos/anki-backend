@@ -75,3 +75,15 @@ type SetCardDueDateRequest struct {
 	// Next review date (Unix timestamp in milliseconds)
 	Due int64 `json:"due" example:"1705324200000" validate:"required,min=0"`
 }
+
+// RepositionCardsRequest represents the request payload to reposition multiple cards
+type RepositionCardsRequest struct {
+	// List of card IDs to reposition
+	CardIDs []int64 `json:"card_ids" validate:"required,min=1,dive,gt=0"`
+	// Starting position (default: 0)
+	Start int `json:"start" validate:"min=0"`
+	// Step between positions (default: 1)
+	Step int `json:"step" validate:"min=1"`
+	// Whether to shift existing cards at those positions
+	Shift bool `json:"shift"`
+}

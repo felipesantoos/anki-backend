@@ -219,6 +219,11 @@ func (m *MockCardService) FindLeeches(ctx context.Context, userID int64, limit, 
 	return args.Get(0).([]*card.Card), args.Int(1), args.Error(2)
 }
 
+func (m *MockCardService) Reposition(ctx context.Context, userID int64, cardIDs []int64, start int, step int, shift bool) error {
+	args := m.Called(ctx, userID, cardIDs, start, step, shift)
+	return args.Error(0)
+}
+
 // MockReviewService is a mock implementation of IReviewService
 type MockReviewService struct {
 	mock.Mock

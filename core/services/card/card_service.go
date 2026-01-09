@@ -320,3 +320,14 @@ func (s *CardService) FindLeeches(ctx context.Context, userID int64, limit, offs
 
 	return s.cardRepo.FindLeeches(ctx, userID, limit, offset)
 }
+
+// Reposition changes the order new cards will appear in
+func (s *CardService) Reposition(ctx context.Context, userID int64, cardIDs []int64, start int, step int, shift bool) error {
+	if len(cardIDs) == 0 {
+		return nil
+	}
+
+	return s.tm.WithTransaction(ctx, func(txCtx context.Context) error {
+		return s.cardRepo.UpdatePositions(txCtx, userID, cardIDs, start, step, shift)
+	})
+}

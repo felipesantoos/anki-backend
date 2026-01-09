@@ -1077,6 +1077,54 @@ func (r *CardRepository) FindLeeches(ctx context.Context, userID int64, limit, o
 	return cards, total, nil
 }
 
+// UpdatePositions updates the positions of multiple cards
+func (r *CardRepository) UpdatePositions(ctx context.Context, userID int64, cardIDs []int64, start int, step int, shift bool) error {
+	if len(cardIDs) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+
+	// 1. Shift existing cards if requested
+	if shift {
+		shiftAmount := len(cardIDs) * step
+		shiftQuery := `
+			UPDATE cards c
+			SET position = c.position + $1, updated_at = $2
+			FROM decks d
+			WHERE c.deck_id = d.id 
+			  AND d.user_id = $3 
+			  AND d.deleted_at IS NULL
+			  AND c.position >= $4
+			  AND c.id != ANY($5)
+		`
+		_, err := r.db.ExecContext(ctx, shiftQuery, shiftAmount, now, userID, start, pq.Array(cardIDs))
+		if err != nil {
+			return fmt.Errorf("failed to shift card positions: %w", err)
+		}
+	}
+
+	// 2. Update selected cards
+	// We use WITH ORDINALITY to ensure the order of cardIDs is respected
+	updateQuery := `
+		WITH updates AS (
+			SELECT id, 
+			       $1 + (idx::int - 1) * $2 as new_pos
+			FROM unnest($3::bigint[]) WITH ORDINALITY AS t(id, idx)
+		)
+		UPDATE cards c
+		SET position = u.new_pos, updated_at = $4
+		FROM updates u, decks d
+		WHERE c.id = u.id AND c.deck_id = d.id AND d.user_id = $5 AND d.deleted_at IS NULL
+	`
+	_, err := r.db.ExecContext(ctx, updateQuery, start, step, pq.Array(cardIDs), now, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update card positions: %w", err)
+	}
+
+	return nil
+}
+
 // Ensure CardRepository implements ICardRepository
 var _ secondary.ICardRepository = (*CardRepository)(nil)
 

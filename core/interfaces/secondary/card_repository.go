@@ -71,5 +71,8 @@ type ICardRepository interface {
 	// FindLeeches finds cards that are difficult to memorize (leeches)
 	// Defined by a lapse count exceeding a deck-specific threshold
 	FindLeeches(ctx context.Context, userID int64, limit, offset int) ([]*card.Card, int, error)
+
+	// UpdatePositions updates the positions of multiple cards
+	UpdatePositions(ctx context.Context, userID int64, cardIDs []int64, start int, step int, shift bool) error
 }
 

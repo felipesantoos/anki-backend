@@ -439,3 +439,32 @@ func TestCardService_SetDueDate(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
+
+func TestCardService_Reposition(t *testing.T) {
+	mockRepo := new(MockCardRepository)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
+
+	ctx := context.Background()
+	userID := int64(1)
+	cardIDs := []int64{1, 2, 3}
+
+	t.Run("Success", func(t *testing.T) {
+		mockTM.On("WithTransaction", ctx, mock.Anything).Return(nil).Once()
+		mockRepo.On("UpdatePositions", mock.Anything, userID, cardIDs, 10, 2, true).Return(nil).Once()
+
+		err := service.Reposition(ctx, userID, cardIDs, 10, 2, true)
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Empty IDs", func(t *testing.T) {
+		err := service.Reposition(ctx, userID, []int64{}, 10, 2, true)
+		assert.NoError(t, err)
+	})
+}

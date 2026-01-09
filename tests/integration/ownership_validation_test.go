@@ -255,6 +255,25 @@ func TestOwnership_Validation(t *testing.T) {
 		var leechesB response.ListCardsResponse
 		json.Unmarshal(rec.Body.Bytes(), &leechesB)
 		assert.Empty(t, leechesB.Data, "User B should not see User A's leeches")
+
+		// User B tries to Reposition User A's cards
+		repoReq := request.RepositionCardsRequest{
+			CardIDs: []int64{cardA.ID},
+			Start:   100,
+			Step:    1,
+		}
+		b, _ = json.Marshal(repoReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/cards/reposition", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code) // Service returns 204 even if 0 cards were updated (authorized)
+		// Verify position didn't change for User A's card
+		var posA int
+		db.DB.QueryRow("SELECT position FROM cards WHERE id = $1", cardA.ID).Scan(&posA)
+		assert.NotEqual(t, 100, posA, "User B should not be able to change User A's card position")
 	})
 
 	// --- Media Isolation ---

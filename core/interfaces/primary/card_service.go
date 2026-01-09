@@ -56,4 +56,7 @@ type ICardService interface {
 
 	// FindLeeches finds cards that are difficult to memorize (leeches)
 	FindLeeches(ctx context.Context, userID int64, limit, offset int) ([]*card.Card, int, error)
+
+	// Reposition changes the order new cards will appear in
+	Reposition(ctx context.Context, userID int64, cardIDs []int64, start int, step int, shift bool) error
 }

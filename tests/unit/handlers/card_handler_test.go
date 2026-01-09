@@ -1632,3 +1632,101 @@ func TestCardHandler_SetDueDate(t *testing.T) {
 		mockSvc.AssertExpectations(t)
 	})
 }
+
+func TestCardHandler_Reposition(t *testing.T) {
+	e := echo.New()
+	e.Validator = middlewares.NewCustomValidator()
+	userID := int64(1)
+	cardIDs := []int64{1, 2, 3}
+
+	t.Run("Success", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		repoReq := request.RepositionCardsRequest{
+			CardIDs: cardIDs,
+			Start:   10,
+			Step:    2,
+			Shift:   true,
+		}
+		b, _ := json.Marshal(repoReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/reposition", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Reposition", mock.Anything, userID, cardIDs, 10, 2, true).Return(nil).Once()
+
+		if assert.NoError(t, handler.Reposition(c)) {
+			assert.Equal(t, http.StatusNoContent, rec.Code)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Validation Error - empty IDs", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		repoReq := request.RepositionCardsRequest{
+			CardIDs: []int64{},
+			Start:   0,
+			Step:    1,
+		}
+		b, _ := json.Marshal(repoReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/reposition", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Reposition(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+		}
+	})
+
+	t.Run("Validation Error - negative start", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		repoReq := request.RepositionCardsRequest{
+			CardIDs: cardIDs,
+			Start:   -1,
+			Step:    1,
+		}
+		b, _ := json.Marshal(repoReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/reposition", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.Reposition(c)
+		assert.Error(t, err)
+	})
+
+	t.Run("Service Error", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		repoReq := request.RepositionCardsRequest{
+			CardIDs: cardIDs,
+			Start:   0,
+			Step:    1,
+		}
+		b, _ := json.Marshal(repoReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/cards/reposition", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		mockSvc.On("Reposition", mock.Anything, userID, cardIDs, 0, 1, false).Return(errors.New("service error")).Once()
+
+		err := handler.Reposition(c)
+		assert.Error(t, err)
+		mockSvc.AssertExpectations(t)
+	})
+}

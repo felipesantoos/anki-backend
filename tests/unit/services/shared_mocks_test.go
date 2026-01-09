@@ -214,6 +214,9 @@ func (m *MockCardRepository) FindLeeches(ctx context.Context, uid int64, limit, 
 	}
 	return cards, args.Int(1), args.Error(2)
 }
+func (m *MockCardRepository) UpdatePositions(ctx context.Context, uid int64, cids []int64, start, step int, shift bool) error {
+	return m.Called(ctx, uid, cids, start, step, shift).Error(0)
+}
 
 // MockReviewRepository
 type MockReviewRepository struct{ mock.Mock }

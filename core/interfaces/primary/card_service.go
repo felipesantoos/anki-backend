@@ -59,4 +59,7 @@ type ICardService interface {
 
 	// Reposition changes the order new cards will appear in
 	Reposition(ctx context.Context, userID int64, cardIDs []int64, start int, step int, shift bool) error
+
+	// GetPosition returns the ordinal position of a card
+	GetPosition(ctx context.Context, userID int64, cardID int64) (int, error)
 }

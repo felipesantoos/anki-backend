@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -1351,6 +1352,30 @@ func TestStudy_Integration(t *testing.T) {
 		db.DB.QueryRow("SELECT position FROM cards WHERE id = $1", card4ID).Scan(&p2)
 		assert.Equal(t, 40, p1)
 		assert.Equal(t, 41, p2) // Shifted by 1 * 1 = 1
+	})
+
+	t.Run("Get Position", func(t *testing.T) {
+		// Create deck
+		deck := createDeck(t, e, token, request.CreateDeckRequest{Name: "Position Test Deck"})
+
+		// Create Note Type
+		var noteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Pos Test Type', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		require.NoError(t, err)
+
+		// Create card with specific position
+		cardID := createCardWithPosition(t, db, loginRes.User.ID, noteTypeID, deck.ID, "550e8400-e29b-41d4-a716-446655440021", 500)
+
+		// Get position via API
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/cards/%d/position", cardID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var res response.CardPositionResponse
+		json.Unmarshal(rec.Body.Bytes(), &res)
+		assert.Equal(t, 500, res.Position)
 	})
 }
 

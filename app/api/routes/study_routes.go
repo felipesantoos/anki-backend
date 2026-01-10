@@ -63,6 +63,7 @@ func (r *Router) RegisterStudyRoutes() {
 	cards.GET("", cardHandler.FindAll)
 	cards.GET("/leeches", cardHandler.FindLeeches)
 	cards.POST("/reposition", cardHandler.Reposition)
+	cards.GET("/:id/position", cardHandler.GetPosition)
 	cards.GET("/:id/info", cardHandler.GetInfo) // Must be before /:id to avoid route conflicts
 	cards.GET("/:id", cardHandler.FindByID)
 	cards.POST("/:id/suspend", cardHandler.Suspend)

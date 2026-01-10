@@ -120,3 +120,9 @@ type CardInfoReviewItem struct {
 	// Review timestamp
 	CreatedAt time.Time `json:"created_at" example:"2024-01-20T15:45:00Z"`
 }
+
+// CardPositionResponse represents the response payload for a card's position
+type CardPositionResponse struct {
+	// Ordinal position
+	Position int `json:"position" example:"100"`
+}

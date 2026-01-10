@@ -581,6 +581,44 @@ func (h *CardHandler) Reposition(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// GetPosition handles GET /api/v1/cards/:id/position
+// @Summary Get card position
+// @Description Returns the ordinal position of a card
+// @Tags cards
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Card ID"
+// @Success 200 {object} response.CardPositionResponse
+// @Failure 400 {object} response.ErrorResponse "Invalid card ID"
+// @Failure 404 {object} response.ErrorResponse "Card not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/cards/{id}/position [get]
+func (h *CardHandler) GetPosition(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := middlewares.GetUserID(c)
+
+	// Parse and validate ID parameter
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid card ID format")
+	}
+
+	// Validate that ID is positive
+	if id <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "Card ID must be greater than 0")
+	}
+
+	position, err := h.service.GetPosition(ctx, userID, id)
+	if err != nil {
+		return handleCardError(err)
+	}
+
+	return c.JSON(http.StatusOK, response.CardPositionResponse{
+		Position: position,
+	})
+}
+
 // handleCardError maps service-level card errors to HTTP errors
 func handleCardError(err error) error {
 	if err == nil {

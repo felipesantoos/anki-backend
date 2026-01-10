@@ -274,6 +274,14 @@ func TestOwnership_Validation(t *testing.T) {
 		var posA int
 		db.DB.QueryRow("SELECT position FROM cards WHERE id = $1", cardA.ID).Scan(&posA)
 		assert.NotEqual(t, 100, posA, "User B should not be able to change User A's card position")
+
+		// User B tries to Get User A's card position
+		req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/cards/%d/position", cardA.ID), nil)
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+userB.AccessToken)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code, "User B should not be able to see User A's card position")
 	})
 
 	// --- Media Isolation ---

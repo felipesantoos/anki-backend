@@ -468,3 +468,37 @@ func TestCardService_Reposition(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestCardService_GetPosition(t *testing.T) {
+	mockRepo := new(MockCardRepository)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
+
+	ctx := context.Background()
+	userID := int64(1)
+	cardID := int64(123)
+
+	t.Run("Success", func(t *testing.T) {
+		c, _ := card.NewBuilder().WithID(cardID).WithPosition(100).Build()
+		mockRepo.On("FindByID", ctx, userID, cardID).Return(c, nil).Once()
+
+		pos, err := service.GetPosition(ctx, userID, cardID)
+		assert.NoError(t, err)
+		assert.Equal(t, 100, pos)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Card not found", func(t *testing.T) {
+		mockRepo.On("FindByID", ctx, userID, cardID).Return(nil, nil).Once()
+
+		pos, err := service.GetPosition(ctx, userID, cardID)
+		assert.Error(t, err)
+		assert.Equal(t, 0, pos)
+		assert.Contains(t, err.Error(), "card not found")
+		mockRepo.AssertExpectations(t)
+	})
+}

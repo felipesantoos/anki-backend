@@ -1730,3 +1730,91 @@ func TestCardHandler_Reposition(t *testing.T) {
 		mockSvc.AssertExpectations(t)
 	})
 }
+
+func TestCardHandler_GetPosition(t *testing.T) {
+	e := echo.New()
+	userID := int64(1)
+	cardID := int64(123)
+
+	t.Run("Success", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		mockSvc.On("GetPosition", mock.Anything, userID, cardID).Return(100, nil).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/123/position", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/position")
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		if assert.NoError(t, handler.GetPosition(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.CardPositionResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Equal(t, 100, res.Position)
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Invalid ID format", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/abc/position", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("abc")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.GetPosition(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Invalid card ID format", httpErr.Message)
+		}
+	})
+
+	t.Run("Invalid ID (zero)", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/0/position", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("0")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.GetPosition(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusBadRequest, httpErr.Code)
+			assert.Equal(t, "Card ID must be greater than 0", httpErr.Message)
+		}
+	})
+
+	t.Run("Card not found", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		mockSvc.On("GetPosition", mock.Anything, userID, cardID).Return(0, ownership.ErrResourceNotFound).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/123/position", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.GetPosition(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+	})
+}

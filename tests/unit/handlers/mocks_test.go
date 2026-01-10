@@ -224,6 +224,11 @@ func (m *MockCardService) Reposition(ctx context.Context, userID int64, cardIDs 
 	return args.Error(0)
 }
 
+func (m *MockCardService) GetPosition(ctx context.Context, userID int64, cardID int64) (int, error) {
+	args := m.Called(ctx, userID, cardID)
+	return args.Int(0), args.Error(1)
+}
+
 // MockReviewService is a mock implementation of IReviewService
 type MockReviewService struct {
 	mock.Mock

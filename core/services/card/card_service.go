@@ -331,3 +331,16 @@ func (s *CardService) Reposition(ctx context.Context, userID int64, cardIDs []in
 		return s.cardRepo.UpdatePositions(txCtx, userID, cardIDs, start, step, shift)
 	})
 }
+
+// GetPosition returns the ordinal position of a card
+func (s *CardService) GetPosition(ctx context.Context, userID int64, cardID int64) (int, error) {
+	c, err := s.cardRepo.FindByID(ctx, userID, cardID)
+	if err != nil {
+		return 0, err
+	}
+	if c == nil {
+		return 0, fmt.Errorf("card not found")
+	}
+
+	return c.GetPosition(), nil
+}

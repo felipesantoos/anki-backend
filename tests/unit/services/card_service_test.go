@@ -6,6 +6,10 @@ import (
 	"testing"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
+	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
+	"github.com/felipesantos/anki-backend/core/domain/entities/note"
+	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
+	"github.com/felipesantos/anki-backend/core/domain/entities/review"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	cardSvc "github.com/felipesantos/anki-backend/core/services/card"
 	"github.com/stretchr/testify/assert"
@@ -500,5 +504,69 @@ func TestCardService_GetPosition(t *testing.T) {
 		assert.Equal(t, 0, pos)
 		assert.Contains(t, err.Error(), "card not found")
 		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestCardService_GetInfo(t *testing.T) {
+	mockRepo := new(MockCardRepository)
+	mockNoteSvc := new(MockNoteService)
+	mockDeckSvc := new(MockDeckService)
+	mockNoteTypeSvc := new(MockNoteTypeService)
+	mockReviewSvc := new(MockReviewService)
+	mockTM := new(MockTransactionManager)
+	service := cardSvc.NewCardService(mockRepo, mockNoteSvc, mockDeckSvc, mockNoteTypeSvc, mockReviewSvc, mockTM)
+
+	ctx := context.Background()
+	userID := int64(1)
+	cardID := int64(123)
+	noteID := int64(456)
+	deckID := int64(789)
+	noteTypeID := int64(101)
+
+	t.Run("Success", func(t *testing.T) {
+		c, _ := card.NewBuilder().
+			WithID(cardID).
+			WithNoteID(noteID).
+			WithDeckID(deckID).
+			WithPosition(100).
+			Build()
+
+		n, _ := note.NewBuilder().
+			WithID(noteID).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON("{\"Front\":\"Hello\"}").
+			Build()
+
+		d, _ := deck.NewBuilder().
+			WithID(deckID).
+			WithName("Default").
+			Build()
+
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithName("Basic").
+			Build()
+
+		mockRepo.On("FindByID", ctx, userID, cardID).Return(c, nil).Once()
+		mockNoteSvc.On("FindByID", ctx, userID, noteID).Return(n, nil).Once()
+		mockDeckSvc.On("FindByID", ctx, userID, deckID).Return(d, nil).Once()
+		mockNoteTypeSvc.On("FindByID", ctx, userID, noteTypeID).Return(nt, nil).Once()
+		mockReviewSvc.On("FindByCardID", ctx, userID, cardID).Return([]*review.Review{}, nil).Once()
+
+		info, err := service.GetInfo(ctx, userID, cardID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, info)
+		assert.Equal(t, cardID, info.CardID)
+		assert.Equal(t, 100, info.Position)
+		assert.Equal(t, "Default", info.DeckName)
+		assert.Equal(t, "Basic", info.NoteTypeName)
+		assert.Equal(t, "Hello", info.Fields["Front"])
+
+		mockRepo.AssertExpectations(t)
+		mockNoteSvc.AssertExpectations(t)
+		mockDeckSvc.AssertExpectations(t)
+		mockNoteTypeSvc.AssertExpectations(t)
+		mockReviewSvc.AssertExpectations(t)
 	})
 }

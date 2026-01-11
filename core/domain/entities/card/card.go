@@ -329,6 +329,7 @@ type CardInfo struct {
 	NoteTypeName    string
 	Fields          map[string]interface{}
 	Tags            []string
+	Position        int
 	CreatedAt       time.Time
 	FirstReview     *time.Time
 	LastReview      *time.Time

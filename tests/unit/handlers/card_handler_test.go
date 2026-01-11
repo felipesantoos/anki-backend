@@ -1818,3 +1818,60 @@ func TestCardHandler_GetPosition(t *testing.T) {
 		}
 	})
 }
+
+func TestCardHandler_GetInfo(t *testing.T) {
+	e := echo.New()
+	userID := int64(1)
+	cardID := int64(123)
+
+	t.Run("Success", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		mockSvc.On("GetInfo", mock.Anything, userID, cardID).Return(&card.CardInfo{
+			CardID:   cardID,
+			Position: 100,
+			Fields:   map[string]interface{}{"Front": "Hello"},
+		}, nil).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/123/info", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/info")
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		if assert.NoError(t, handler.GetInfo(c)) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			var res response.CardInfoResponse
+			json.Unmarshal(rec.Body.Bytes(), &res)
+			assert.Equal(t, cardID, res.CardID)
+			assert.Equal(t, 100, res.Position)
+			assert.Equal(t, "Hello", res.Fields["Front"])
+		}
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("Card not found", func(t *testing.T) {
+		mockSvc := new(MockCardService)
+		handler := handlers.NewCardHandler(mockSvc)
+
+		mockSvc.On("GetInfo", mock.Anything, userID, cardID).Return(nil, ownership.ErrResourceNotFound).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/cards/123/info", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/api/v1/cards/:id/info")
+		c.SetParamNames("id")
+		c.SetParamValues("123")
+		c.Set(middlewares.UserIDContextKey, userID)
+
+		err := handler.GetInfo(c)
+		assert.Error(t, err)
+		if httpErr, ok := err.(*echo.HTTPError); ok {
+			assert.Equal(t, http.StatusNotFound, httpErr.Code)
+			assert.Equal(t, "Card not found", httpErr.Message)
+		}
+	})
+}

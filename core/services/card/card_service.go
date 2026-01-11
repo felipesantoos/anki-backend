@@ -261,6 +261,7 @@ func (s *CardService) GetInfo(ctx context.Context, userID int64, cardID int64) (
 		NoteTypeName:    noteTypeEntity.GetName(),
 		Fields:          fields,
 		Tags:            noteEntity.GetTags(),
+		Position:        cardEntity.GetPosition(),
 		CreatedAt:       cardEntity.GetCreatedAt(),
 		FirstReview:     firstReview,
 		LastReview:      lastReview,

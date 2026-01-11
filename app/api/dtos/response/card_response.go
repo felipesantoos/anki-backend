@@ -35,6 +35,9 @@ type CardResponse struct {
 	// Ordinal position
 	Ord int `json:"ord" example:"0"`
 
+	// Ordinal position (alias for ord)
+	Position int `json:"position" example:"0"`
+
 	// Colored flag (0: none)
 	Flags int `json:"flags" example:"0"`
 
@@ -77,6 +80,9 @@ type CardInfoResponse struct {
 
 	// Note tags
 	Tags []string `json:"tags" example:"[\"vocabulary\"]"`
+
+	// Ordinal position
+	Position int `json:"position" example:"100"`
 
 	// Card creation timestamp
 	CreatedAt time.Time `json:"created_at" example:"2024-01-15T10:30:00Z"`

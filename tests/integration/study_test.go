@@ -1377,6 +1377,32 @@ func TestStudy_Integration(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &res)
 		assert.Equal(t, 500, res.Position)
 	})
+
+	t.Run("Get Info", func(t *testing.T) {
+		// Create deck
+		deck := createDeck(t, e, token, request.CreateDeckRequest{Name: "Info Test Deck"})
+
+		// Create Note Type
+		var noteTypeID int64
+		err := db.DB.QueryRow("INSERT INTO note_types (user_id, name, fields_json, card_types_json, templates_json) VALUES ($1, 'Info Test Type', '[]', '[]', '[]') RETURNING id", loginRes.User.ID).Scan(&noteTypeID)
+		require.NoError(t, err)
+
+		// Create card with specific position
+		cardID := createCardWithPosition(t, db, loginRes.User.ID, noteTypeID, deck.ID, "550e8400-e29b-41d4-a716-446655440022", 700)
+
+		// Get info via API
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/cards/%d/info", cardID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var res response.CardInfoResponse
+		json.Unmarshal(rec.Body.Bytes(), &res)
+		assert.Equal(t, cardID, res.CardID)
+		assert.Equal(t, 700, res.Position)
+		assert.Equal(t, "Info Test Deck", res.DeckName)
+	})
 }
 
 // Helper function to create a card manually in DB with position

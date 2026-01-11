@@ -39,7 +39,7 @@ func TestReviewRepository_Save_Create(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -128,7 +128,7 @@ func TestReviewRepository_FindByID(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -222,7 +222,7 @@ func TestReviewRepository_FindByCardID(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()

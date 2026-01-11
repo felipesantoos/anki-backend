@@ -101,25 +101,8 @@ func (s *NoteService) Create(ctx context.Context, userID int64, noteTypeID int64
 		}
 
 		// 3. Generate Cards based on NoteType
-		cardTypeCount := nt.GetCardTypeCount()
-		for i := 0; i < cardTypeCount; i++ {
-			cardEntity, err := card.NewBuilder().
-				WithNoteID(noteEntity.GetID()).
-				WithCardTypeID(i).
-				WithDeckID(deckID).
-				WithDue(now.Unix() * 1000). // New cards due now
-				WithEase(2500).             // Default ease 250%
-				WithState(valueobjects.CardStateNew).
-				WithCreatedAt(now).
-				WithUpdatedAt(now).
-				Build()
-			if err != nil {
-				return err
-			}
-
-			if err := s.cardRepo.Save(txCtx, userID, cardEntity); err != nil {
-				return err
-			}
+		if err := s.syncCards(txCtx, userID, noteEntity, nt, fieldsJSON, deckID); err != nil {
+			return fmt.Errorf("failed to generate cards: %w", err)
 		}
 
 		return nil
@@ -210,8 +193,8 @@ func (s *NoteService) Update(ctx context.Context, userID int64, id int64, fields
 		}
 
 		// 4. Regenerate cards based on updated fields
-		if err := s.regenerateCards(txCtx, userID, existing, nt, fieldsJSON); err != nil {
-			return fmt.Errorf("failed to regenerate cards: %w", err)
+		if err := s.syncCards(txCtx, userID, existing, nt, fieldsJSON, 0); err != nil {
+			return fmt.Errorf("failed to sync cards: %w", err)
 		}
 
 		updatedNote = existing
@@ -225,12 +208,13 @@ func (s *NoteService) Update(ctx context.Context, userID int64, id int64, fields
 	return updatedNote, nil
 }
 
-// regenerateCards regenerates cards for a note based on templates and fields
-// This method ensures that:
+// syncCards ensures that cards for a note are in sync with its note type templates and field values
+// This method handles initial card generation, card updates, and card deletions:
 // - Cards with empty front templates are deleted
 // - Cards for valid templates are maintained or created
 // - Cards for removed card types are deleted
-func (s *NoteService) regenerateCards(ctx context.Context, userID int64, noteEntity *note.Note, nt *notetype.NoteType, fieldsJSON string) error {
+// If deckID is 0, it tries to determine the deck ID from existing cards
+func (s *NoteService) syncCards(ctx context.Context, userID int64, noteEntity *note.Note, nt *notetype.NoteType, fieldsJSON string, deckID int64) error {
 	// 1. Parse fieldsJSON to map[string]string
 	var fieldsMap map[string]interface{}
 	if err := json.Unmarshal([]byte(fieldsJSON), &fieldsMap); err != nil {
@@ -253,27 +237,23 @@ func (s *NoteService) regenerateCards(ctx context.Context, userID int64, noteEnt
 		return err
 	}
 
-	// 3. Create a map of existing cards by card type ID for quick lookup
+	// 3. Determine deck ID if not provided
+	if deckID <= 0 {
+		if len(existingCards) == 0 {
+			// This should only happen if syncCards is called on a note with no cards and no deckID provided
+			return fmt.Errorf("cannot determine deck ID for card generation")
+		}
+		deckID = existingCards[0].GetDeckID()
+	}
+
+	// 4. Create a map of existing cards by card type ID for quick lookup
 	existingCardsByType := make(map[int]int64) // cardTypeID -> cardID
 	for _, c := range existingCards {
 		existingCardsByType[c.GetCardTypeID()] = c.GetID()
 	}
 
-	// 4. Initialize template renderer
+	// 5. Initialize template renderer
 	templateRenderer := services.NewTemplateRenderer()
-
-	// 5. Get deck ID from first existing card
-	// If no cards exist, we cannot determine which deck to use for new cards
-	// This is an edge case that shouldn't happen in normal flow (notes should always have cards)
-	// In this case, we skip card regeneration but don't fail the update
-	var deckID int64
-	if len(existingCards) == 0 {
-		// No cards exist - this is unusual but we handle it gracefully
-		// We can't create new cards without knowing which deck to use
-		// The note update will succeed, but cards won't be regenerated
-		return nil
-	}
-	deckID = existingCards[0].GetDeckID()
 
 	// 6. Process each card type in the note type
 	cardTypeCount := nt.GetCardTypeCount()
@@ -328,12 +308,9 @@ func (s *NoteService) regenerateCards(ctx context.Context, userID int64, noteEnt
 
 	// 7. Delete any remaining cards that don't correspond to valid card types
 	// (This handles the case where card types were removed from the note type)
-	for cardTypeIndex, cardID := range existingCardsByType {
-		// Only delete if card type index is beyond the current card type count
-		if cardTypeIndex >= cardTypeCount {
-			if err := s.cardRepo.Delete(ctx, userID, cardID); err != nil {
-				return fmt.Errorf("failed to delete obsolete card: %w", err)
-			}
+	for _, cardID := range existingCardsByType {
+		if err := s.cardRepo.Delete(ctx, userID, cardID); err != nil {
+			return fmt.Errorf("failed to delete obsolete card: %w", err)
 		}
 	}
 
@@ -482,25 +459,8 @@ func (s *NoteService) Copy(ctx context.Context, userID int64, noteID int64, deck
 		}
 
 		// 7. Generate Cards based on NoteType (same logic as Create)
-		cardTypeCount := nt.GetCardTypeCount()
-		for i := 0; i < cardTypeCount; i++ {
-			cardEntity, err := card.NewBuilder().
-				WithNoteID(copiedNote.GetID()).
-				WithCardTypeID(i).
-				WithDeckID(targetDeckID).
-				WithDue(now.Unix() * 1000). // New cards due now
-				WithEase(2500).             // Default ease 250%
-				WithState(valueobjects.CardStateNew).
-				WithCreatedAt(now).
-				WithUpdatedAt(now).
-				Build()
-			if err != nil {
-				return err
-			}
-
-			if err := s.cardRepo.Save(txCtx, userID, cardEntity); err != nil {
-				return err
-			}
+		if err := s.syncCards(txCtx, userID, copiedNote, nt, copiedNote.GetFieldsJSON(), targetDeckID); err != nil {
+			return fmt.Errorf("failed to generate cards for copy: %w", err)
 		}
 
 		// 8. Handle media copying (placeholder for future implementation)

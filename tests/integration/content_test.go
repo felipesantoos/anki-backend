@@ -71,7 +71,7 @@ func TestContent_Integration(t *testing.T) {
 			Name:          "Basic Integration",
 			FieldsJSON:    `[{"name": "Front"}, {"name": "Back"}]`,
 			CardTypesJSON: `[{"name": "Card 1"}]`,
-			TemplatesJSON: `[{"name": "Template 1"}]`,
+			TemplatesJSON: `[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`,
 		}
 		b, _ := json.Marshal(createReq)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
@@ -94,7 +94,7 @@ func TestContent_Integration(t *testing.T) {
 			Name:          "Updated Basic Integration",
 			FieldsJSON:    `[{"name": "Front"}, {"name": "Back"}, {"name": "Extra"}]`,
 			CardTypesJSON: `[{"name": "Card 1"}]`,
-			TemplatesJSON: `[{"name": "Template 1"}]`,
+			TemplatesJSON: `[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`,
 		}
 		b, _ = json.Marshal(updateReq)
 		req = httptest.NewRequest(http.MethodPut, "/api/v1/note-types/"+strconv.FormatInt(noteTypeID, 10), bytes.NewReader(b))
@@ -200,7 +200,7 @@ func TestContent_Integration(t *testing.T) {
 			Name:          "User B Note Type",
 			FieldsJSON:    `[{"name": "Front"}]`,
 			CardTypesJSON: `[{"name": "Card 1"}]`,
-			TemplatesJSON: `[{"name": "Template 1"}]`,
+			TemplatesJSON: `[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`,
 		}
 		b, _ = json.Marshal(createReqB)
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
@@ -1005,6 +1005,125 @@ func TestContent_Integration(t *testing.T) {
 		rec = httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code, "Should find duplicates with explicit field name (backward compatibility)")
+	})
+
+	t.Run("Automatic Card Generation", func(t *testing.T) {
+		var defaultDeckID int64
+		err := db.DB.QueryRow("SELECT id FROM decks WHERE user_id = $1 AND name = 'Default'", loginRes.User.ID).Scan(&defaultDeckID)
+		require.NoError(t, err)
+
+		// 1. Create a NoteType with conditional templates
+		createNTReq := request.CreateNoteTypeRequest{
+			Name: "Conditional Note Type",
+			FieldsJSON: `[{"name":"Front"},{"name":"Back"},{"name":"Extra"}]`,
+			CardTypesJSON: `[{"name":"Basic"},{"name":"Optional"}]`,
+			TemplatesJSON: `[
+				{"qfmt":"{{Front}}","afmt":"{{Back}}"},
+				{"qfmt":"{{#Extra}}{{Front}} (Optional){{/Extra}}","afmt":"{{Back}}"}
+			]`,
+		}
+		b, _ := json.Marshal(createNTReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var ntRes response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &ntRes)
+		conditionalNTID := ntRes.ID
+
+		// 2. Create Note WITHOUT Extra field (should generate only 1 card)
+		createNoteReq := request.CreateNoteRequest{
+			NoteTypeID: conditionalNTID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front":"Q1","Back":"A1"}`,
+			Tags:       []string{},
+		}
+		b, _ = json.Marshal(createNoteReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+		var noteRes response.NoteResponse
+		json.Unmarshal(rec.Body.Bytes(), &noteRes)
+		noteID1 := noteRes.ID
+
+		// Verify only 1 card exists for this note
+		var cardCount int
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID1).Scan(&cardCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, cardCount, "Should have generated exactly 1 card")
+
+		// 3. Create Note WITH Extra field (should generate 2 cards)
+		createNoteReq2 := request.CreateNoteRequest{
+			NoteTypeID: conditionalNTID,
+			DeckID:     defaultDeckID,
+			FieldsJSON: `{"Front":"Q2","Back":"A2","Extra":"Something"}`,
+			Tags:       []string{},
+		}
+		b, _ = json.Marshal(createNoteReq2)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+		json.Unmarshal(rec.Body.Bytes(), &noteRes)
+		noteID2 := noteRes.ID
+
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID2).Scan(&cardCount)
+		require.NoError(t, err)
+		assert.Equal(t, 2, cardCount, "Should have generated 2 cards")
+
+		// 4. Update note 1 to ADD Extra field (should generate the second card)
+		updateNoteReq := request.UpdateNoteRequest{
+			FieldsJSON: `{"Front":"Q1","Back":"A1","Extra":"Now I have it"}`,
+			Tags:       []string{},
+		}
+		b, _ = json.Marshal(updateNoteReq)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/"+strconv.FormatInt(noteID1, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID1).Scan(&cardCount)
+		require.NoError(t, err)
+		assert.Equal(t, 2, cardCount, "Should have regenerated to 2 cards")
+
+		// 5. Update note 2 to REMOVE Extra field (should delete the second card)
+		updateNoteReq2 := request.UpdateNoteRequest{
+			FieldsJSON: `{"Front":"Q2","Back":"A2","Extra":""}`,
+			Tags:       []string{},
+		}
+		b, _ = json.Marshal(updateNoteReq2)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/notes/"+strconv.FormatInt(noteID2, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", noteID2).Scan(&cardCount)
+		require.NoError(t, err)
+		assert.Equal(t, 1, cardCount, "Should have reduced to 1 card")
+
+		// 6. Copy note 1 (which has 2 cards) - should result in 2 cards for the copy
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/notes/"+strconv.FormatInt(noteID1, 10)+"/copy", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+		json.Unmarshal(rec.Body.Bytes(), &noteRes)
+		copyNoteID := noteRes.ID
+
+		err = db.DB.QueryRow("SELECT COUNT(*) FROM cards WHERE note_id = $1", copyNoteID).Scan(&cardCount)
+		require.NoError(t, err)
+		assert.Equal(t, 2, cardCount, "Copied note should have 2 cards")
 	})
 
 	// Find Duplicates by GUID - Success (no duplicates found in normal scenario)

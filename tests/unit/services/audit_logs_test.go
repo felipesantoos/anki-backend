@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -238,7 +239,11 @@ func TestDeletionLogService_Restore(t *testing.T) {
 	t.Run("Success - restore note", func(t *testing.T) {
 		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dl, nil).Once()
 		mockNoteRepo.On("FindByGUID", ctx, userID, "550e8400-e29b-41d4-a716-446655440000").Return(nil, nil).Once()
-		mockNoteService.On("Create", ctx, userID, int64(10), deckID, `{"Front":"Hello","Back":"World"}`, []string{"vocab"}).Return(restoredNote, nil).Once()
+		mockNoteService.On("Create", ctx, userID, int64(10), deckID, mock.MatchedBy(func(fieldsJSON string) bool {
+			var fields map[string]interface{}
+			_ = json.Unmarshal([]byte(fieldsJSON), &fields)
+			return fields["Front"] == "Hello" && fields["Back"] == "World" && len(fields) == 2
+		}), []string{"vocab"}).Return(restoredNote, nil).Once()
 		mockNoteRepo.On("Update", ctx, userID, int64(201), mock.AnythingOfType("*note.Note")).Return(nil).Once()
 
 		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
@@ -375,7 +380,11 @@ func TestDeletionLogService_Restore(t *testing.T) {
 	t.Run("Error - note service Create fails", func(t *testing.T) {
 		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dl, nil).Once()
 		mockNoteRepo.On("FindByGUID", ctx, userID, "550e8400-e29b-41d4-a716-446655440000").Return(nil, nil).Once()
-		mockNoteService.On("Create", ctx, userID, int64(10), deckID, `{"Front":"Hello","Back":"World"}`, []string{"vocab"}).Return(nil, errors.New("note type not found")).Once()
+		mockNoteService.On("Create", ctx, userID, int64(10), deckID, mock.MatchedBy(func(fieldsJSON string) bool {
+			var fields map[string]interface{}
+			_ = json.Unmarshal([]byte(fieldsJSON), &fields)
+			return fields["Front"] == "Hello" && fields["Back"] == "World" && len(fields) == 2
+		}), []string{"vocab"}).Return(nil, errors.New("note type not found")).Once()
 
 		result, err := service.Restore(ctx, userID, deletionLogID, deckID)
 
@@ -390,7 +399,11 @@ func TestDeletionLogService_Restore(t *testing.T) {
 	t.Run("Error - Update GUID fails", func(t *testing.T) {
 		mockRepo.On("FindByID", ctx, userID, deletionLogID).Return(dl, nil).Once()
 		mockNoteRepo.On("FindByGUID", ctx, userID, "550e8400-e29b-41d4-a716-446655440000").Return(nil, nil).Once()
-		mockNoteService.On("Create", ctx, userID, int64(10), deckID, `{"Front":"Hello","Back":"World"}`, []string{"vocab"}).Return(restoredNote, nil).Once()
+		mockNoteService.On("Create", ctx, userID, int64(10), deckID, mock.MatchedBy(func(fieldsJSON string) bool {
+			var fields map[string]interface{}
+			_ = json.Unmarshal([]byte(fieldsJSON), &fields)
+			return fields["Front"] == "Hello" && fields["Back"] == "World" && len(fields) == 2
+		}), []string{"vocab"}).Return(restoredNote, nil).Once()
 		mockNoteRepo.On("Update", ctx, userID, int64(201), mock.AnythingOfType("*note.Note")).Return(errors.New("update failed")).Once()
 
 		result, err := service.Restore(ctx, userID, deletionLogID, deckID)

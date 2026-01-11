@@ -29,7 +29,7 @@ func TestNoteTypeRepository_Save_Create(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -56,7 +56,7 @@ func TestNoteTypeRepository_FindByID(t *testing.T) {
 		WithName("Cloze").
 		WithFieldsJSON(`[{"name":"Text"}]`).
 		WithCardTypesJSON(`[{"name":"Cloze"}]`).
-		WithTemplatesJSON(`[{"name":"Cloze Template"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Text}}","afmt":"{{Text}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -89,7 +89,7 @@ func TestNoteTypeRepository_FindByName(t *testing.T) {
 		WithName("Unique Note Type").
 		WithFieldsJSON(`[{"name":"Field"}]`).
 		WithCardTypesJSON(`[{"name":"Card"}]`).
-		WithTemplatesJSON(`[{"name":"Template"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Field}}","afmt":"{{Field}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -120,7 +120,7 @@ func TestNoteTypeRepository_Delete(t *testing.T) {
 		WithName("To Delete").
 		WithFieldsJSON(`[{"name":"Field"}]`).
 		WithCardTypesJSON(`[{"name":"Card"}]`).
-		WithTemplatesJSON(`[{"name":"Template"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Field}}","afmt":"{{Field}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -158,7 +158,7 @@ func TestNoteTypeRepository_FindByUserID_Search(t *testing.T) {
 			WithName(name).
 			WithFieldsJSON(`[{"name":"Field"}]`).
 			WithCardTypesJSON(`[{"name":"Card"}]`).
-			WithTemplatesJSON(`[{"name":"Template"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Field}}","afmt":"{{Field}}"}]`).
 			WithCreatedAt(time.Now()).
 			WithUpdatedAt(time.Now()).
 			Build()

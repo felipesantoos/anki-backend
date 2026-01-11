@@ -40,7 +40,7 @@ func TestCardRepository_Save_Create(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -115,7 +115,7 @@ func TestCardRepository_FindByID(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -194,7 +194,7 @@ func TestCardRepository_FindByNoteID(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -293,7 +293,7 @@ func TestCardRepository_Update(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -380,7 +380,7 @@ func TestCardRepository_Delete(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -463,7 +463,7 @@ func TestCardRepository_CountByDeckAndState(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()

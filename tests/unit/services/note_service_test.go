@@ -18,16 +18,21 @@ import (
 )
 
 func TestNoteService_Create(t *testing.T) {
-	mockNoteRepo := new(MockNoteRepository)
-	mockCardRepo := new(MockCardRepository)
-	mockNoteTypeRepo := new(MockNoteTypeRepository)
-	mockDeckRepo := new(MockDeckRepository)
-	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
+	setup := func() (*noteSvc.NoteService, *MockNoteRepository, *MockCardRepository, *MockNoteTypeRepository, *MockDeckRepository, *MockTransactionManager) {
+		mockNoteRepo := new(MockNoteRepository)
+		mockCardRepo := new(MockCardRepository)
+		mockNoteTypeRepo := new(MockNoteTypeRepository)
+		mockDeckRepo := new(MockDeckRepository)
+		mockTM := new(MockTransactionManager)
+		service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM).(*noteSvc.NoteService)
+		return service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM
+	}
+
 	t.Run("Success", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
 		noteTypeID := int64(10)
 		deckID := int64(20)
 		fields := "{\"Front\":\"Q\", \"Back\":\"A\"}"
@@ -35,6 +40,8 @@ func TestNoteService_Create(t *testing.T) {
 		nt, _ := notetype.NewBuilder().
 			WithID(noteTypeID).
 			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"},{"qfmt":"{{Back}}","afmt":"{{Front}}"}]`).
 			WithCardTypesJSON("[{}, {}]"). // 2 card types
 			Build()
 
@@ -47,6 +54,7 @@ func TestNoteService_Create(t *testing.T) {
 			n := args.Get(2).(*note.Note)
 			n.SetID(100) // Set ID so card generation works
 		}).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(100)).Return([]*card.Card{}, nil).Once()
 		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Twice()
 
 		result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{"tag1"})
@@ -60,16 +68,23 @@ func TestNoteService_Create(t *testing.T) {
 	})
 
 	t.Run("Deck Not Found or Unauthorized", func(t *testing.T) {
+		service, _, _, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
 		noteTypeID := int64(10)
 		deckID := int64(404)
+		fields := "{\"Front\":\"Q\", \"Back\":\"A\"}"
 		
-		nt, _ := notetype.NewBuilder().WithID(noteTypeID).WithUserID(userID).Build()
+		nt, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
+			Build()
 
 		mockTM.ExpectTransaction()
 		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
 		mockDeckRepo.On("FindByID", mock.Anything, userID, deckID).Return(nil, nil).Once()
 
-		result, err := service.Create(ctx, userID, noteTypeID, deckID, "{}", nil)
+		result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, nil)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "deck not found")
@@ -77,6 +92,7 @@ func TestNoteService_Create(t *testing.T) {
 	})
 
 	t.Run("Generates GUID automatically", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
 		noteTypeID := int64(10)
 		deckID := int64(20)
 		fields := "{\"Front\":\"Q\", \"Back\":\"A\"}"
@@ -84,6 +100,8 @@ func TestNoteService_Create(t *testing.T) {
 		nt, _ := notetype.NewBuilder().
 			WithID(noteTypeID).
 			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 			WithCardTypesJSON("[{}]"). // 1 card type
 			Build()
 
@@ -103,6 +121,7 @@ func TestNoteService_Create(t *testing.T) {
 			guidValue := guid.Value()
 			assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, guidValue, "GUID should be in UUID format")
 		}).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(100)).Return([]*card.Card{}, nil).Once()
 		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
 
 		result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{})
@@ -120,6 +139,7 @@ func TestNoteService_Create(t *testing.T) {
 	})
 
 	t.Run("First Field Validation", func(t *testing.T) {
+		service, _, _, mockNoteTypeRepo, _, mockTM := setup()
 		noteTypeID := int64(10)
 		deckID := int64(20)
 
@@ -129,8 +149,6 @@ func TestNoteService_Create(t *testing.T) {
 			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 			WithCardTypesJSON("[{}]"). // 1 card type
 			Build()
-
-		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("Target Deck").Build()
 
 		t.Run("First Field Empty", func(t *testing.T) {
 			fields := "{\"Front\":\"\", \"Back\":\"A\"}"
@@ -143,8 +161,6 @@ func TestNoteService_Create(t *testing.T) {
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "first field is required")
 			assert.Nil(t, result)
-			mockNoteTypeRepo.AssertExpectations(t)
-			mockTM.AssertExpectations(t)
 		})
 
 		t.Run("First Field Missing", func(t *testing.T) {
@@ -158,8 +174,6 @@ func TestNoteService_Create(t *testing.T) {
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "first field is required")
 			assert.Nil(t, result)
-			mockNoteTypeRepo.AssertExpectations(t)
-			mockTM.AssertExpectations(t)
 		})
 
 		t.Run("First Field Whitespace Only", func(t *testing.T) {
@@ -173,12 +187,12 @@ func TestNoteService_Create(t *testing.T) {
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "first field is required")
 			assert.Nil(t, result)
-			mockNoteTypeRepo.AssertExpectations(t)
-			mockTM.AssertExpectations(t)
 		})
 
 		t.Run("First Field Valid", func(t *testing.T) {
+			service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
 			fields := "{\"Front\":\"Question\", \"Back\":\"Answer\"}"
+			d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("Target Deck").Build()
 
 			mockTM.ExpectTransaction()
 			mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(nt, nil).Once()
@@ -187,17 +201,56 @@ func TestNoteService_Create(t *testing.T) {
 				n := args.Get(2).(*note.Note)
 				n.SetID(100) // Set ID so card generation works
 			}).Once()
+			mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(100)).Return([]*card.Card{}, nil).Once()
 			mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
 
 			result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
-			mockNoteRepo.AssertExpectations(t)
-			mockCardRepo.AssertExpectations(t)
-			mockDeckRepo.AssertExpectations(t)
-			mockTM.AssertExpectations(t)
 		})
+	})
+
+	t.Run("Skips card generation when template renders empty", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
+		noteTypeID := int64(10)
+		deckID := int64(20)
+		// Note type with conditional template that renders empty when Extra field is empty
+		ntWithConditional, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"},{"name":"Extra"}]`).
+			WithCardTypesJSON(`[{"name":"Card 1"},{"name":"Card 2"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"},{"qfmt":"{{#Extra}}{{Front}}{{/Extra}}","afmt":"{{Back}}"}]`).
+			Build()
+
+		fields := "{\"Front\":\"Question\", \"Back\":\"Answer\"}" // Extra field missing/empty
+		d, _ := deck.NewBuilder().WithID(deckID).WithUserID(userID).WithName("Target Deck").Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(ntWithConditional, nil).Once()
+		mockDeckRepo.On("FindByID", mock.Anything, userID, deckID).Return(d, nil).Once()
+		mockNoteRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*note.Note")).Return(nil).Run(func(args mock.Arguments) {
+			n := args.Get(2).(*note.Note)
+			n.SetID(100)
+		}).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(100)).Return([]*card.Card{}, nil).Once()
+		// Only 1 card should be saved (the one with non-empty template)
+		mockCardRepo.On("Save", mock.Anything, userID, mock.MatchedBy(func(c *card.Card) bool {
+			return c.GetCardTypeID() == 0
+		})).Return(nil).Once()
+
+		result, err := service.Create(ctx, userID, noteTypeID, deckID, fields, []string{})
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		mockCardRepo.AssertNotCalled(t, "Save", mock.Anything, userID, mock.MatchedBy(func(c *card.Card) bool {
+			return c.GetCardTypeID() == 1
+		}))
+		mockNoteRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
 	})
 }
 
@@ -390,12 +443,6 @@ func TestNoteService_FindAll(t *testing.T) {
 }
 
 func TestNoteService_Copy(t *testing.T) {
-	mockNoteRepo := new(MockNoteRepository)
-	mockCardRepo := new(MockCardRepository)
-	mockNoteTypeRepo := new(MockNoteTypeRepository)
-	mockDeckRepo := new(MockDeckRepository)
-	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	originalNoteID := int64(100)
@@ -403,7 +450,18 @@ func TestNoteService_Copy(t *testing.T) {
 	originalDeckID := int64(20)
 	targetDeckID := int64(30)
 
+	setup := func() (*noteSvc.NoteService, *MockNoteRepository, *MockCardRepository, *MockNoteTypeRepository, *MockDeckRepository, *MockTransactionManager) {
+		mockNoteRepo := new(MockNoteRepository)
+		mockCardRepo := new(MockCardRepository)
+		mockNoteTypeRepo := new(MockNoteTypeRepository)
+		mockDeckRepo := new(MockDeckRepository)
+		mockTM := new(MockTransactionManager)
+		service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM).(*noteSvc.NoteService)
+		return service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM
+	}
+
 	t.Run("Success with all options", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
 		// Setup original note
 		originalNote, _ := note.NewBuilder().
 			WithID(originalNoteID).
@@ -417,6 +475,8 @@ func TestNoteService_Copy(t *testing.T) {
 		nt, _ := notetype.NewBuilder().
 			WithID(noteTypeID).
 			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"},{"qfmt":"{{Back}}","afmt":"{{Front}}"}]`).
 			WithCardTypesJSON("[{}, {}]"). // 2 card types
 			Build()
 
@@ -431,6 +491,7 @@ func TestNoteService_Copy(t *testing.T) {
 			n := args.Get(2).(*note.Note)
 			n.SetID(200) // Set ID so card generation works
 		}).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(200)).Return([]*card.Card{}, nil).Once()
 		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Twice()
 
 		result, err := service.Copy(ctx, userID, originalNoteID, &targetDeckID, true, true)
@@ -450,6 +511,7 @@ func TestNoteService_Copy(t *testing.T) {
 	})
 
 	t.Run("Success with custom deck", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
 		originalNote, _ := note.NewBuilder().
 			WithID(originalNoteID).
 			WithUserID(userID).
@@ -461,6 +523,8 @@ func TestNoteService_Copy(t *testing.T) {
 		nt, _ := notetype.NewBuilder().
 			WithID(noteTypeID).
 			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 			WithCardTypesJSON("[{}]"). // 1 card type
 			Build()
 
@@ -474,6 +538,7 @@ func TestNoteService_Copy(t *testing.T) {
 			n := args.Get(2).(*note.Note)
 			n.SetID(201)
 		}).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(201)).Return([]*card.Card{}, nil).Once()
 		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
 
 		result, err := service.Copy(ctx, userID, originalNoteID, &targetDeckID, false, false)
@@ -488,6 +553,7 @@ func TestNoteService_Copy(t *testing.T) {
 	})
 
 	t.Run("Success without tags", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, _, mockTM := setup()
 		originalNote, _ := note.NewBuilder().
 			WithID(originalNoteID).
 			WithUserID(userID).
@@ -499,6 +565,8 @@ func TestNoteService_Copy(t *testing.T) {
 		nt, _ := notetype.NewBuilder().
 			WithID(noteTypeID).
 			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 			WithCardTypesJSON("[{}]").
 			Build()
 
@@ -515,6 +583,7 @@ func TestNoteService_Copy(t *testing.T) {
 			n := args.Get(2).(*note.Note)
 			n.SetID(202)
 		}).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(202)).Return([]*card.Card{}, nil).Once()
 		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
 
 		result, err := service.Copy(ctx, userID, originalNoteID, nil, false, false)
@@ -528,6 +597,7 @@ func TestNoteService_Copy(t *testing.T) {
 	})
 
 	t.Run("Note not found", func(t *testing.T) {
+		service, mockNoteRepo, _, _, _, mockTM := setup()
 		mockTM.ExpectTransaction()
 		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(nil, nil).Once()
 
@@ -541,6 +611,7 @@ func TestNoteService_Copy(t *testing.T) {
 	})
 
 	t.Run("Deck not found", func(t *testing.T) {
+		service, mockNoteRepo, _, _, mockDeckRepo, mockTM := setup()
 		originalNote, _ := note.NewBuilder().
 			WithID(originalNoteID).
 			WithUserID(userID).
@@ -563,6 +634,7 @@ func TestNoteService_Copy(t *testing.T) {
 	})
 
 	t.Run("Note has no cards", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, _, _, mockTM := setup()
 		originalNote, _ := note.NewBuilder().
 			WithID(originalNoteID).
 			WithUserID(userID).
@@ -585,6 +657,7 @@ func TestNoteService_Copy(t *testing.T) {
 	})
 
 	t.Run("Cross-user isolation", func(t *testing.T) {
+		service, mockNoteRepo, _, _, _, mockTM := setup()
 		mockTM.ExpectTransaction()
 		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(nil, nil).Once()
 
@@ -598,6 +671,7 @@ func TestNoteService_Copy(t *testing.T) {
 	})
 
 	t.Run("Generates new GUID automatically", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
 		// Setup original note with a specific GUID
 		originalGUID, _ := valueobjects.NewGUID("550e8400-e29b-41d4-a716-446655440000")
 		originalNote, _ := note.NewBuilder().
@@ -613,6 +687,8 @@ func TestNoteService_Copy(t *testing.T) {
 		nt, _ := notetype.NewBuilder().
 			WithID(noteTypeID).
 			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 			WithCardTypesJSON("[{}]"). // 1 card type
 			Build()
 
@@ -636,6 +712,7 @@ func TestNoteService_Copy(t *testing.T) {
 			// Verify new GUID is different from original
 			assert.False(t, newGUID.Equals(originalGUID), "Copied note should have a different GUID from original")
 		}).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(200)).Return([]*card.Card{}, nil).Once()
 		mockCardRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*card.Card")).Return(nil).Once()
 
 		result, err := service.Copy(ctx, userID, originalNoteID, &targetDeckID, true, true)
@@ -647,6 +724,54 @@ func TestNoteService_Copy(t *testing.T) {
 		assert.False(t, newGUID.IsEmpty(), "GUID should not be empty")
 		assert.NotEmpty(t, newGUID.Value(), "GUID should have a value")
 		assert.False(t, newGUID.Equals(originalGUID), "Copied note should have a different GUID from original")
+		mockNoteRepo.AssertExpectations(t)
+		mockCardRepo.AssertExpectations(t)
+		mockDeckRepo.AssertExpectations(t)
+		mockNoteTypeRepo.AssertExpectations(t)
+		mockTM.AssertExpectations(t)
+	})
+
+	t.Run("Skips card generation when template renders empty", func(t *testing.T) {
+		service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM := setup()
+		originalNote, _ := note.NewBuilder().
+			WithID(originalNoteID).
+			WithUserID(userID).
+			WithNoteTypeID(noteTypeID).
+			WithFieldsJSON(`{"Front":"Q", "Back":"A"}`). // Extra field missing
+			Build()
+
+		// Note type with conditional template
+		ntWithConditional, _ := notetype.NewBuilder().
+			WithID(noteTypeID).
+			WithUserID(userID).
+			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"},{"name":"Extra"}]`).
+			WithCardTypesJSON(`[{"name":"Card 1"},{"name":"Card 2"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"},{"qfmt":"{{#Extra}}{{Front}}{{/Extra}}","afmt":"{{Back}}"}]`).
+			Build()
+
+		d, _ := deck.NewBuilder().WithID(targetDeckID).WithUserID(userID).WithName("Target Deck").Build()
+
+		mockTM.ExpectTransaction()
+		mockNoteRepo.On("FindByID", mock.Anything, userID, originalNoteID).Return(originalNote, nil).Once()
+		mockDeckRepo.On("FindByID", mock.Anything, userID, targetDeckID).Return(d, nil).Once()
+		mockNoteTypeRepo.On("FindByID", mock.Anything, userID, noteTypeID).Return(ntWithConditional, nil).Once()
+		mockNoteRepo.On("Save", mock.Anything, userID, mock.AnythingOfType("*note.Note")).Return(nil).Run(func(args mock.Arguments) {
+			n := args.Get(2).(*note.Note)
+			n.SetID(200)
+		}).Once()
+		mockCardRepo.On("FindByNoteID", mock.Anything, userID, int64(200)).Return([]*card.Card{}, nil).Once()
+		// Only 1 card should be saved
+		mockCardRepo.On("Save", mock.Anything, userID, mock.MatchedBy(func(c *card.Card) bool {
+			return c.GetCardTypeID() == 0
+		})).Return(nil).Once()
+
+		result, err := service.Copy(ctx, userID, originalNoteID, &targetDeckID, true, false)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		mockCardRepo.AssertNotCalled(t, "Save", mock.Anything, userID, mock.MatchedBy(func(c *card.Card) bool {
+			return c.GetCardTypeID() == 1
+		}))
 		mockNoteRepo.AssertExpectations(t)
 		mockCardRepo.AssertExpectations(t)
 		mockDeckRepo.AssertExpectations(t)
@@ -1305,7 +1430,7 @@ func TestNoteService_Update(t *testing.T) {
 			mockNoteTypeRepo.On("FindByID", mock.Anything, userID, int64(10)).Return(ntWithOneCard, nil).Once()
 			mockNoteRepo.On("Update", mock.Anything, userID, noteID, existing).Return(nil).Once()
 			mockCardRepo.On("FindByNoteID", mock.Anything, userID, noteID).Return([]*card.Card{existingCard0, existingCard1}, nil).Once()
-			// Card 1 should be deleted (card type index 1 >= cardTypeCount 1)
+			// Card 1 should be deleted (it's in existingCardsByType but not in card types)
 			mockCardRepo.On("Delete", mock.Anything, userID, int64(201)).Return(nil).Once()
 
 			result, err := service.Update(ctx, userID, noteID, fields, []string{})
@@ -1405,4 +1530,3 @@ func TestNoteService_Delete(t *testing.T) {
 		mockTM.AssertExpectations(t)
 	})
 }
-

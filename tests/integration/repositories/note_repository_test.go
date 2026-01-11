@@ -42,7 +42,7 @@ func TestNoteRepository_Save_Create(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -91,7 +91,7 @@ func TestNoteRepository_FindByID(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -162,7 +162,7 @@ func TestNoteRepository_FindByGUID(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -215,7 +215,7 @@ func TestNoteRepository_Update(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -277,7 +277,7 @@ func TestNoteRepository_Delete(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -335,7 +335,7 @@ func TestNoteRepository_Exists(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -394,7 +394,7 @@ func TestNoteRepository_FindByAdvancedSearch_Regex(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -509,7 +509,7 @@ func TestNoteRepository_FindByAdvancedSearch_NoCombining(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -686,7 +686,7 @@ func TestNoteService_Copy(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"},{"name":"Card 2"}]`). // 2 card types
-		WithTemplatesJSON(`[{"name":"Template 1"},{"name":"Template 2"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"},{"qfmt":"{{Back}}","afmt":"{{Front}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -878,7 +878,7 @@ func TestNoteRepository_FindDuplicatesByField(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -950,7 +950,7 @@ func TestNoteRepository_FindDuplicatesByField(t *testing.T) {
 			WithName("Basic").
 			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 			WithCardTypesJSON(`[{"name":"Card 1"}]`).
-			WithTemplatesJSON(`[{"name":"Template 1"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 			WithCreatedAt(time.Now()).
 			WithUpdatedAt(time.Now()).
 			Build()
@@ -1000,7 +1000,7 @@ func TestNoteRepository_FindDuplicatesByGUID(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -1123,7 +1123,7 @@ func TestNoteRepository_FindDuplicatesByGUID(t *testing.T) {
 			WithName("Basic").
 			WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 			WithCardTypesJSON(`[{"name":"Card 1"}]`).
-			WithTemplatesJSON(`[{"name":"Template 1"}]`).
+			WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 			WithCreatedAt(time.Now()).
 			WithUpdatedAt(time.Now()).
 			Build()
@@ -1178,7 +1178,7 @@ func TestNoteRepository_FindDuplicates_EdgeCases(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"},{"name":"Back"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -1399,7 +1399,7 @@ func TestNoteRepository_FindByIDs(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -1485,7 +1485,7 @@ func TestNoteRepository_FindByIDs_OwnershipValidation(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()
@@ -1501,7 +1501,7 @@ func TestNoteRepository_FindByIDs_OwnershipValidation(t *testing.T) {
 		WithName("Basic").
 		WithFieldsJSON(`[{"name":"Front"}]`).
 		WithCardTypesJSON(`[{"name":"Card 1"}]`).
-		WithTemplatesJSON(`[{"name":"Template 1"}]`).
+		WithTemplatesJSON(`[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`).
 		WithCreatedAt(time.Now()).
 		WithUpdatedAt(time.Now()).
 		Build()

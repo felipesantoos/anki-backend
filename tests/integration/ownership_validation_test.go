@@ -106,7 +106,7 @@ func TestOwnership_Validation(t *testing.T) {
 			Name:          "User A NoteType",
 			FieldsJSON:    `[{"name":"Front"},{"name":"Back"}]`,
 			CardTypesJSON: `[{"Name": "Card 1"}]`,
-			TemplatesJSON: `[{"Front": "{{Front}}", "Back": "{{Back}}"}]`,
+			TemplatesJSON: `[{"qfmt": "{{Front}}", "afmt": "{{Back}}"}]`,
 		}
 		b, _ := json.Marshal(ntReq)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))

@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -49,7 +50,7 @@ func (h *NoteTypeHandler) Create(c echo.Context) error {
 
 	nt, err := h.service.Create(ctx, userID, req.Name, req.FieldsJSON, req.CardTypesJSON, req.TemplatesJSON)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return handleNoteTypeError(err)
 	}
 
 	return c.JSON(http.StatusCreated, mappers.ToNoteTypeResponse(nt))
@@ -129,7 +130,7 @@ func (h *NoteTypeHandler) Update(c echo.Context) error {
 
 	nt, err := h.service.Update(ctx, userID, id, req.Name, req.FieldsJSON, req.CardTypesJSON, req.TemplatesJSON)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return handleNoteTypeError(err)
 	}
 
 	return c.JSON(http.StatusOK, mappers.ToNoteTypeResponse(nt))
@@ -148,9 +149,24 @@ func (h *NoteTypeHandler) Delete(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
 	if err := h.service.Delete(ctx, userID, id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return handleNoteTypeError(err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
 }
 
+func handleNoteTypeError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "not found") {
+		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+	}
+	if strings.Contains(err.Error(), "already exists") {
+		return echo.NewHTTPError(http.StatusConflict, err.Error())
+	}
+
+	// Default to bad request for validation errors
+	return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+}

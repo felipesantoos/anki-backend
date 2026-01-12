@@ -2,7 +2,9 @@ package notetype
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/note_type"
@@ -31,6 +33,15 @@ func (s *NoteTypeService) Create(ctx context.Context, userID int64, name string,
 	}
 	if exists {
 		return nil, fmt.Errorf("note type with name %s already exists", name)
+	}
+
+	// 1.5. Validate front templates are not empty
+	cardTypesCount, err := s.getCardTypesCount(cardTypesJSON)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.validateFrontTemplates(templatesJSON, cardTypesCount); err != nil {
+		return nil, err
 	}
 
 	// 2. Create note type entity using builder
@@ -79,6 +90,15 @@ func (s *NoteTypeService) Update(ctx context.Context, userID int64, id int64, na
 		return nil, fmt.Errorf("note type not found")
 	}
 
+	// 1.5. Validate front templates are not empty
+	cardTypesCount, err := s.getCardTypesCount(cardTypesJSON)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.validateFrontTemplates(templatesJSON, cardTypesCount); err != nil {
+		return nil, err
+	}
+
 	// 2. If name changed, check for conflicts
 	if existing.GetName() != name {
 		exists, err := s.noteTypeRepo.ExistsByName(ctx, userID, name)
@@ -120,3 +140,60 @@ func (s *NoteTypeService) Delete(ctx context.Context, userID int64, id int64) er
 	return s.noteTypeRepo.Delete(ctx, userID, id)
 }
 
+// validateFrontTemplates validates that all templates have non-empty qfmt fields
+func (s *NoteTypeService) validateFrontTemplates(templatesJSON string, cardTypesCount int) error {
+	// 1. Parse templatesJSON
+	// It can be an array of objects or a single object (fallback)
+	var templates []map[string]interface{}
+	if err := json.Unmarshal([]byte(templatesJSON), &templates); err != nil {
+		// Try parsing as single object if array fails
+		var singleTemplate map[string]interface{}
+		if err2 := json.Unmarshal([]byte(templatesJSON), &singleTemplate); err2 == nil {
+			templates = []map[string]interface{}{singleTemplate}
+		} else {
+			return fmt.Errorf("invalid templates JSON: %w", err)
+		}
+	}
+
+	// 2. Validate each template has non-empty qfmt
+	for i := 0; i < cardTypesCount; i++ {
+		if i >= len(templates) {
+			return fmt.Errorf("template missing for card type %d", i)
+		}
+
+		template := templates[i]
+		qfmt, exists := template["qfmt"]
+		if !exists {
+			// Try "Front" as fallback if qfmt doesn't exist
+			qfmt, exists = template["Front"]
+			if !exists {
+				return fmt.Errorf("front template (qfmt) missing for card type %d", i)
+			}
+		}
+
+		qfmtStr, ok := qfmt.(string)
+		if !ok {
+			return fmt.Errorf("front template (qfmt) must be a string for card type %d", i)
+		}
+
+		if strings.TrimSpace(qfmtStr) == "" {
+			return fmt.Errorf("front template (qfmt) cannot be empty for card type %d", i)
+		}
+	}
+
+	return nil
+}
+
+// getCardTypesCount parses cardTypesJSON and returns the number of card types
+func (s *NoteTypeService) getCardTypesCount(cardTypesJSON string) (int, error) {
+	if cardTypesJSON == "" {
+		return 0, nil
+	}
+
+	var cardTypes []interface{}
+	if err := json.Unmarshal([]byte(cardTypesJSON), &cardTypes); err != nil {
+		return 0, fmt.Errorf("invalid card types JSON: %w", err)
+	}
+
+	return len(cardTypes), nil
+}

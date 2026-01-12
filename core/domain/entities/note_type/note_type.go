@@ -6,8 +6,11 @@ import (
 	"time"
 )
 
+var (
+	ErrEmptyFrontTemplate = fmt.Errorf("front template (qfmt) cannot be empty")
+)
+
 // NoteType represents a note type entity in the domain
-// It defines the structure and templates for notes
 type NoteType struct {
 	id            int64
 	userID        int64

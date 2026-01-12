@@ -39,6 +39,51 @@ func TestNoteTypeService_Create(t *testing.T) {
 		assert.Nil(t, result)
 		mockRepo.AssertExpectations(t)
 	})
+
+	t.Run("Rejects empty front template", func(t *testing.T) {
+		name := "Empty Template"
+		cardTypesJSON := `[{"name": "Card 1"}]`
+		templatesJSON := `[{"qfmt": "", "afmt": "{{Back}}"}]`
+
+		mockRepo.On("ExistsByName", ctx, userID, name).Return(false, nil).Once()
+
+		result, err := service.Create(ctx, userID, name, "[]", cardTypesJSON, templatesJSON)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "front template (qfmt) cannot be empty")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Rejects missing qfmt field", func(t *testing.T) {
+		name := "Missing qfmt"
+		cardTypesJSON := `[{"name": "Card 1"}]`
+		templatesJSON := `[{"afmt": "{{Back}}"}]`
+
+		mockRepo.On("ExistsByName", ctx, userID, name).Return(false, nil).Once()
+
+		result, err := service.Create(ctx, userID, name, "[]", cardTypesJSON, templatesJSON)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "front template (qfmt) missing")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Rejects missing template for card type", func(t *testing.T) {
+		name := "Missing Template"
+		cardTypesJSON := `[{"name": "Card 1"}, {"name": "Card 2"}]`
+		templatesJSON := `[{"qfmt": "{{Front}}", "afmt": "{{Back}}"}]` // Only 1 template for 2 card types
+
+		mockRepo.On("ExistsByName", ctx, userID, name).Return(false, nil).Once()
+
+		result, err := service.Create(ctx, userID, name, "[]", cardTypesJSON, templatesJSON)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "template missing for card type 1")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
 }
 
 func TestNoteTypeService_Update(t *testing.T) {
@@ -51,15 +96,49 @@ func TestNoteTypeService_Update(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		existing, _ := notetype.NewBuilder().WithID(id).WithUserID(userID).WithName("Old Name").Build()
 		newName := "New Name"
+		cardTypesJSON := `[{"name": "Card 1"}]`
+		templatesJSON := `[{"qfmt": "{{Front}}", "afmt": "{{Back}}"}]`
 
 		mockRepo.On("FindByID", ctx, userID, id).Return(existing, nil).Once()
 		mockRepo.On("ExistsByName", ctx, userID, newName).Return(false, nil).Once()
 		mockRepo.On("Update", ctx, userID, id, mock.Anything).Return(nil).Once()
 
-		result, err := service.Update(ctx, userID, id, newName, "[]", "[]", "{}")
+		result, err := service.Update(ctx, userID, id, newName, "[]", cardTypesJSON, templatesJSON)
 
 		assert.NoError(t, err)
 		assert.Equal(t, newName, result.GetName())
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Rejects empty front template", func(t *testing.T) {
+		existing, _ := notetype.NewBuilder().WithID(id).WithUserID(userID).WithName("Old Name").Build()
+		newName := "Old Name"
+		cardTypesJSON := `[{"name": "Card 1"}]`
+		templatesJSON := `[{"qfmt": "", "afmt": "{{Back}}"}]`
+
+		mockRepo.On("FindByID", ctx, userID, id).Return(existing, nil).Once()
+
+		result, err := service.Update(ctx, userID, id, newName, "[]", cardTypesJSON, templatesJSON)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "front template (qfmt) cannot be empty")
+		assert.Nil(t, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Rejects missing template for card type", func(t *testing.T) {
+		existing, _ := notetype.NewBuilder().WithID(id).WithUserID(userID).WithName("Old Name").Build()
+		newName := "Old Name"
+		cardTypesJSON := `[{"name": "Card 1"}, {"name": "Card 2"}]`
+		templatesJSON := `[{"qfmt": "{{Front}}", "afmt": "{{Back}}"}]`
+
+		mockRepo.On("FindByID", ctx, userID, id).Return(existing, nil).Once()
+
+		result, err := service.Update(ctx, userID, id, newName, "[]", cardTypesJSON, templatesJSON)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "template missing for card type 1")
+		assert.Nil(t, result)
 		mockRepo.AssertExpectations(t)
 	})
 }

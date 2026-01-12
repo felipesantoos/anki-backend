@@ -247,6 +247,73 @@ func TestContent_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusNoContent, rec.Code)
 	})
 
+	t.Run("NoteType Validation", func(t *testing.T) {
+		// 1. Rejects empty front template (qfmt) on Create
+		createReq := request.CreateNoteTypeRequest{
+			Name:          "Empty Template Test",
+			FieldsJSON:    `[{"name": "Front"}]`,
+			CardTypesJSON: `[{"name": "Card 1"}]`,
+			TemplatesJSON: `[{"qfmt":"","afmt":"{{Back}}"}]`,
+		}
+		b, _ := json.Marshal(createReq)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "front template (qfmt) cannot be empty")
+
+		// 2. Rejects missing qfmt field on Create
+		createReqMissing := request.CreateNoteTypeRequest{
+			Name:          "Missing qfmt Test",
+			FieldsJSON:    `[{"name": "Front"}]`,
+			CardTypesJSON: `[{"name": "Card 1"}]`,
+			TemplatesJSON: `[{"afmt":"{{Back}}"}]`,
+		}
+		b, _ = json.Marshal(createReqMissing)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "front template (qfmt) missing")
+
+		// 3. Rejects empty front template on Update
+		// First create a valid one
+		validReq := request.CreateNoteTypeRequest{
+			Name:          "For Update Validation",
+			FieldsJSON:    `[{"name": "Front"}]`,
+			CardTypesJSON: `[{"name": "Card 1"}]`,
+			TemplatesJSON: `[{"qfmt":"{{Front}}","afmt":"{{Back}}"}]`,
+		}
+		b, _ = json.Marshal(validReq)
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/note-types", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		var ntRes response.NoteTypeResponse
+		json.Unmarshal(rec.Body.Bytes(), &ntRes)
+
+		updateReq := request.UpdateNoteTypeRequest{
+			Name:          "For Update Validation",
+			FieldsJSON:    `[{"name": "Front"}]`,
+			CardTypesJSON: `[{"name": "Card 1"}]`,
+			TemplatesJSON: `[{"qfmt":"","afmt":"{{Back}}"}]`,
+		}
+		b, _ = json.Marshal(updateReq)
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/note-types/"+strconv.FormatInt(ntRes.ID, 10), bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "front template (qfmt) cannot be empty")
+	})
+
 	t.Run("Notes", func(t *testing.T) {
 		// Re-create a note type for notes test since we deleted it above
 		var noteTypeID int64

@@ -10,6 +10,7 @@ import (
 	"github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
+	"github.com/felipesantos/anki-backend/core/domain/services"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	noteSvc "github.com/felipesantos/anki-backend/core/services/note"
 	"github.com/felipesantos/anki-backend/pkg/ownership"
@@ -27,7 +28,8 @@ func TestNoteService_Create(t *testing.T) {
 		mockNoteTypeRepo := new(MockNoteTypeRepository)
 		mockDeckRepo := new(MockDeckRepository)
 		mockTM := new(MockTransactionManager)
-		service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM).(*noteSvc.NoteService)
+		tr := services.NewTemplateRenderer()
+		service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM).(*noteSvc.NoteService)
 		return service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM
 	}
 
@@ -260,7 +262,8 @@ func TestNoteService_FindAll(t *testing.T) {
 	mockNoteTypeRepo := new(MockNoteTypeRepository)
 	mockDeckRepo := new(MockDeckRepository)
 	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	tr := services.NewTemplateRenderer()
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -456,7 +459,8 @@ func TestNoteService_Copy(t *testing.T) {
 		mockNoteTypeRepo := new(MockNoteTypeRepository)
 		mockDeckRepo := new(MockDeckRepository)
 		mockTM := new(MockTransactionManager)
-		service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM).(*noteSvc.NoteService)
+		tr := services.NewTemplateRenderer()
+		service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM).(*noteSvc.NoteService)
 		return service, mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM
 	}
 
@@ -786,7 +790,8 @@ func TestNoteService_FindDuplicates(t *testing.T) {
 	mockNoteTypeRepo := new(MockNoteTypeRepository)
 	mockDeckRepo := new(MockDeckRepository)
 	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	tr := services.NewTemplateRenderer()
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	fieldName := "Front"
@@ -1022,7 +1027,8 @@ func TestNoteService_FindDuplicatesByGUID(t *testing.T) {
 	mockNoteTypeRepo := new(MockNoteTypeRepository)
 	mockDeckRepo := new(MockDeckRepository)
 	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	tr := services.NewTemplateRenderer()
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 
@@ -1111,7 +1117,8 @@ func TestNoteService_FindByID(t *testing.T) {
 	mockNoteTypeRepo := new(MockNoteTypeRepository)
 	mockDeckRepo := new(MockDeckRepository)
 	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	tr := services.NewTemplateRenderer()
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	noteID := int64(100)
@@ -1145,7 +1152,8 @@ func TestNoteService_Update(t *testing.T) {
 	mockNoteTypeRepo := new(MockNoteTypeRepository)
 	mockDeckRepo := new(MockDeckRepository)
 	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	tr := services.NewTemplateRenderer()
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	noteID := int64(100)
@@ -1451,7 +1459,8 @@ func TestNoteService_AddTag(t *testing.T) {
 	mockNoteTypeRepo := new(MockNoteTypeRepository)
 	mockDeckRepo := new(MockDeckRepository)
 	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	tr := services.NewTemplateRenderer()
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	noteID := int64(100)
@@ -1478,7 +1487,8 @@ func TestNoteService_RemoveTag(t *testing.T) {
 	mockNoteTypeRepo := new(MockNoteTypeRepository)
 	mockDeckRepo := new(MockDeckRepository)
 	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	tr := services.NewTemplateRenderer()
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	noteID := int64(100)
@@ -1506,7 +1516,8 @@ func TestNoteService_Delete(t *testing.T) {
 	mockNoteTypeRepo := new(MockNoteTypeRepository)
 	mockDeckRepo := new(MockDeckRepository)
 	mockTM := new(MockTransactionManager)
-	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, mockTM)
+	tr := services.NewTemplateRenderer()
+	service := noteSvc.NewNoteService(mockNoteRepo, mockCardRepo, mockNoteTypeRepo, mockDeckRepo, tr, mockTM)
 	ctx := context.Background()
 	userID := int64(1)
 	noteID := int64(100)

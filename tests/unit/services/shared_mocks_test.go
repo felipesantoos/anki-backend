@@ -708,3 +708,15 @@ func (m *MockStorageRepository) Copy(ctx context.Context, s, d string) error {
 func (m *MockStorageRepository) Move(ctx context.Context, s, d string) error {
 	return m.Called(ctx, s, d).Error(0)
 }
+
+// MockTemplateRenderer
+type MockTemplateRenderer struct{ mock.Mock }
+
+func (m *MockTemplateRenderer) RenderFront(tj string, cti int, f map[string]string) (string, error) {
+	args := m.Called(tj, cti, f)
+	return args.String(0), args.Error(1)
+}
+func (m *MockTemplateRenderer) RenderBack(tj string, cti int, f map[string]string) (string, error) {
+	args := m.Called(tj, cti, f)
+	return args.String(0), args.Error(1)
+}

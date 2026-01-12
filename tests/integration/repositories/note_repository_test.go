@@ -15,6 +15,7 @@ import (
 	deckEntity "github.com/felipesantos/anki-backend/core/domain/entities/deck"
 	"github.com/felipesantos/anki-backend/core/domain/entities/note"
 	notetype "github.com/felipesantos/anki-backend/core/domain/entities/note_type"
+	"github.com/felipesantos/anki-backend/core/domain/services"
 	searchdomain "github.com/felipesantos/anki-backend/core/domain/services/search"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	noteService "github.com/felipesantos/anki-backend/core/services/note"
@@ -702,7 +703,8 @@ func TestNoteService_Copy(t *testing.T) {
 
 	// Create original note with service
 	tm := database.NewTransactionManager(db.DB)
-	service := noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tm)
+	tr := services.NewTemplateRenderer()
+	service := noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tr, tm)
 	originalNote, err := service.Create(ctx, userID, noteTypeID, deckID, `{"Front":"Original Question","Back":"Original Answer"}`, []string{"tag1", "tag2"})
 	require.NoError(t, err)
 	originalNoteID := originalNote.GetID()
@@ -894,7 +896,8 @@ func TestNoteRepository_FindDuplicatesByField(t *testing.T) {
 
 	// Create service for creating notes
 	tm := database.NewTransactionManager(db.DB)
-	service := noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tm)
+	tr := services.NewTemplateRenderer()
+	service := noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tr, tm)
 
 	// Create duplicate notes (3 notes with "Hello" in Front field)
 	note1, err := service.Create(ctx, userID, noteTypeID, deckID, `{"Front":"Hello","Back":"World1"}`, []string{})

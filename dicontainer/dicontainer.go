@@ -19,6 +19,7 @@ import (
 	mediaService "github.com/felipesantos/anki-backend/core/services/media"
 	metricsService "github.com/felipesantos/anki-backend/core/services/metrics"
 	noteService "github.com/felipesantos/anki-backend/core/services/note"
+	"github.com/felipesantos/anki-backend/core/domain/services"
 	notetypeService "github.com/felipesantos/anki-backend/core/services/notetype"
 	profileService "github.com/felipesantos/anki-backend/core/services/profile"
 	reviewService "github.com/felipesantos/anki-backend/core/services/review"
@@ -124,7 +125,13 @@ func GetNoteService() primary.INoteService {
 	noteTypeRepo := repositories.NewNoteTypeRepository(dbRepo.GetDB())
 	deckRepo := repositories.NewDeckRepository(dbRepo.GetDB())
 	tm := database.NewTransactionManager(dbRepo.GetDB())
-	return noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, tm)
+	templateRenderer := GetTemplateRenderer()
+	return noteService.NewNoteService(noteRepo, cardRepo, noteTypeRepo, deckRepo, templateRenderer, tm)
+}
+
+// GetTemplateRenderer returns a fresh instance of TemplateRenderer
+func GetTemplateRenderer() services.ITemplateRenderer {
+	return services.NewTemplateRenderer()
 }
 
 // GetSearchService returns a fresh instance of SearchService

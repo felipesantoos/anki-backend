@@ -22,11 +22,12 @@ import (
 
 // NoteService implements INoteService
 type NoteService struct {
-	noteRepo     secondary.INoteRepository
-	cardRepo     secondary.ICardRepository
-	noteTypeRepo secondary.INoteTypeRepository
-	deckRepo     secondary.IDeckRepository
-	tm           database.TransactionManager
+	noteRepo         secondary.INoteRepository
+	cardRepo         secondary.ICardRepository
+	noteTypeRepo     secondary.INoteTypeRepository
+	deckRepo         secondary.IDeckRepository
+	templateRenderer services.ITemplateRenderer
+	tm               database.TransactionManager
 }
 
 // NewNoteService creates a new NoteService instance
@@ -35,14 +36,16 @@ func NewNoteService(
 	cardRepo secondary.ICardRepository,
 	noteTypeRepo secondary.INoteTypeRepository,
 	deckRepo secondary.IDeckRepository,
+	templateRenderer services.ITemplateRenderer,
 	tm database.TransactionManager,
 ) primary.INoteService {
 	return &NoteService{
-		noteRepo:     noteRepo,
-		cardRepo:     cardRepo,
-		noteTypeRepo: noteTypeRepo,
-		deckRepo:     deckRepo,
-		tm:           tm,
+		noteRepo:         noteRepo,
+		cardRepo:         cardRepo,
+		noteTypeRepo:     noteTypeRepo,
+		deckRepo:         deckRepo,
+		templateRenderer: templateRenderer,
+		tm:               tm,
 	}
 }
 
@@ -252,16 +255,13 @@ func (s *NoteService) syncCards(ctx context.Context, userID int64, noteEntity *n
 		existingCardsByType[c.GetCardTypeID()] = c.GetID()
 	}
 
-	// 5. Initialize template renderer
-	templateRenderer := services.NewTemplateRenderer()
-
-	// 6. Process each card type in the note type
+	// 5. Process each card type in the note type
 	cardTypeCount := nt.GetCardTypeCount()
 	now := time.Now()
 
 	for cardTypeIndex := 0; cardTypeIndex < cardTypeCount; cardTypeIndex++ {
 		// Render front template
-		renderedFront, err := templateRenderer.RenderFront(nt.GetTemplatesJSON(), cardTypeIndex, fields)
+		renderedFront, err := s.templateRenderer.RenderFront(nt.GetTemplatesJSON(), cardTypeIndex, fields)
 		if err != nil {
 			// If template rendering fails, log error but continue with other card types
 			// This prevents one bad template from breaking the entire update

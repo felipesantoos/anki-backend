@@ -15,9 +15,10 @@ func NewTemplateRenderer() *TemplateRenderer {
 	return &TemplateRenderer{}
 }
 
-// RenderFront renders the front template of a card
-// It processes field replacements and conditional replacements
-// Returns empty string if the rendered template is empty (after stripping HTML and whitespace)
+// RenderFront renders the front template of a card.
+// It processes field replacements ({{Field}}) and conditional replacements ({{#Field}}...{{/Field}}).
+// Returns an empty string if the rendered template is empty or contains only HTML tags and whitespace.
+// This is used to determine if a card should be generated for a given note.
 func (tr *TemplateRenderer) RenderFront(templatesJSON string, cardTypeIndex int, fields map[string]string) (string, error) {
 	frontTemplate, err := tr.getFrontTemplate(templatesJSON, cardTypeIndex)
 	if err != nil {
@@ -27,7 +28,8 @@ func (tr *TemplateRenderer) RenderFront(templatesJSON string, cardTypeIndex int,
 	return tr.renderTemplate(frontTemplate, fields)
 }
 
-// RenderBack renders the back template of a card
+// RenderBack renders the back template of a card.
+// It processes field replacements and conditional replacements.
 func (tr *TemplateRenderer) RenderBack(templatesJSON string, cardTypeIndex int, fields map[string]string) (string, error) {
 	backTemplate, err := tr.getBackTemplate(templatesJSON, cardTypeIndex)
 	if err != nil {
@@ -37,7 +39,10 @@ func (tr *TemplateRenderer) RenderBack(templatesJSON string, cardTypeIndex int, 
 	return tr.renderTemplate(backTemplate, fields)
 }
 
-// renderTemplate processes a template string with field replacements and conditionals
+// renderTemplate processes a template string with field replacements and conditionals.
+// It returns the rendered content after stripping all HTML tags and trimming leading/trailing whitespace.
+// If the final text content is empty (e.g., it only contained tags or spaces), it returns an empty string.
+// This "empty" check is critical for Anki's card generation rules.
 func (tr *TemplateRenderer) renderTemplate(template string, fields map[string]string) (string, error) {
 	if template == "" {
 		return "", nil
@@ -53,6 +58,8 @@ func (tr *TemplateRenderer) renderTemplate(template string, fields map[string]st
 
 	// Strip HTML tags and check if result is empty
 	textContent := tr.stripHTML(result)
+	// Replace non-breaking spaces with regular spaces before trimming
+	textContent = strings.ReplaceAll(textContent, "\u00a0", " ")
 	textContent = strings.TrimSpace(textContent)
 
 	return textContent, nil
@@ -68,12 +75,9 @@ func (tr *TemplateRenderer) processFieldReplacements(template string, fields map
 		escapedName := regexp.QuoteMeta(fieldName)
 		// Match {{FieldName}} or {{FieldName}} with optional whitespace
 		pattern := regexp.MustCompile(`\{\{` + escapedName + `\}\}`)
-		// Replace with field value, or empty string if field is nil/empty
+		// Replace with field value
 		replacement := fieldValue
-		if replacement == "" {
-			replacement = ""
-		}
-		result = pattern.ReplaceAllString(result, html.EscapeString(replacement))
+		result = pattern.ReplaceAllString(result, replacement)
 	}
 
 	return result

@@ -62,4 +62,10 @@ type ICardService interface {
 
 	// GetPosition returns the ordinal position of a card
 	GetPosition(ctx context.Context, userID int64, cardID int64) (int, error)
+
+	// FindEmptyCards finds cards where the front template renders to empty
+	FindEmptyCards(ctx context.Context, userID int64) ([]*card.Card, error)
+
+	// CleanupEmptyCards deletes all cards where the front template renders to empty
+	CleanupEmptyCards(ctx context.Context, userID int64) (int, error)
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/felipesantos/anki-backend/core/domain/entities/card"
+	"github.com/felipesantos/anki-backend/core/domain/services"
 	"github.com/felipesantos/anki-backend/core/domain/valueobjects"
 	"github.com/felipesantos/anki-backend/core/interfaces/primary"
 	"github.com/felipesantos/anki-backend/core/interfaces/secondary"
@@ -15,12 +16,13 @@ import (
 
 // CardService implements ICardService
 type CardService struct {
-	cardRepo        secondary.ICardRepository
-	noteService     primary.INoteService
-	deckService     primary.IDeckService
-	noteTypeService primary.INoteTypeService
-	reviewService   primary.IReviewService
-	tm              database.TransactionManager
+	cardRepo         secondary.ICardRepository
+	noteService      primary.INoteService
+	deckService      primary.IDeckService
+	noteTypeService  primary.INoteTypeService
+	reviewService    primary.IReviewService
+	templateRenderer services.ITemplateRenderer
+	tm               database.TransactionManager
 }
 
 // NewCardService creates a new CardService instance
@@ -30,15 +32,17 @@ func NewCardService(
 	deckService primary.IDeckService,
 	noteTypeService primary.INoteTypeService,
 	reviewService primary.IReviewService,
+	templateRenderer services.ITemplateRenderer,
 	tm database.TransactionManager,
 ) primary.ICardService {
 	return &CardService{
-		cardRepo:        cardRepo,
-		noteService:     noteService,
-		deckService:     deckService,
-		noteTypeService: noteTypeService,
-		reviewService:   reviewService,
-		tm:              tm,
+		cardRepo:         cardRepo,
+		noteService:      noteService,
+		deckService:      deckService,
+		noteTypeService:  noteTypeService,
+		reviewService:    reviewService,
+		templateRenderer: templateRenderer,
+		tm:               tm,
 	}
 }
 
@@ -344,4 +348,73 @@ func (s *CardService) GetPosition(ctx context.Context, userID int64, cardID int6
 	}
 
 	return c.GetPosition(), nil
+}
+
+// FindEmptyCards finds cards where the front template renders to empty
+func (s *CardService) FindEmptyCards(ctx context.Context, userID int64) ([]*card.Card, error) {
+	// 1. Get all cards for user
+	// Using a large limit to get all cards for maintenance
+	filters := card.CardFilters{
+		Limit: 1000000,
+	}
+	cards, _, err := s.cardRepo.FindAll(ctx, userID, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch all cards: %w", err)
+	}
+
+	emptyCards := make([]*card.Card, 0)
+
+	for _, c := range cards {
+		// 2. Get note for card
+		n, err := s.noteService.FindByID(ctx, userID, c.GetNoteID())
+		if err != nil {
+			// If note is not found or error, skip this card
+			continue
+		}
+
+		// 3. Get note type for note
+		nt, err := s.noteTypeService.FindByID(ctx, userID, n.GetNoteTypeID())
+		if err != nil {
+			continue
+		}
+
+		// 4. Parse note fields JSON
+		var fields map[string]string
+		if err := json.Unmarshal([]byte(n.GetFieldsJSON()), &fields); err != nil {
+			continue
+		}
+
+		// 5. Render front template
+		renderedFront, err := s.templateRenderer.RenderFront(nt.GetTemplatesJSON(), c.GetCardTypeID(), fields)
+		if err != nil {
+			continue
+		}
+
+		// 6. If rendered empty, add to list
+		if renderedFront == "" {
+			emptyCards = append(emptyCards, c)
+		}
+	}
+
+	return emptyCards, nil
+}
+
+// CleanupEmptyCards deletes all cards where the front template renders to empty
+func (s *CardService) CleanupEmptyCards(ctx context.Context, userID int64) (int, error) {
+	emptyCards, err := s.FindEmptyCards(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, c := range emptyCards {
+		// We use a transaction for each delete to ensure consistency, 
+		// but since they are independent, we don't wrap the whole loop in one tx 
+		// to avoid long-running locks.
+		if err := s.cardRepo.Delete(ctx, userID, c.GetID()); err == nil {
+			count++
+		}
+	}
+
+	return count, nil
 }

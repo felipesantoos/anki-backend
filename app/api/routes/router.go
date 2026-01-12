@@ -77,6 +77,7 @@ func (r *Router) RegisterAll() {
 	r.RegisterSystemRoutes()
 	r.RegisterCommunityRoutes()
 	r.RegisterSearchRoutes()
+	r.RegisterMaintenanceRoutes()
 }
 
 // RegisterSwaggerRoutes registers the Swagger documentation routes

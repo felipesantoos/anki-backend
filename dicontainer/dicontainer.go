@@ -101,7 +101,8 @@ func GetCardService() primary.ICardService {
 	noteTypeService := GetNoteTypeService()
 	reviewService := GetReviewService()
 	tm := database.NewTransactionManager(dbRepo.GetDB())
-	return cardService.NewCardService(cardRepo, noteService, deckService, noteTypeService, reviewService, tm)
+	templateRenderer := GetTemplateRenderer()
+	return cardService.NewCardService(cardRepo, noteService, deckService, noteTypeService, reviewService, templateRenderer, tm)
 }
 
 // GetReviewService returns a fresh instance of ReviewService
